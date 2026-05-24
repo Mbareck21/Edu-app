@@ -100,20 +100,51 @@ export default function InteractiveCrossword({
     const info = cellInfo[`${r},${c}`];
     if (!info) return;
     let orient: Orientation;
+
     if (active && active.r === r && active.c === c) {
-      // Toggle orientation if cell has both.
+      // Same cell → toggle orientation if both directions are available here.
       if (info.acrossId !== undefined && info.downId !== undefined) {
         orient = active.orient === "across" ? "down" : "across";
       } else {
         orient = info.acrossId !== undefined ? "across" : "down";
       }
     } else {
-      // New cell: prefer existing active orient if available, else first match.
+      // New cell. Two-pass preference:
+      //   1. Continuity — if the new cell is in the same active word, keep
+      //      orient. This catches programmatic focus from auto-advance, even
+      //      when the new cell happens to be the start of a perpendicular word.
+      //   2. Starts here — if the new cell is the STARTING cell of one word
+      //      but only a crossing cell of the other, prefer the one that starts
+      //      here (clear user intent).
+      //   3. Fallback — prior orient if compatible, else default to across.
+      const acrossWord = info.acrossId !== undefined ? placedById.get(info.acrossId) ?? null : null;
+      const downWord = info.downId !== undefined ? placedById.get(info.downId) ?? null : null;
       const prefer = active?.orient;
-      if (prefer === "across" && info.acrossId !== undefined) orient = "across";
-      else if (prefer === "down" && info.downId !== undefined) orient = "down";
-      else orient = info.acrossId !== undefined ? "across" : "down";
+      const prevInfo = active ? cellInfo[`${active.r},${active.c}`] : undefined;
+
+      if (
+        prefer === "across" &&
+        acrossWord &&
+        prevInfo?.acrossId === acrossWord.position
+      ) {
+        orient = "across";
+      } else if (
+        prefer === "down" &&
+        downWord &&
+        prevInfo?.downId === downWord.position
+      ) {
+        orient = "down";
+      } else {
+        const startsAcross = !!acrossWord && acrossWord.startRow === r && acrossWord.startCol === c;
+        const startsDown = !!downWord && downWord.startRow === r && downWord.startCol === c;
+        if (startsDown && !startsAcross) orient = "down";
+        else if (startsAcross && !startsDown) orient = "across";
+        else if (prefer === "across" && acrossWord) orient = "across";
+        else if (prefer === "down" && downWord) orient = "down";
+        else orient = acrossWord ? "across" : "down";
+      }
     }
+
     setActive({ r, c, orient });
     inputRefs.current.get(`${r},${c}`)?.focus();
   }
