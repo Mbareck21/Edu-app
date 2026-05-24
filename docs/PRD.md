@@ -4,6 +4,57 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Interactive play mode for worksheets — 2026-05-24
+
+- **Status:** Shipped (commit `ab7672d`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> (open any list, tap any of the three worksheets)
+- **Summary:** Added a "▶ Play on phone" toggle to each of the three worksheets alongside the existing Print button. Solving in the browser triggers voice praise (via existing TTS) and confetti from canvas-confetti for correct answers; wrong answers shake red with brief encouragement. **Print path is bit-for-bit identical to before.**
+
+### Acceptance criteria (verified — server side green; browser flow ready to test)
+- [x] /scramble, /crossword, /wordsearch each carry the Play toggle in the header
+- [x] **Print regression — server-side verified.** Each page renders BOTH print-view and play-view divs to the DOM; CSS controls visibility via `[data-mode]`; `@media print` forces `.play-view { display: none !important }` so the printer never sees React state
+- [x] Scramble: type + Check button + Show Answer after 2 wrongs
+- [x] Crossword: tap-cell + auto-advance + word completion validation; correct words lock green
+- [x] Word search: tap-first-letter + tap-last-letter; straight-line path resolver in 8 directions
+- [x] Voice praise via existing /api/tts (bilingual phrases marked PARENT CONTRIBUTION #5); respects /chat mute toggle
+- [x] Confetti via canvas-confetti, lazy-imported so print view doesn't pay the 12KB cost
+- [x] Backend regression: chat/tts/transcribe/lists all 200 on prod
+- [ ] **Browser smoke** (mic perm, full crossword fill, tap-tap word search, confetti, big completion) — user to verify on phone
+
+### Files touched
+**New:** `lib/feedback.ts`, `components/PlayToggle.tsx`, `components/Interactive{Scramble,Crossword,WordSearch}.tsx`
+**Modified:** `components/WorksheetFrame.tsx` (extraHeaderRight slot), `app/globals.css` (visibility rules + shake keyframes + correctness colorways), three worksheet pages (wrap content in PlayToggle)
+**Dep added:** `canvas-confetti` + `@types/canvas-confetti` (lazy-imported)
+
+### Decisions worth remembering
+- **Both views rendered, CSS-controlled visibility.** The cleanest way to guarantee print never regresses regardless of React state. Adds DOM weight (~2x markup per page), trivial vs the safety guarantee.
+- **`@media print` overrides with `!important`** on `.play-view` (hide) and `.print-view` (show). React state is irrelevant inside the printer's CSS pipeline.
+- **Tap-first / tap-last for word search**, not drag. Mobile drag-detection on 7×7 grids through small fingers is fiddly; tap-tap matches how kids solve paper puzzles and the straight-line path validator is ~10 lines of code (`Math.max(adr, adc)` step count, sign deltas, walk).
+- **Validate scramble on explicit Check button.** Kid controls the success moment → better confetti theater than auto-validation, less anxiety from typing wrong mid-word.
+- **Crossword auto-advance + correct-word locking.** Standard crossword muscle memory. Correct words turn green and their cells become read-only so they don't get edited away by intersecting-word fills.
+- **600ms voice cooldown + first-wrong-only encouragement.** Prevents voice spam during rapid-fire scramble checks or word-search tapping.
+- **Bilingual praise array** (English + Arabic) — single PARENT CONTRIBUTION #5 marker in `lib/feedback.ts`; the existing bilingual TTS chunking handles voice switching automatically.
+- **Lazy-import `canvas-confetti`.** `await import('canvas-confetti')` inside `celebrate()` defers the 12KB until the kid first answers.
+- **Reuse `readAutoPlayPref()`** from `/chat` mute toggle — single source of truth for "do we play voice anywhere in the app".
+- **Crossword fallback path bypasses play mode.** When `buildCrossword()` returns `ok: false` (rare, disjoint-letter word lists), the page falls back to the definitions list — no Play toggle shown, since there's nothing to play.
+
+### Karpathy frame (as shipped)
+- **What:** Three client components (`Interactive{Scramble,Crossword,WordSearch}`) live alongside the existing print markup, switched by a context-driven `[data-mode]` attribute. Shared `lib/feedback.ts` celebrates with TTS + confetti.
+- **Why this shape:** Adds zero risk to the print path (CSS guarantees), zero backend coupling (existing endpoints reused, no schema changes), zero ongoing cost (TTS we already pay for, confetti is free).
+- **First failure mode explicitly probed:** print regression. Server-side smoke confirmed each page contains both `print-view` and `play-view` divs — CSS in production handles the toggle without any React intervention.
+
+### Known follow-ups
+- **Real browser smoke pending** — user verifies on phone (server-side checks all green).
+- Tuning surface: edit `PRAISES` / `ENCOURAGEMENTS` arrays in `lib/feedback.ts` (PARENT CONTRIBUTION #5) for personalized phrases (his name, etc.) and redeploy.
+- Crossword on very small screens: 44px cells × 15 cols = 660px wide, may overflow on narrow phones. Add horizontal scroll if it bites in practice.
+- v2 idea: persistent stats / streaks per word list (Mongo schema add). Skipped v1 per YAGNI.
+- v2 idea: drag-select for word search if tap-tap doesn't feel right after use.
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Hands-free continuous conversation mode — 2026-05-24
 
 - **Status:** Shipped (commit `64c7d31`)
