@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Edu-App
 
-## Getting Started
+A small, printable English-vocabulary practice app for a 9-year-old learner, plus a kid-safe AI chat playground. Built with Next.js 16, Tailwind v4, Mongoose (MongoDB Atlas), and Groq.
 
-First, run the development server:
+## Features
+
+- **Word lists** — create named lists (e.g. "Week 1 — Animals"), add vocabulary words with optional clues.
+- **AI clue generation** — click "AI suggest clues" and Groq writes Grade-3-friendly definitions you can edit.
+- **Three printable worksheets per list**, regenerated server-side on every visit:
+  - **Crossword** with numbered clues + answer key
+  - **Word Scramble** with answer key
+  - **Hidden-Message Word Search** (find the words; unused letters spell a bonus message)
+- **AI chat playground** at `/chat` — streamed Groq responses, simple-English system prompt, IP rate-limited.
+- **Single PIN auth** — one cookie-signed PIN guards every page (good enough for one family).
+- **Print-optimised CSS** — `Ctrl+P` produces clean B&W output with the answer key on page 2.
+
+## Local development
 
 ```bash
+npm install
+cp .env.local.example .env.local
+# Edit .env.local — see "Environment variables" below
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `.env.local.example`. Four required:
 
-## Learn More
+| Var | Where to get it |
+|---|---|
+| `MONGODB_URI` | <https://cloud.mongodb.com> → cluster → Connect |
+| `GROQ_API_KEY` | <https://console.groq.com/keys> (free tier is plenty) |
+| `PARENT_PIN`  | A 4–6 digit PIN your family will use to sign in |
+| `AUTH_SECRET` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy to Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx vercel login
+npx vercel link
+# Push every variable from .env.local to all environments:
+npx vercel env add MONGODB_URI
+npx vercel env add GROQ_API_KEY
+npx vercel env add PARENT_PIN
+npx vercel env add AUTH_SECRET
+npx vercel --prod
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**One Atlas gotcha:** in MongoDB Atlas, go to **Network Access** and add `0.0.0.0/0` (or Vercel's IP ranges) so the deployed app can connect.
 
-## Deploy on Vercel
+## Where you (the parent) can customise
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Two prose blocks in `lib/groq.ts` are flagged with `✏️ PARENT CONTRIBUTION` comments:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Tutor personality** (`CHAT_SYSTEM_PROMPT`) — how the AI talks to your son.
+2. **Clue-writing style** (`CLUE_SYSTEM_PROMPT`) — definition / behavioural / fill-the-blank / synonym.
+
+Edit those strings, redeploy, done.
+
+## File layout
+
+```
+app/
+  page.tsx                          # Home: word-list overview
+  login/page.tsx                    # PIN entry
+  lists/[id]/page.tsx               # Edit a list
+  lists/[id]/{crossword,scramble,wordsearch}/page.tsx   # Print-ready worksheets
+  chat/page.tsx                     # AI chat
+  api/auth/route.ts                 # POST PIN, set signed cookie
+  api/lists/route.ts                # GET, POST
+  api/lists/[id]/route.ts           # GET, PATCH, DELETE
+  api/clues/route.ts                # POST { words[] } → { clues[] }
+  api/chat/route.ts                 # POST streaming, Groq proxy
+lib/
+  db.ts                             # Mongoose connect (cached)
+  auth.ts                           # PIN cookie helpers (jose)
+  groq.ts                           # Groq client + parent-customisable prompts
+  crossword.ts                      # Layout wrapper + fallback logic
+  wordsearch.ts                     # Hidden-message generator
+  scramble.ts                       # Fisher-Yates scramble
+  models/WordList.ts                # Mongoose schema
+components/
+  ListEditor.tsx                    # Word & clue table + AI buttons
+  CrosswordGrid.tsx                 # Worksheet grid
+  WordSearchGrid.tsx
+  WorksheetFrame.tsx                # Print container
+  NewListForm.tsx
+  DeleteListButton.tsx
+proxy.ts                            # PIN gate (Next 16 proxy middleware)
+```
