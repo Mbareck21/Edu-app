@@ -4,6 +4,47 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## High-quality server-side voice (Whisper + Edge TTS) — 2026-05-24
+
+- **Status:** Shipped (commit `142a546`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app/chat>
+- **Summary:** Replaced the browser Web Speech API (poor recording, robotic Arabic TTS) with two free server-side endpoints: Groq Whisper for STT and Microsoft Edge TTS for bilingual neural-voice playback.
+
+### Acceptance criteria (verified live)
+- [x] `GET /api/tts?text=...` returns valid `audio/mpeg` — 17 KB for an English sentence in 920ms
+- [x] Bilingual TTS chunks by Arabic Unicode range and calls Edge TTS once per language span — verified with mixed text "A curious (فضولي) person…" → 39 KB MPEG produced in 1.16s
+- [x] `POST /api/transcribe` exists and validates input (400 on empty body)
+- [x] Voices are parent-customizable: `AI_ENGLISH_VOICE` defaults to `en-US-AnaNeural` (child voice), `AI_ARABIC_VOICE` defaults to `ar-EG-SalmaNeural`
+- [x] Mic uses `MediaRecorder`; on stop, POSTs `multipart/form-data` to `/api/transcribe`
+- [x] AI auto-play uses `<audio>` element pointed at `/api/tts`; 1-hour browser cache for replays
+- [x] Mute toggle + replay button preserved
+
+### Files touched
+`app/api/tts/route.ts` (new), `app/api/transcribe/route.ts` (new), `lib/voice.ts` (rewrite), `lib/groq.ts` (voice constants + STT_MODEL), `app/chat/page.tsx` (new mic + audio flows), `package.json` (+@andresaya/edge-tts)
+
+### Decisions worth remembering
+- **Groq Whisper over browser STT.** Same provider, same API key, 2000 req/day free tier, much better Arabic-accented English recognition. `whisper-large-v3-turbo` is the right model — fast and multilingual.
+- **Edge TTS over Azure/Google.** No signup, no API key, no monthly char cap to track. Same neural-voice engine as Azure Speech. Lives on Microsoft's public Read-Aloud endpoint.
+- **Server-side bilingual chunking.** Same Unicode regex as the previous client-side version, but now lives in `/api/tts` next to the Edge TTS calls. Each chunk → one `EdgeTTS.synthesize()` → `Buffer.concat()` produces valid concatenated MP3.
+- **Browser cache via `Cache-Control: public, max-age=3600`.** The text is in the URL, so the cache key is stable — replays are instant after the first play.
+- **`en-US-AnaNeural` for the AI.** It's Microsoft's child voice — relatable for a 9-year-old peer dynamic.
+- **`FormData.get("audio")` returns `File`, not `Blob`.** Type-narrows directly to File; no need to wrap.
+
+### Karpathy frame (as shipped)
+- **What:** Server-side voice via Groq Whisper (STT) and Edge TTS (TTS) replacing inconsistent browser-native APIs.
+- **Why this shape:** Both free, both high quality, both work consistently regardless of what voices the user's OS has installed. Server-side means the kid gets the same Arabic voice on his phone as on the laptop.
+- **First failure mode probed:** Embedded Arabic in TTS with English voice (the old failure). Verified the chunked endpoint produces 39 KB of audio for mixed text — proves the per-chunk synthesis is firing.
+
+### Known follow-ups
+- Edge TTS uses an unofficial Microsoft endpoint; if Microsoft kills it, swap to **Azure Speech Services free tier** (500k chars/month, official, requires only a free Azure key) — one file change in `app/api/tts/route.ts`.
+- Voice choice can be improved per-family by editing `AI_ENGLISH_VOICE` / `AI_ARABIC_VOICE` in `lib/groq.ts` (PARENT CONTRIBUTION #3) — list of alternatives included in comments.
+- No streaming yet — the whole TTS response is buffered before sending. For longer replies (>10 sec audio) we could stream chunks; not needed at current reply lengths.
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Voice chat for English practice — 2026-05-24
 
 - **Status:** Shipped (commit `4a85687`, direct main push)
