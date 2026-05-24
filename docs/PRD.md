@@ -4,6 +4,38 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Bug fix — crossword auto-advance skips intersection cells — 2026-05-24
+
+- **Status:** Shipped (commit `bd30c02`)
+- **Summary:** Interactive crossword's auto-advance now jumps over already-filled intersection cells instead of getting stuck on them, so filling an across word that crosses a completed down word (or vice versa) is one continuous typing flow.
+
+### What was broken
+Auto-advance moved focus exactly one cell after each typed letter. If that next cell was already filled by a completed intersecting word, its input was `disabled` (cell belonged to a `wordStatus === "correct"` word) — so typing did nothing and the kid had to manually tap past every intersection to keep going.
+
+### Fix
+`components/InteractiveCrossword.tsx`:
+- Replaced the single-step `if (cellInfo[nextKey])` advance with a `while (cellInfo[next] && valuesRef.current[next])` loop in `onCellInput`. Walks forward over any filled cells, lands on the next empty cell of the active word, or falls through to `checkWord` when it walks off the word.
+- Symmetric fix in `onCellKeyDown`'s Backspace branch: walks back over locked cells (intersecting correct words) so Backspace can navigate over completed crossings.
+- Extracted `isLocked(r, c)` helper used by both the existing edit-guard and the new backspace skip — DRY and easier to read than inline `info?.acrossId !== undefined && ...` chains.
+
+### Decisions worth remembering
+- **Forward skips by `value` presence; backspace skips by `locked` status.** Filled-but-not-locked cells are the kid's own input that they may want to retype; the auto-advance skips them anyway (standard crossword UX = find next blank), but backspace stops at them so the kid can delete and re-enter.
+- **`cellInfo[key]` is the boundary detector.** It's `undefined` for black squares and out-of-bounds, so the `while` loop terminates safely without a separate bounds check.
+- **No new state.** Whole fix is navigation math inside two existing handlers + one helper. ~30-line diff, no schema/API change.
+
+### Files touched
+`components/InteractiveCrossword.tsx` (only)
+
+### Verification
+- `npm run build` clean
+- Live URL: `/lists/<id>/crossword` 200; both `print-view` and `play-view` markup still present
+- Manual play-mode flow (user-side): fill down word → fill crossing across word → typing flows through the intersection without manual tap
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Interactive play mode for worksheets — 2026-05-24
 
 - **Status:** Shipped (commit `ab7672d`)
