@@ -16,7 +16,7 @@ async function valid(token: string | undefined): Promise<boolean> {
   }
 }
 
-export async function proxy(req: NextRequest) {
+async function proxyImpl(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
 
@@ -31,6 +31,11 @@ export async function proxy(req: NextRequest) {
   url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
 }
+
+// Next 16's dev runtime is strict about the export shape — provide BOTH the
+// named `proxy` export AND a default export so every loader path is satisfied.
+export const proxy = proxyImpl;
+export default proxyImpl;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
