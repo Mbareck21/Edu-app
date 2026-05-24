@@ -5,6 +5,8 @@ import { WordList, toClient } from "@/lib/models/WordList";
 import { buildCrossword } from "@/lib/crossword";
 import WorksheetFrame from "@/components/WorksheetFrame";
 import CrosswordGrid from "@/components/CrosswordGrid";
+import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
+import InteractiveCrossword from "@/components/InteractiveCrossword";
 
 export const dynamic = "force-dynamic";
 
@@ -21,18 +23,39 @@ export default async function CrosswordPage({
   const list = toClient(doc);
   const result = buildCrossword(list.words);
 
-  return (
-    <WorksheetFrame title="Crossword" listName={list.name} backHref={`/lists/${list._id}`}>
-      {!result.ok ? (
+  // If the crossword generator fell back, no interactive mode either.
+  if (!result.ok) {
+    return (
+      <WorksheetFrame title="Crossword" listName={list.name} backHref={`/lists/${list._id}`}>
         <FallbackList list={list} reason={result.reason} />
-      ) : (
-        <>
-          <Page1 listName={list.name} result={result} />
-          <div className="page-break-after" />
-          <Page2 listName={list.name} result={result} />
-        </>
-      )}
-    </WorksheetFrame>
+      </WorksheetFrame>
+    );
+  }
+
+  return (
+    <PlayProvider>
+      <WorksheetFrame
+        title="Crossword"
+        listName={list.name}
+        backHref={`/lists/${list._id}`}
+        extraHeaderRight={<PlayToggleButton />}
+      >
+        <PlayPaneSwitcher
+          printView={<PrintView listName={list.name} result={result} />}
+          playView={
+            <InteractiveCrossword
+              listName={list.name}
+              rows={result.rows}
+              cols={result.cols}
+              grid={result.grid}
+              placed={result.placed}
+              across={result.across}
+              down={result.down}
+            />
+          }
+        />
+      </WorksheetFrame>
+    </PlayProvider>
   );
 }
 
@@ -52,11 +75,28 @@ function FallbackList({
       <ol className="space-y-2 text-lg">
         {list.words.map((w, i) => (
           <li key={i}>
-            <strong>{i + 1}.</strong> {w.clue || "(no clue yet)"} <span className="ml-4 inline-block min-w-32 border-b border-black">&nbsp;</span>
+            <strong>{i + 1}.</strong> {w.clue || "(no clue yet)"}{" "}
+            <span className="ml-4 inline-block min-w-32 border-b border-black">&nbsp;</span>
           </li>
         ))}
       </ol>
     </section>
+  );
+}
+
+function PrintView({
+  listName,
+  result,
+}: {
+  listName: string;
+  result: Extract<ReturnType<typeof buildCrossword>, { ok: true }>;
+}) {
+  return (
+    <>
+      <Page1 listName={listName} result={result} />
+      <div className="page-break-after" />
+      <Page2 listName={listName} result={result} />
+    </>
   );
 }
 

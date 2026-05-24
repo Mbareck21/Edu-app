@@ -4,6 +4,8 @@ import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { scrambleAll } from "@/lib/scramble";
 import WorksheetFrame from "@/components/WorksheetFrame";
+import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
+import InteractiveScramble from "@/components/InteractiveScramble";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +24,34 @@ export default async function ScramblePage({
   const rows = scrambleAll(list.words.map((w) => w.word));
 
   return (
-    <WorksheetFrame title="Word Scramble" listName={list.name} backHref={`/lists/${list._id}`}>
+    <PlayProvider>
+      <WorksheetFrame
+        title="Word Scramble"
+        listName={list.name}
+        backHref={`/lists/${list._id}`}
+        extraHeaderRight={<PlayToggleButton />}
+      >
+        <PlayPaneSwitcher
+          printView={<PrintView listName={list.name} rows={rows} />}
+          playView={<InteractiveScramble listName={list.name} rows={rows} />}
+        />
+      </WorksheetFrame>
+    </PlayProvider>
+  );
+}
+
+function PrintView({
+  listName,
+  rows,
+}: {
+  listName: string;
+  rows: { scrambled: string; answer: string }[];
+}) {
+  return (
+    <>
       <section>
         <h1 className="mb-1 text-3xl font-bold">Word Scramble</h1>
-        <p className="mb-4 text-sm text-slate-600">{list.name}</p>
+        <p className="mb-4 text-sm text-slate-600">{listName}</p>
         <p className="mb-6 text-base">Unscramble each word.</p>
         <ol className="space-y-5 text-lg">
           {rows.map((r, i) => (
@@ -33,11 +59,7 @@ export default async function ScramblePage({
               <span className="scramble-scrambled font-bold min-w-40">{r.scrambled}</span>
               <span className="inline-flex gap-1">
                 {Array.from({ length: r.answer.length }).map((_, j) => (
-                  <span
-                    key={j}
-                    className="scramble-box"
-                    aria-hidden
-                  />
+                  <span key={j} className="scramble-box" aria-hidden />
                 ))}
               </span>
             </li>
@@ -49,7 +71,7 @@ export default async function ScramblePage({
 
       <section>
         <h1 className="mb-1 text-3xl font-bold">Answer Key</h1>
-        <p className="mb-4 text-sm text-slate-600">{list.name}</p>
+        <p className="mb-4 text-sm text-slate-600">{listName}</p>
         <ol className="space-y-2 text-lg">
           {rows.map((r, i) => (
             <li key={i} className="flex gap-4">
@@ -59,6 +81,6 @@ export default async function ScramblePage({
           ))}
         </ol>
       </section>
-    </WorksheetFrame>
+    </>
   );
 }

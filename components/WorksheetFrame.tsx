@@ -7,11 +7,13 @@ export default function WorksheetFrame({
   listName,
   backHref,
   children,
+  extraHeaderRight,
 }: {
   title: string;
   listName: string;
   backHref: string;
   children: React.ReactNode;
+  extraHeaderRight?: React.ReactNode;
 }) {
   return (
     <>
@@ -22,9 +24,12 @@ export default function WorksheetFrame({
             <span className="text-sm text-slate-500">·</span>
             <span className="text-sm font-medium">{listName} — {title}</span>
           </div>
-          <button type="button" className="btn-primary" onClick={() => window.print()}>
-            Print
-          </button>
+          <div className="flex items-center gap-2">
+            {extraHeaderRight}
+            <button type="button" className="btn-primary" onClick={() => window.print()}>
+              Print
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-6 worksheet">
