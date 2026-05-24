@@ -4,6 +4,47 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Voice chat for English practice — 2026-05-24
+
+- **Status:** Shipped (commit `4a85687`, direct main push)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app/chat>
+- **Summary:** Added voice in/out to `/chat` using the browser-native Web Speech API. The AI now strategically inserts brief Arabic glosses when introducing English vocabulary words, and TTS splits replies by language so Arabic is spoken with an Arabic voice.
+
+### Acceptance criteria (verified live)
+- [x] Mic button next to the input (hidden if browser lacks `SpeechRecognition`)
+- [x] Tap-to-start / tap-to-stop with live interim transcript
+- [x] AI replies auto-play through device speaker when streaming finishes
+- [x] Mute toggle in header, preference persisted to `localStorage` (`eduapp.autoplay`)
+- [x] Replay button on each AI message
+- [x] TTS chunks text by Arabic vs Latin Unicode range; one `SpeechSynthesisUtterance` per chunk with correct `lang` (`ar-SA` / `en-US`)
+- [x] AI system prompt produces Arabic glosses on vocabulary words — verified live: *"A happy (سعيد) person smiles and feels good inside"*
+- [x] Zero backend changes; `/api/chat` untouched; no new env vars; no new deps
+
+### Files touched
+`lib/voice.ts` (new), `lib/groq.ts` (CHAT_SYSTEM_PROMPT update), `app/chat/page.tsx` (mic + replay + mute + auto-play wiring)
+
+### Decisions worth remembering
+- **Web Speech API over Whisper/ElevenLabs.** Free, no backend, no key rotation. Trade-off: voice quality varies by device; Firefox lacks STT (we hide the mic there gracefully).
+- **UI stays English-only.** "Arabic fallback" is an AI behaviour in the system prompt, not a UI feature. Keeps the chat surface clean and English-immersive while still giving the child a comprehension safety net.
+- **TTS bilingual chunking is required, not optional.** Without splitting per-language and setting `utterance.lang`, embedded Arabic words are pronounced by the English voice as gibberish. The Unicode regex `[؀-ۿ...]` is the language anchor; letters drive language, whitespace/punctuation join the previous chunk.
+- **Auto-play default on with persistent mute toggle.** Feels like a real tutor; toggle covers library/quiet-room cases.
+- **Tap-to-start / tap-to-stop, not push-to-hold.** Matches WhatsApp/Telegram voice-note UI a 9-year-old already knows.
+
+### Karpathy frame (as shipped)
+- **What:** Voice in/out on `/chat` via Web Speech API + system-prompt-driven Arabic glosses.
+- **Why this shape:** Zero backend changes, zero new costs. Arabic is an AI behaviour not a UI element — keeps the surface English-immersive.
+- **First failure mode probed:** Embedded Arabic in TTS using English voice. Mitigation in `lib/voice.ts::chunkByLanguage`. Verified the AI does produce mixed-language replies in prod.
+
+### Known follow-ups
+- The Arabic-policy block in `CHAT_SYSTEM_PROMPT` is marked as a parent contribution — tune aggressiveness if Arabic glosses feel too frequent or too rare in practice.
+- iOS Safari `SpeechSynthesis` occasionally stalls on rapid utterances — `speak()` always calls `cancel()` first as defence; may still need refinement after more real-world use.
+- Voice quality depends on the OS's installed voices. Arabic voice may need to be installed on some Android devices.
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Edu-App foundation — English worksheets + AI buddy — 2026-05-24
 
 - **Status:** Shipped (no PR — direct main push to GitHub, deployed via Vercel CLI)
