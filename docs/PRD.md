@@ -4,6 +4,48 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Hands-free continuous conversation mode — 2026-05-24
+
+- **Status:** Shipped (commit `64c7d31`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app/chat>
+- **Summary:** Added a state-machine-driven continuous conversation mode to `/chat`. After tapping "Talk", the mic auto-opens after each AI reply, auto-submits on speech-pause, loops until the kid taps Stop or doesn't say anything for 6 seconds.
+
+### Acceptance criteria (verified — server side green; browser flow ready to test)
+- [x] "Talk" button on `/chat` enters conversation mode (server-side build clean; /chat page 200 OK)
+- [x] No backend changes — `/api/transcribe`, `/api/tts`, `/api/chat`, `/api/lists` all regression-tested on prod
+- [x] Single-utterance mic flow untouched (existing recordAudio path preserved)
+- [x] Mute toggle behavior defined: skips speaking state, loop continues silently
+- [x] Stop button always visible during conversation mode
+- [x] Interrupt button replaces big state button during AI speech
+- [ ] Browser smoke test (mic permission, full cycle, interrupt, stop) — **user to verify on phone**
+
+### Files touched
+`lib/voice.ts` (added openMicStream / closeMicStream / recordUntilSilent + 4 tuning constants), `app/chat/page.tsx` (convState state machine + runConversation loop + Talk/Stop/Interrupt UI)
+
+### Decisions worth remembering
+- **Hand-rolled silence detection over @ricky0123/vad-web for v1.** Web Audio AnalyserNode + getByteTimeDomainData → RMS at 20Hz. Default threshold 0.015 (between ambient ~0.005 and speech ~0.05). Upgrade path documented if real-world quality is poor.
+- **Refs for loop-readable state.** stopRef, messagesRef, autoPlayRef. React state captured in closures goes stale across `await` points; refs always read live.
+- **Mic stream held across turns.** openMicStream once per conversation; closeMicStream on exit. Avoids Safari re-prompts and Chrome re-init latency.
+- **No real barge-in v1.** Tap-to-interrupt button instead. Mic stays closed during AI speech so we don't pick up our own audio. Echo cancellation is on (`echoCancellation: true`) but we don't rely on it.
+- **Deferred-resolver pattern in recordUntilSilent.** External `cancel()` needed to resolve the same promise the polling loop resolves — extracted the resolver out of the Promise executor closure.
+- **streamChatReply() extracted.** Single function shared between single-utterance `send()` and the conversation loop. Adds the user message + empty assistant placeholder; streams chunks in; returns final text or null.
+
+### Karpathy frame (as shipped)
+- **What:** Client-side state machine (off/listening/transcribing/thinking/streaming/speaking) that loops over the existing `/api/transcribe` and `/api/tts` endpoints, plus a held-stream Web Audio analyser for silence detection.
+- **Why this shape:** Zero backend changes; existing endpoints already work turn-by-turn. Holding the stream removes permission re-prompts. Refs side-step React's stale-closure problem in the async loop.
+- **First failure mode probed:** Silence cuts him off mid-thought. Mitigated with 1.5s default + obvious Interrupt button + three parent-tunable constants in one place.
+
+### Known follow-ups
+- **Real browser smoke test pending** — server-side everything passes; user needs to verify mic permission + full cycle on phone.
+- Three tuning constants in `lib/voice.ts` (`SILENCE_DURATION_MS`, `INITIAL_WAIT_MS`, `SPEECH_THRESHOLD_RMS`) marked PARENT CONTRIBUTION #4 — edit and redeploy if rhythm feels off.
+- VAD upgrade path: swap to `@ricky0123/vad-web` (Silero VAD ONNX, ~2 MB bundle) if hand-rolled RMS detection mis-triggers on background noise.
+- v2: real voice-activated barge-in (mic open during AI speech, detect kid's voice to interrupt). Requires careful AEC tuning; out of scope for v1.
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## High-quality server-side voice (Whisper + Edge TTS) — 2026-05-24
 
 - **Status:** Shipped (commit `142a546`)
