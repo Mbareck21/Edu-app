@@ -1,161 +1,120 @@
-// Browser-only Web Speech API wrappers for the /chat voice feature.
+// Client-side voice helpers for /chat.
 //
-// Two capabilities:
-//   - startRecognition(): mic -> English transcript (live + final)
-//   - speak(): play text through TTS, switching voice when Arabic appears
+// Two responsibilities:
+//   - recordAudio(): MediaRecorder wrapper → returns the recorded audio Blob
+//   - playUrl():     plays a /api/tts URL through an <audio> element
 //
-// Arabic detection is by Unicode range. We split mixed-language AI replies into
-// chunks and set utterance.lang per chunk so the OS picks the right voice for
-// each piece — otherwise embedded Arabic words come out as gibberish in an
-// English voice.
+// All voice quality (STT + TTS) is now server-side via /api/transcribe and
+// /api/tts. This file just wires up the browser-side input/output.
 
-const ARABIC_RE =
-  /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+// ────────────────────────────────────────────────────────────────────────────
+// Recording
+// ────────────────────────────────────────────────────────────────────────────
 
-// Web Speech API isn't in lib.dom.d.ts on every TS setup; lookups via `any`.
-type AnyWindow = typeof window & {
-  SpeechRecognition?: unknown;
-  webkitSpeechRecognition?: unknown;
+export function isRecordingSupported(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!(
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function" &&
+    typeof window.MediaRecorder !== "undefined"
+  );
+}
+
+export type Recording = {
+  stop: () => Promise<Blob | null>;
+  cancel: () => void;
 };
 
-export function isSpeechRecognitionSupported(): boolean {
-  if (typeof window === "undefined") return false;
-  const w = window as AnyWindow;
-  return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
-}
+export async function recordAudio(): Promise<Recording> {
+  if (!isRecordingSupported()) {
+    return { stop: async () => null, cancel: () => {} };
+  }
 
-export function isSpeechSynthesisSupported(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
-}
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // Pick the best mime type Chrome/Safari/Firefox all accept reliably.
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : MediaRecorder.isTypeSupported("audio/mp4")
+      ? "audio/mp4"
+      : "";
+  const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+  recorder.start();
 
-export function startRecognition(opts: {
-  lang?: string;
-  onInterim?: (transcript: string) => void;
-}): { stop: () => void; promise: Promise<string | null> } {
-  const w = window as AnyWindow;
-  const Ctor =
-    (w.SpeechRecognition as new () => unknown) ||
-    (w.webkitSpeechRecognition as new () => unknown);
-  if (!Ctor) return { stop: () => {}, promise: Promise.resolve(null) };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recog: any = new Ctor();
-  recog.lang = opts.lang ?? "en-US";
-  recog.continuous = true;
-  recog.interimResults = true;
-
-  let finalText = "";
-  let finished = false;
-
-  const promise = new Promise<string | null>((resolve) => {
-    const settle = (value: string | null) => {
-      if (finished) return;
-      finished = true;
-      resolve(value);
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recog.onresult = (event: any) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) finalText += t + " ";
-        else interim += t;
-      }
-      opts.onInterim?.((finalText + interim).trim());
-    };
-    recog.onerror = () => settle(finalText.trim() || null);
-    recog.onend = () => settle(finalText.trim() || null);
-
-    try {
-      recog.start();
-    } catch {
-      settle(null);
-    }
-  });
+  const finishStream = () => stream.getTracks().forEach((t) => t.stop());
 
   return {
-    stop: () => {
-      try { recog.stop(); } catch { /* ignore */ }
+    stop: () =>
+      new Promise<Blob | null>((resolve) => {
+        recorder.onstop = () => {
+          finishStream();
+          if (chunks.length === 0) {
+            resolve(null);
+            return;
+          }
+          const blob = new Blob(chunks, { type: mimeType || chunks[0].type || "audio/webm" });
+          resolve(blob);
+        };
+        try {
+          recorder.stop();
+        } catch {
+          finishStream();
+          resolve(null);
+        }
+      }),
+    cancel: () => {
+      try {
+        recorder.stop();
+      } catch {
+        // ignore
+      }
+      finishStream();
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Playback — point an <audio> element at /api/tts
+// ────────────────────────────────────────────────────────────────────────────
+
+export type Playback = {
+  cancel: () => void;
+  promise: Promise<void>;
+};
+
+export function playTextThroughTTS(text: string): Playback {
+  if (typeof window === "undefined" || !text.trim()) {
+    return { cancel: () => {}, promise: Promise.resolve() };
+  }
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = `/api/tts?text=${encodeURIComponent(text)}`;
+  const promise = new Promise<void>((resolve) => {
+    const done = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      resolve();
+    };
+    audio.onended = done;
+    audio.onerror = done;
+    audio.play().catch(done);
+  });
+  return {
+    cancel: () => {
+      audio.pause();
+      audio.src = "";
     },
     promise,
   };
 }
 
-// Split text into runs of one language each, so each utterance can use the right voice.
-// Whitespace and punctuation attach to the surrounding chunk.
-function chunkByLanguage(text: string): Array<{ lang: string; text: string }> {
-  if (!text) return [];
-  const out: Array<{ lang: string; text: string }> = [];
-  let buf = "";
-  let bufLang: "en-US" | "ar-SA" | null = null;
+// ────────────────────────────────────────────────────────────────────────────
+// Preferences
+// ────────────────────────────────────────────────────────────────────────────
 
-  const isLetter = (ch: string) => /\p{L}/u.test(ch);
-
-  for (const ch of text) {
-    let charLang: "en-US" | "ar-SA" | null = null;
-    if (isLetter(ch)) charLang = ARABIC_RE.test(ch) ? "ar-SA" : "en-US";
-
-    if (charLang && bufLang && charLang !== bufLang) {
-      if (buf.trim()) out.push({ lang: bufLang, text: buf });
-      buf = ch;
-      bufLang = charLang;
-    } else {
-      if (charLang && !bufLang) bufLang = charLang;
-      buf += ch;
-    }
-  }
-  if (buf.trim()) out.push({ lang: bufLang ?? "en-US", text: buf });
-  return out;
-}
-
-export function speak(
-  text: string,
-  opts: { rate?: number; onDone?: () => void } = {}
-): { cancel: () => void } {
-  if (!isSpeechSynthesisSupported() || !text.trim()) {
-    opts.onDone?.();
-    return { cancel: () => {} };
-  }
-  // Always start clean — iOS Safari sometimes stalls if a previous utterance is in flight.
-  window.speechSynthesis.cancel();
-
-  const chunks = chunkByLanguage(text);
-  if (chunks.length === 0) {
-    opts.onDone?.();
-    return { cancel: () => {} };
-  }
-
-  const rate = opts.rate ?? 0.95; // slightly slower so a 9-year-old can follow
-  let cancelled = false;
-  let lastUtterance: SpeechSynthesisUtterance | null = null;
-
-  for (const ch of chunks) {
-    const u = new SpeechSynthesisUtterance(ch.text);
-    u.lang = ch.lang;
-    u.rate = rate;
-    window.speechSynthesis.speak(u);
-    lastUtterance = u;
-  }
-  if (lastUtterance) {
-    lastUtterance.onend = () => {
-      if (!cancelled) opts.onDone?.();
-    };
-  }
-
-  return {
-    cancel: () => {
-      cancelled = true;
-      window.speechSynthesis.cancel();
-    },
-  };
-}
-
-export function cancelSpeech(): void {
-  if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
-}
-
-// localStorage-backed auto-play preference. Default true (auto-play on).
 const KEY = "eduapp.autoplay";
 
 export function readAutoPlayPref(): boolean {

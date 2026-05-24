@@ -12,9 +12,32 @@ export function groq(): Groq {
   return _client;
 }
 
-// Models — pinned so behavior is predictable. Both are free on Groq's hobby tier.
+// Models — pinned so behavior is predictable. All free on Groq's hobby tier.
 export const CHAT_MODEL = "llama-3.1-8b-instant";   // fast, friendly, plenty smart for a 9-year-old
 export const CLUE_MODEL = "llama-3.3-70b-versatile"; // a touch slower but writes nicer simple-English clues
+export const STT_MODEL = "whisper-large-v3-turbo";   // fast multilingual speech recognition
+
+// ────────────────────────────────────────────────────────────────────────────
+// ✏️ PARENT CONTRIBUTION #3 — Voice selection for AI speech
+// ────────────────────────────────────────────────────────────────────────────
+// These are Microsoft Edge TTS neural voice IDs. Listen to samples and pick
+// the ones your family likes most, then redeploy.
+//
+// English voices (try in order):
+//   "en-US-AnaNeural"     — CHILD voice, peer-style, friendly (default)
+//   "en-GB-MaisieNeural"  — UK child voice
+//   "en-US-AriaNeural"    — warm female adult, natural
+//   "en-US-JennyNeural"   — clear female adult, education-style
+//   "en-US-GuyNeural"     — warm male adult
+//
+// Arabic voices (try in order):
+//   "ar-EG-SalmaNeural"   — Egyptian female (most widely understood, default)
+//   "ar-EG-ShakirNeural"  — Egyptian male
+//   "ar-SA-ZariyahNeural" — Saudi MSA female (formal)
+//   "ar-SA-HamedNeural"   — Saudi MSA male
+// ────────────────────────────────────────────────────────────────────────────
+export const AI_ENGLISH_VOICE = "en-US-AnaNeural";
+export const AI_ARABIC_VOICE = "ar-EG-SalmaNeural";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ✏️ PARENT CONTRIBUTION #1 — Tutor personality

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  isSpeechRecognitionSupported,
-  isSpeechSynthesisSupported,
-  startRecognition,
-  speak,
-  cancelSpeech,
+  isRecordingSupported,
+  recordAudio,
+  playTextThroughTTS,
   readAutoPlayPref,
   writeAutoPlayPref,
+  type Playback,
+  type Recording,
 } from "@/lib/voice";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -20,46 +20,44 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Voice state
   const [autoPlay, setAutoPlay] = useState(true);
-  const [sttSupported, setSttSupported] = useState(false);
-  const [ttsSupported, setTtsSupported] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [interim, setInterim] = useState("");
+  const [micAvailable, setMicAvailable] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<{ stop: () => void; promise: Promise<string | null> } | null>(null);
-  const speechHandleRef = useRef<{ cancel: () => void } | null>(null);
+  const recordingRef = useRef<Recording | null>(null);
+  const playbackRef = useRef<Playback | null>(null);
 
-  // One-time feature detection + preference load (client only).
   useEffect(() => {
-    setSttSupported(isSpeechRecognitionSupported());
-    setTtsSupported(isSpeechSynthesisSupported());
+    setMicAvailable(isRecordingSupported());
     setAutoPlay(readAutoPlayPref());
   }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, streaming, interim]);
+  }, [messages, streaming]);
 
-  // Cancel any in-flight speech when leaving the page.
-  useEffect(() => () => cancelSpeech(), []);
+  useEffect(() => () => playbackRef.current?.cancel(), []);
 
   function toggleAutoPlay() {
     const next = !autoPlay;
     setAutoPlay(next);
     writeAutoPlayPref(next);
-    if (!next) cancelSpeech();
+    if (!next) {
+      playbackRef.current?.cancel();
+      setSpeakingIdx(null);
+    }
   }
 
   function playMessage(idx: number, text: string) {
-    if (!ttsSupported) return;
-    speechHandleRef.current?.cancel();
+    playbackRef.current?.cancel();
     setSpeakingIdx(idx);
-    speechHandleRef.current = speak(text, {
-      onDone: () => setSpeakingIdx((cur) => (cur === idx ? null : cur)),
+    const pb = playTextThroughTTS(text);
+    playbackRef.current = pb;
+    pb.promise.then(() => {
+      setSpeakingIdx((cur) => (cur === idx ? null : cur));
     });
   }
 
@@ -115,9 +113,8 @@ export default function ChatPage() {
         });
       }
 
-      // Auto-play the finished reply.
-      if (autoPlay && acc.trim() && ttsSupported) {
-        const idx = next.length; // index of the assistant message we just appended
+      if (autoPlay && acc.trim()) {
+        const idx = next.length;
         playMessage(idx, acc);
       }
     } catch (err) {
@@ -128,43 +125,74 @@ export default function ChatPage() {
     }
   }
 
-  async function toggleMic() {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    if (!sttSupported || streaming) return;
-
-    // Stop any speech first so the mic doesn't pick it up.
-    cancelSpeech();
+  async function startRecording() {
+    if (!micAvailable || recording || transcribing || streaming) return;
+    setError(null);
+    playbackRef.current?.cancel();
     setSpeakingIdx(null);
+    try {
+      const rec = await recordAudio();
+      recordingRef.current = rec;
+      setRecording(true);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.name === "NotAllowedError"
+          ? "Microphone permission was blocked. Allow it in your browser settings to use voice."
+          : "Could not start the microphone."
+      );
+    }
+  }
 
-    setInterim("");
-    setListening(true);
-    const handle = startRecognition({
-      lang: "en-US",
-      onInterim: (t) => setInterim(t),
-    });
-    recognitionRef.current = handle;
+  async function stopRecording() {
+    const rec = recordingRef.current;
+    if (!rec) return;
+    recordingRef.current = null;
+    setRecording(false);
+    setTranscribing(true);
 
-    const final = await handle.promise;
-    recognitionRef.current = null;
-    setListening(false);
-    setInterim("");
-
-    if (final && final.trim()) {
-      setInput(final.trim());
-      // small visual beat so he sees the text before it sends
-      setTimeout(() => send(final.trim()), 150);
+    try {
+      const blob = await rec.stop();
+      if (!blob || blob.size === 0) {
+        setTranscribing(false);
+        return;
+      }
+      const form = new FormData();
+      form.append("audio", blob, "recording.webm");
+      const res = await fetch("/api/transcribe", { method: "POST", body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(
+          res.status === 429
+            ? "Whoa — taking a quick break before more voice messages."
+            : typeof data.error === "string"
+              ? `Could not understand: ${data.error}`
+              : "Could not understand the audio."
+        );
+        return;
+      }
+      const data = (await res.json()) as { text?: string };
+      const text = (data.text || "").trim();
+      if (!text) {
+        setError("I didn't hear anything — try again.");
+        return;
+      }
+      setInput(text);
+      setTimeout(() => send(text), 150);
+    } finally {
+      setTranscribing(false);
     }
   }
 
   function clearAll() {
-    cancelSpeech();
+    playbackRef.current?.cancel();
     setSpeakingIdx(null);
     setMessages([]);
     setError(null);
   }
+
+  const micBusy = recording || transcribing;
+  const micLabel = recording ? "■" : transcribing ? "…" : "🎤";
+  const micTitle = recording ? "Stop and send" : transcribing ? "Transcribing…" : "Start listening";
 
   return (
     <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col px-4 py-3">
@@ -172,17 +200,15 @@ export default function ChatPage() {
         <Link href="/" className="text-sm text-slate-600 hover:underline">← Home</Link>
         <h1 className="text-lg font-semibold">AI Buddy</h1>
         <div className="flex items-center gap-3">
-          {ttsSupported && (
-            <button
-              type="button"
-              onClick={toggleAutoPlay}
-              className="text-base"
-              title={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
-              aria-label={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
-            >
-              {autoPlay ? "🔊" : "🔇"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={toggleAutoPlay}
+            className="text-base"
+            title={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
+            aria-label={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
+          >
+            {autoPlay ? "🔊" : "🔇"}
+          </button>
           <button
             type="button"
             className="text-sm text-slate-600 hover:underline disabled:opacity-50"
@@ -202,7 +228,7 @@ export default function ChatPage() {
         )}
         {messages.map((m, i) => {
           const isLast = i === messages.length - 1;
-          const showReplay = m.role === "assistant" && ttsSupported && m.content && !(streaming && isLast);
+          const showReplay = m.role === "assistant" && m.content && !(streaming && isLast);
           return (
             <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
               <div
@@ -231,10 +257,13 @@ export default function ChatPage() {
         })}
       </div>
 
-      {listening && (
+      {recording && (
         <p className="mt-2 text-sm text-rose-600">
-          🎤 Listening… <span className="text-slate-700">{interim || "say something"}</span>
+          🎤 Listening… <span className="text-slate-700">tap the square when you finish</span>
         </p>
+      )}
+      {transcribing && (
+        <p className="mt-2 text-sm text-slate-600">⏳ Understanding what you said…</p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
@@ -245,31 +274,31 @@ export default function ChatPage() {
           send();
         }}
       >
-        {sttSupported && (
+        {micAvailable && (
           <button
             type="button"
-            onClick={toggleMic}
-            disabled={streaming}
+            onClick={recording ? stopRecording : startRecording}
+            disabled={streaming || transcribing}
             className={
               "inline-flex items-center justify-center rounded-md px-3 text-lg transition-colors disabled:opacity-50 " +
-              (listening
+              (recording
                 ? "bg-rose-600 text-white animate-pulse"
                 : "bg-white text-slate-900 border border-slate-300 hover:bg-slate-100")
             }
-            aria-label={listening ? "Stop listening" : "Start listening"}
-            title={listening ? "Stop listening" : "Start listening"}
+            aria-label={micTitle}
+            title={micTitle}
           >
-            {listening ? "■" : "🎤"}
+            {micLabel}
           </button>
         )}
         <input
           className="input flex-1"
-          placeholder={listening ? "Speaking…" : "Type or tap the mic…"}
+          placeholder={micBusy ? "Listening…" : "Type or tap the mic…"}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={streaming || listening}
+          disabled={streaming || micBusy}
         />
-        <button type="submit" className="btn-primary" disabled={streaming || !input.trim()}>
+        <button type="submit" className="btn-primary" disabled={streaming || micBusy || !input.trim()}>
           {streaming ? "…" : "Send"}
         </button>
       </form>
