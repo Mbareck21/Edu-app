@@ -139,13 +139,19 @@ export default function InteractiveCrossword({
     }
   }
 
+  function isLocked(r: number, c: number): boolean {
+    const info = cellInfo[`${r},${c}`];
+    if (!info) return false;
+    if (info.acrossId !== undefined && wordStatus[info.acrossId] === "correct") return true;
+    if (info.downId !== undefined && wordStatus[info.downId] === "correct") return true;
+    return false;
+  }
+
   function onCellInput(r: number, c: number, raw: string) {
     const key = `${r},${c}`;
     // Block edit if any word through this cell is locked correct.
     const info = cellInfo[key];
-    const lockedAcross = info?.acrossId !== undefined && wordStatus[info.acrossId] === "correct";
-    const lockedDown = info?.downId !== undefined && wordStatus[info.downId] === "correct";
-    if (lockedAcross || lockedDown) return;
+    if (isLocked(r, c)) return;
 
     // Strip to one letter A-Z.
     const ch = raw.toUpperCase().replace(/[^A-Z]/g, "").slice(-1);
@@ -159,17 +165,25 @@ export default function InteractiveCrossword({
     }
 
     if (ch) {
-      // Auto-advance to the next cell of the active word.
+      // Auto-advance to the next EMPTY cell of the active word — skip over
+      // intersection cells already filled by a previous word, so the kid
+      // doesn't get stuck at every crossing.
       const word = activeWord();
       if (word) {
         const dr = word.orientation === "down" ? 1 : 0;
         const dc = word.orientation === "across" ? 1 : 0;
-        const nextKey = `${r + dr},${c + dc}`;
+        let r2 = r + dr;
+        let c2 = c + dc;
+        while (cellInfo[`${r2},${c2}`] && valuesRef.current[`${r2},${c2}`]) {
+          r2 += dr;
+          c2 += dc;
+        }
+        const nextKey = `${r2},${c2}`;
         if (cellInfo[nextKey]) {
-          setActive({ r: r + dr, c: c + dc, orient: word.orientation });
+          setActive({ r: r2, c: c2, orient: word.orientation });
           inputRefs.current.get(nextKey)?.focus();
         } else {
-          // End of word — validate.
+          // Walked off the word — validate (useEffect on values also re-checks).
           setTimeout(() => checkWord(word), 0);
         }
       }
@@ -180,15 +194,22 @@ export default function InteractiveCrossword({
     if (e.key === "Backspace") {
       const key = `${r},${c}`;
       if (!values[key]) {
-        // Empty cell → step back to previous cell of active word.
+        // Empty cell → step back to previous EDITABLE cell of active word,
+        // skipping any locked cells (intersecting correct words).
         const word = activeWord();
         if (word) {
           const dr = word.orientation === "down" ? -1 : 0;
           const dc = word.orientation === "across" ? -1 : 0;
-          const prevKey = `${r + dr},${c + dc}`;
+          let r2 = r + dr;
+          let c2 = c + dc;
+          while (cellInfo[`${r2},${c2}`] && isLocked(r2, c2)) {
+            r2 += dr;
+            c2 += dc;
+          }
+          const prevKey = `${r2},${c2}`;
           if (cellInfo[prevKey]) {
             e.preventDefault();
-            setActive({ r: r + dr, c: c + dc, orient: word.orientation });
+            setActive({ r: r2, c: c2, orient: word.orientation });
             inputRefs.current.get(prevKey)?.focus();
           }
         }
