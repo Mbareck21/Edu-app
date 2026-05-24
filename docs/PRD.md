@@ -4,6 +4,41 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Bug fix — crossword orientation prefers word that starts at tapped cell — 2026-05-24
+
+- **Status:** Shipped (commit `1c7bf2e`)
+- **Summary:** Tapping the start cell of a DOWN word that sits on an across row (e.g., the C of "CAT" going down) used to default the cursor to ACROSS — typing then auto-advanced rightward instead of downward. `selectCell` now uses a two-pass preference that picks the orientation matching user intent.
+
+### What was broken
+The "new cell" branch of `selectCell` had a single fallback rule: `orient = acrossId !== undefined ? "across" : "down"`. It defaulted to across whenever an across word existed at the cell, ignoring whether the user tapped on a cell where a DOWN word *starts* (with the across word just passing through). Result: tapping the C of vertical "CAT" lit up the perpendicular across word, and typing went sideways.
+
+### Fix
+`components/InteractiveCrossword.tsx`, `selectCell` rewritten with a two-pass preference:
+
+1. **Continuity** — if the new cell continues the user's active word (`prevInfo.acrossId === acrossWord.position` for the active direction), keep the active orientation. Catches programmatic focus from auto-advance + onFocus so the cursor doesn't false-switch mid-word at perpendicular start cells.
+2. **Starts here** — if the cell is the STARTING cell of one word and a CROSSING cell of the other, prefer the one that starts here. The user-intent fix.
+3. **Existing fallback** — prefer prior orient if compatible, else default to across.
+
+Tap-to-toggle (same cell, second tap) is unchanged.
+
+### Decisions worth remembering
+- **The order matters.** Continuity must beat "starts here," otherwise auto-advance through a cell that happens to start a perpendicular word would false-switch the user's typing direction mid-word.
+- **Continuity match requires BOTH conditions** — the prior cell's word ID for the active direction AND the active orientation. Without both, a cell tap from outside the word could match by coincidence.
+- **No new state.** Just data lookups against `placedById` + `cellInfo`. The fix is ~30 lines added to one function.
+
+### Verification
+- `npm run build` clean.
+- Crossword page still serves 200 with both `print-view` and `play-view` markup present.
+- Live UX (parent verifies): tapping a down-word start cell that's on an across row now lights up the DOWN clue and typing flows downward.
+
+### Files touched
+`components/InteractiveCrossword.tsx` (only)
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Bug fix — crossword auto-advance skips intersection cells — 2026-05-24
 
 - **Status:** Shipped (commit `bd30c02`)
