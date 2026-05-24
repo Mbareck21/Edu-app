@@ -26,6 +26,42 @@
   }
 }
 
+/* Worksheet grids (crossword + word search). Cell size is a CSS variable so
+   the @media print block below can switch it to physical units (mm) when
+   printing — what's "big enough on screen" is not the same as "big enough to
+   write in by hand on paper". */
+.ws-grid {
+  --ws-cell: 44px;
+  --ws-font: 1.5rem;
+  --ws-num-font: 11px;
+  display: inline-grid;
+  grid-template-columns: repeat(var(--ws-cols, 10), var(--ws-cell));
+  grid-auto-rows: var(--ws-cell);
+  font-size: var(--ws-font);
+  line-height: 1;
+}
+.ws-num {
+  font-size: var(--ws-num-font);
+}
+
+/* Scramble worksheet answer boxes. Same screen-vs-print sizing logic. */
+.scramble-box {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 1px solid black;
+}
+.scramble-scrambled {
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+}
+
+/* Center the print-rendered grids on the page. */
+.print-center {
+  display: flex;
+  justify-content: center;
+}
+
 /* Print rules — applied on the worksheet pages */
 @media print {
   html, body {
@@ -49,8 +85,42 @@
     background: transparent !important;
     box-shadow: none !important;
   }
+  /* Let the worksheet fill the printable A4 area instead of capping at 1024px. */
+  .worksheet {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+  /* Bump cells & fonts to physical sizes that are easy to write inside. */
+  .ws-grid {
+    --ws-cell: 12mm;
+    --ws-font: 6mm;
+    --ws-num-font: 2.8mm;
+    border-width: 0.6mm !important;
+  }
+  .ws-grid > div {
+    border-width: 0.3mm !important;
+  }
+  .scramble-box {
+    width: 12mm !important;
+    height: 12mm !important;
+    border-width: 0.4mm !important;
+  }
+  .scramble-scrambled {
+    font-size: 6mm !important;
+  }
+  /* Bigger worksheet typography on paper. */
+  .worksheet h1 { font-size: 9mm !important; margin-bottom: 2mm !important; }
+  .worksheet h2 { font-size: 6mm !important; }
+  .worksheet p,
+  .worksheet li,
+  .worksheet ol,
+  .worksheet ul {
+    font-size: 4.5mm !important;
+    line-height: 1.4 !important;
+  }
   @page {
-    margin: 1.5cm;
+    margin: 1.2cm;
   }
 }
 

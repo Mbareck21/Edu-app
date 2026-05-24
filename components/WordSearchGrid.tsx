@@ -1,6 +1,5 @@
+import type { CSSProperties } from "react";
 import type { Placement } from "@/lib/wordsearch";
-
-const CELL = 30; // px
 
 export default function WordSearchGrid({
   rows,
@@ -22,28 +21,29 @@ export default function WordSearchGrid({
     }
   }
 
+  const styleVars = { "--ws-cols": cols } as CSSProperties;
+
   return (
-    <div
-      className="inline-grid border-2 border-black font-mono"
-      style={{ gridTemplateColumns: `repeat(${cols}, ${CELL}px)`, gridAutoRows: `${CELL}px` }}
-    >
-      {Array.from({ length: rows }).flatMap((_, r) =>
-        Array.from({ length: cols }).map((_, c) => {
-          const k = `${r},${c}`;
-          const lit = highlighted.has(k);
-          return (
-            <div
-              key={k}
-              className={
-                "flex items-center justify-center border border-black uppercase " +
-                (lit ? "bg-yellow-200 font-bold" : "bg-white")
-              }
-            >
-              {grid[r][c]}
-            </div>
-          );
-        })
-      )}
+    <div className="print-center">
+      <div className="ws-grid border-2 border-black font-mono" style={styleVars}>
+        {Array.from({ length: rows }).flatMap((_, r) =>
+          Array.from({ length: cols }).map((_, c) => {
+            const k = `${r},${c}`;
+            const lit = highlighted.has(k);
+            return (
+              <div
+                key={k}
+                className={
+                  "flex items-center justify-center border border-black uppercase " +
+                  (lit ? "bg-yellow-200 font-bold" : "bg-white")
+                }
+              >
+                {grid[r][c]}
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

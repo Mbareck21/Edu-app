@@ -27,15 +27,15 @@ export default async function ScramblePage({
         <h1 className="mb-1 text-3xl font-bold">Word Scramble</h1>
         <p className="mb-4 text-sm text-slate-600">{list.name}</p>
         <p className="mb-6 text-base">Unscramble each word.</p>
-        <ol className="space-y-4 text-lg">
+        <ol className="space-y-5 text-lg">
           {rows.map((r, i) => (
             <li key={i} className="flex flex-wrap items-center gap-4">
-              <span className="font-bold tracking-widest min-w-32">{r.scrambled}</span>
+              <span className="scramble-scrambled font-bold min-w-40">{r.scrambled}</span>
               <span className="inline-flex gap-1">
                 {Array.from({ length: r.answer.length }).map((_, j) => (
                   <span
                     key={j}
-                    className="inline-block h-8 w-8 border border-black"
+                    className="scramble-box"
                     aria-hidden
                   />
                 ))}
