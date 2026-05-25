@@ -145,7 +145,7 @@ export async function POST(req: Request) {
           },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.85,
+        temperature: 0.75,
         max_tokens: 2000,
       });
       const text = completion.choices[0]?.message?.content ?? "{}";

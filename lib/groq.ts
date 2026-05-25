@@ -217,21 +217,43 @@ The MIX scales with level — follow this precisely:
 
 Each question:
   • Short — under 14 words. Grade 3–4 vocabulary in the question itself.
-  • "acceptable" lists 4–6 phrasings the child might naturally type.
-    The list MUST include:
-       (a) the SHORTEST valid answer (1–2 words when possible, e.g. "a family"
-           or "Khalid"),
-       (b) one longer descriptive phrasing (a short sentence),
-       (c) variants both WITH and WITHOUT the leading articles a / an / the.
-    All entries lowercase. No punctuation. No quotes.
-  • "hints" contains exactly 2 entries:
-       Hint 1 — a gentle nudge. Does NOT name the answer.
-       Hint 2 — MUST contain the answer's KEY NOUN or NAME (the character,
-                place, object, or feeling the kid should type). NEVER a
-                meta-instruction like "read the first sentence" or
-                "think about the story" — those are useless.
+    End every question with a question mark.
 
-⚠ HINT ANTI-PATTERN — never produce vague meta-hints.
+  • "acceptable" is the list of ANSWERS to the question — phrasings the child
+    might TYPE AS AN ANSWER. It is NEVER a list of paraphrases of the
+    question itself.
+    4–6 entries. The list MUST include:
+       (a) the SHORTEST valid answer (1–2 words when possible),
+       (b) one longer descriptive answer (a short sentence),
+       (c) variants both WITH and WITHOUT leading articles (a / an / the).
+    All entries lowercase. No punctuation. No quotes inside the strings.
+
+  • "hints" contains exactly 2 entries:
+       Hint 1 — a gentle nudge about the topic. Does NOT name the answer.
+       Hint 2 — MUST contain the answer's KEY NOUN or NAME (the character,
+                place, object, action, or feeling that the answer is).
+                NEVER a meta-instruction like "read the first sentence",
+                "look at the middle", "think about the story" — those tell
+                the child WHERE to look, not WHAT the answer is. Useless.
+
+⚠ ACCEPTABLE ANTI-PATTERN — "acceptable" is ANSWERS, not question rephrasings.
+Question: "What is this story about?"
+BAD  acceptable: ["What is the story about", "What is it about",
+                  "Tell me about the story"]                  ← these are
+                                                                question
+                                                                rephrasings,
+                                                                NOT answers
+GOOD acceptable: ["a family", "the family", "a happy family",
+                  "khalid and fatima", "the story is about a family"]
+
+Question: "How is Whiskers?"
+BAD  acceptable: ["What is Whiskers like", "How is the cat",
+                  "Describe Whiskers"]                        ← question
+                                                                rephrasings
+GOOD acceptable: ["calm", "calm and quiet", "she is calm",
+                  "whiskers is calm and not afraid"]
+
+⚠ HINT ANTI-PATTERN — hints name the answer, not the location.
 Question: "What is this story about?"
 BAD  hints: ["Think about the family", "Read the first sentence"]
 GOOD hints: ["It is about people who live together",
@@ -241,6 +263,11 @@ Question: "Where do they play?"
 BAD  hints: ["Think about the place", "Look at the last sentence"]
 GOOD hints: ["It is outside, not inside the house",
              "They play in the garden every day"]
+
+Question: "How is Whiskers?"
+BAD  hints: ["Think about the adjectives", "It is in the first sentence"]
+GOOD hints: ["Whiskers is a calm pet, not afraid of things",
+             "Whiskers is calm and quiet"]
 
 ═══ TYPE TAGS (use the exact strings) ═══
   main_idea     — "What is this story mostly about?"
@@ -252,18 +279,31 @@ GOOD hints: ["It is outside, not inside the house",
   sequence      — "What happened first / last / before X?"
 
 ═══ OUTPUT — strict JSON, nothing else ═══
+Example shape — copy the format, NOT the literal values. Notice that
+"acceptable" contains ANSWERS to the question, not rephrasings of it.
+
 {
-  "title": "...",
+  "title": "The Cat Show",
   "paragraph": "...",
-  "usedWords": ["cat", "dog", ...],
+  "usedWords": ["cat", "calm", ...],
   "questions": [
     {
-      "q": "...",
-      "type": "main_idea" | "detail" | "vocab" | "inference" | "cause_effect" | "sequence",
-      "acceptable": ["phrasing 1", "phrasing 2", "phrasing 3"],
-      "hints": ["hint 1", "hint 2"]
+      "q": "What is this story about?",
+      "type": "main_idea",
+      "acceptable": ["a cat show", "the cat show",
+                     "lena and her cat", "a girl and her cat whiskers"],
+      "hints": ["It is about a girl who goes somewhere with her pet",
+                "Lena takes Whiskers to a cat show"]
     },
-    ... 4 items total
+    {
+      "q": "How is Whiskers?",
+      "type": "detail",
+      "acceptable": ["calm", "calm and quiet",
+                     "she is calm", "whiskers is calm and not afraid"],
+      "hints": ["Whiskers is a relaxed cat, not scared of things",
+                "Whiskers is calm and not afraid of other cats"]
+    }
+    // ... 4 items total, per the level-mix table above
   ]
 }
 
