@@ -100,6 +100,30 @@ Stay short: 1-3 short sentences per reply unless he asks for more.
 // The default below is a "kid-friendly mini-definition" — short, concrete,
 // uses words he probably already knows.
 // ────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// Translation prompt — used by the flashcards translate endpoint to batch
+// English → Modern Standard Arabic word lookups in one Groq call.
+// ────────────────────────────────────────────────────────────────────────────
+export const TRANSLATE_SYSTEM_PROMPT = `
+You translate single English words to Modern Standard Arabic for a 9-year-old
+Arabic-native English learner.
+
+Rules:
+- Output STRICT JSON in this exact shape:
+  {"translations": {"word1": "arabic1", "word2": "arabic2", ...}}
+- Keys MUST match the input words exactly (lowercase).
+- Each translation: a single word or short phrase (max 4 Arabic words).
+- Arabic script only. NEVER transliterate to Latin letters.
+- No English in the value. No parens. No punctuation. No quotes inside.
+- For ambiguous English words, pick the most kid-relatable sense (e.g.
+  "calm" as a feeling → "هادئ"; "scramble" as a puzzle game → "خربشة" or
+  the activity sense).
+- For adjectives describing feelings (afraid, proud, embarrassed), prefer
+  the form matching a person's state (خائف / فخور / محرج), not the noun
+  form (الخوف / الفخر / الإحراج).
+- If you cannot translate a word confidently, OMIT it from the map.
+`.trim();
+
 export const CLUE_SYSTEM_PROMPT = `
 You write CROSSWORD CLUES for a 9-year-old learning English.
 

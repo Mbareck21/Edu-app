@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientWordList } from "@/lib/models/WordList";
 
-type Word = { word: string; clue: string };
+type Word = { word: string; clue: string; arabic: string };
 
 export default function ListEditor({ list }: { list: ClientWordList }) {
   const router = useRouter();
   const [name, setName] = useState(list.name);
   const [hiddenMessage, setHiddenMessage] = useState(list.hiddenMessage);
   const [words, setWords] = useState<Word[]>(
-    list.words.length ? list.words : [{ word: "", clue: "" }]
+    list.words.length
+      ? list.words.map((w) => ({ word: w.word, clue: w.clue, arabic: w.arabic }))
+      : [{ word: "", clue: "", arabic: "" }]
   );
   const [busy, setBusy] = useState<"saving" | "aiclues" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,16 +22,22 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
     setWords((ws) => ws.map((w, idx) => (idx === i ? { ...w, ...patch } : w)));
   }
   function addRow() {
-    setWords((ws) => [...ws, { word: "", clue: "" }]);
+    setWords((ws) => [...ws, { word: "", clue: "", arabic: "" }]);
   }
   function removeRow(i: number) {
-    setWords((ws) => (ws.length === 1 ? [{ word: "", clue: "" }] : ws.filter((_, idx) => idx !== i)));
+    setWords((ws) =>
+      ws.length === 1 ? [{ word: "", clue: "", arabic: "" }] : ws.filter((_, idx) => idx !== i)
+    );
   }
 
   async function save() {
     setError(null);
     const clean = words
-      .map((w) => ({ word: w.word.trim().toLowerCase(), clue: w.clue.trim() }))
+      .map((w) => ({
+        word: w.word.trim().toLowerCase(),
+        clue: w.clue.trim(),
+        arabic: w.arabic.trim(),
+      }))
       .filter((w) => w.word.length > 0);
     setBusy("saving");
     try {
@@ -115,7 +123,7 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
 
         <ul className="space-y-3">
           {words.map((w, i) => (
-            <li key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_auto]">
+            <li key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_1fr_auto]">
               <input
                 aria-label="word"
                 className="input"
@@ -129,6 +137,15 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
                 placeholder="clue (or leave blank and click 'AI suggest clues')"
                 value={w.clue}
                 onChange={(e) => update(i, { clue: e.target.value })}
+              />
+              <input
+                aria-label="arabic"
+                className="input"
+                placeholder="الترجمة"
+                lang="ar"
+                dir="rtl"
+                value={w.arabic}
+                onChange={(e) => update(i, { arabic: e.target.value })}
               />
               <button
                 type="button"
@@ -153,6 +170,7 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
         <a className="btn-secondary" href={`/lists/${list._id}/scramble`}>Open Scramble</a>
         <a className="btn-secondary" href={`/lists/${list._id}/wordsearch`}>Open Word Search</a>
         <a className="btn-secondary" href={`/lists/${list._id}/reading`}>Open Reading</a>
+        <a className="btn-secondary" href={`/lists/${list._id}/flashcards`}>Open Flashcards</a>
       </div>
     </div>
   );

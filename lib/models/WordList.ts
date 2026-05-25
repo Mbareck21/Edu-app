@@ -103,10 +103,26 @@ const ReadingStatsSchema = new Schema(
 
 // ── Word + WordList ────────────────────────────────────────────────────────
 
+// SRS (spaced-repetition) state for the flashcards feature. New cards have
+// interval=0 and dueAt=now so they show up immediately on first visit.
+const SrsStateSchema = new Schema(
+  {
+    interval: { type: Number, default: 0 }, // days
+    dueAt: { type: Date, default: () => new Date() },
+    lastReviewed: { type: Date, default: null },
+    reviewCount: { type: Number, default: 0 },
+    easyCount: { type: Number, default: 0 },
+    hardCount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const WordSchema = new Schema(
   {
     word: { type: String, required: true, trim: true, lowercase: true },
     clue: { type: String, trim: true, default: "" },
+    arabic: { type: String, trim: true, default: "" },
+    srs: { type: SrsStateSchema, default: () => ({}) },
   },
   { _id: false }
 );
@@ -132,7 +148,21 @@ export const WordList: Model<WordListDoc> =
 
 // ── Client types ──────────────────────────────────────────────────────────
 
-export type ClientWord = { word: string; clue: string };
+export type SrsState = {
+  interval: number;
+  dueAt: string; // ISO
+  lastReviewed: string | null; // ISO
+  reviewCount: number;
+  easyCount: number;
+  hardCount: number;
+};
+
+export type ClientWord = {
+  word: string;
+  clue: string;
+  arabic: string;
+  srs: SrsState;
+};
 
 export type ReadingQuestion = {
   q: string;
@@ -225,11 +255,36 @@ function normalizeByType(raw: any): ReadingByType {
   return fallback;
 }
 
+// Map one raw word subdoc to its client shape, filling in defaults so old
+// documents that pre-date arabic/srs render as empty translation + new SRS.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toClientWord(w: any): ClientWord {
+  const srs = w?.srs ?? {};
+  return {
+    word: String(w?.word ?? ""),
+    clue: String(w?.clue ?? ""),
+    arabic: String(w?.arabic ?? ""),
+    srs: {
+      interval: Number(srs.interval ?? 0),
+      dueAt: srs.dueAt
+        ? new Date(srs.dueAt).toISOString()
+        : new Date().toISOString(),
+      lastReviewed: srs.lastReviewed
+        ? new Date(srs.lastReviewed).toISOString()
+        : null,
+      reviewCount: Number(srs.reviewCount ?? 0),
+      easyCount: Number(srs.easyCount ?? 0),
+      hardCount: Number(srs.hardCount ?? 0),
+    },
+  };
+}
+
 export function toClient(doc: {
   _id: unknown;
   name: string;
   hiddenMessage?: string;
-  words: { word: string; clue?: string }[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  words: any[];
   readingLevel?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   currentReading?: any;
@@ -300,7 +355,7 @@ export function toClient(doc: {
     _id: String(doc._id),
     name: doc.name,
     hiddenMessage: doc.hiddenMessage || "",
-    words: doc.words.map((w) => ({ word: w.word, clue: w.clue || "" })),
+    words: doc.words.map((w) => toClientWord(w)),
     readingLevel: Math.max(1, Math.min(5, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,
