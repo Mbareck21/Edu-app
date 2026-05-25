@@ -47,6 +47,7 @@ export default async function Home() {
                   <Link href={`/lists/${l._id}/crossword`} className="btn-secondary">Crossword</Link>
                   <Link href={`/lists/${l._id}/scramble`} className="btn-secondary">Scramble</Link>
                   <Link href={`/lists/${l._id}/wordsearch`} className="btn-secondary">Word Search</Link>
+                  <Link href={`/lists/${l._id}/reading`} className="btn-secondary">Reading</Link>
                   <DeleteListButton id={l._id} name={l.name} />
                 </div>
               </li>
