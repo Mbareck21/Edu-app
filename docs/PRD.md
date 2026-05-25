@@ -4,6 +4,39 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Reading: highlight vocab words + Arabic hover translations — 2026-05-25
+
+- **Status:** Shipped (commit `66b1d26`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app>
+- **Summary:** Vocab words from the kid's list are now visually highlighted in the generated story (soft amber background + dotted underline). On hover (desktop) or tap-focus (mobile), an Arabic translation tooltip appears above the word; hover/focus ends → tooltip disappears. Translations are produced by the same Groq call as the story (no extra round-trip), validated with Zod, persisted on `currentReading.vocabGlosses`, and rendered via a tokenizing helper using Tailwind `group-hover` + `group-focus-within` for pure-CSS tooltip behavior. The old "AI inlines one Arabic gloss in parens" behavior in PARENT CONTRIBUTION #6 was retired as part of this change (it would have produced duplicate Arabic alongside the tooltips).
+
+### Acceptance criteria (verified live)
+- [x] `READING_SYSTEM_PROMPT` gains an "ARABIC GLOSSES" section instructing the AI to emit `vocabGlosses[]` for every vocab word actually used in the paragraph. Arabic script only, base form, ≤4 words.
+- [x] PARENT CONTRIBUTION #6 updated: inline-Arabic-parens bullet replaced with explicit "paragraph stays English-only; Arabic is hover-revealed".
+- [x] Zod `ResponseShape` adds `vocabGlosses` (default `[]` so an AI omission doesn't fail generation).
+- [x] Mongoose `CurrentReadingSchema` gains `vocabGlosses: [VocabGlossSchema]` (default `[]`).
+- [x] `CurrentReading` TS type + `toClient` surface `vocabGlosses` with defensive `String(g?.x ?? "")` fallbacks for old documents.
+- [x] `InteractiveReading.tsx` tokenizes the paragraph and wraps any matching token (lowercase exact, or trailing-s stripped) in a Tailwind-styled focusable span with sibling tooltip span. Non-matching tokens pass through.
+- [x] Highlighted spans: `bg-amber-100`, `border-b-2 border-dotted border-amber-700`, `cursor-help`, `tabIndex={0}`.
+- [x] Tooltip: positioned above with `bottom-full`, dark slate background, white text, `lang="ar" dir="rtl"`, opacity transition, appears on `:hover` AND `:focus-within`.
+- [x] Live smoke: 10/10 glosses populated for the Feelings list, all glossed words appear in the paragraph, all Arabic values pass the Arabic-script regex, paragraph contains zero inline Arabic characters (cleanup worked).
+- [x] Backward compatible: pre-change readings (no `vocabGlosses`) render paragraph as plain text via the helper's early-return-on-empty-map path. No errors.
+- [x] Build clean, no schema migration, no deps added, no env vars.
+
+### Files touched
+**Modified:** `lib/models/WordList.ts` (new `VocabGlossSchema` + `vocabGlosses` field + `VocabGloss` TS type + `toClient` mapping), `lib/groq.ts` (new ARABIC GLOSSES prompt section + updated OUTPUT JSON example + retired PARENT CONTRIBUTION #6 inline-Arabic bullet), `app/api/reading/generate/route.ts` (Zod `vocabGlosses` array + persistence on save), `components/InteractiveReading.tsx` (re-imported `Fragment`/`useMemo`/`ReactNode`, new `renderParagraphWithVocab` module-level helper, `glossMap` `useMemo` inside component, paragraph render swapped to use helper).
+
+### Decisions worth remembering
+- **Per-reading storage on `currentReading.vocabGlosses`**, not per-word on `WordSchema`. Confirmed via AskUserQuestion. Smallest scope, context-aware translations, free (same AI call), no backfill or list-editor changes.
+- **Retired the inline-parens Arabic behavior** as part of this change. Otherwise the kid would see Arabic both inline AND on hover — clutter + redundancy.
+- **Inflection matching = exact lowercase + trailing-s strip only**. Heavier stemming (`-ed`, `-ing`, `-ly`) risks false positives ("is" → "i"). False-positive highlights are worse UX than missed ones, so accept the miss; the failure is silent.
+- **Pure CSS tooltip via `group-hover` + `group-focus-within`**. No JS state machine. Works on desktop hover AND mobile tap-focus (`tabIndex={0}` makes the span focusable on tap). One pattern, two interaction modes.
+
+### Translation-quality notes (spot-check, not blocking)
+The model gets the common feelings vocabulary right (happy → سعيد, afraid → خائف, calm → هادئ, proud → فخور, curious → فضولي, angry → غاضب, embarrassed → محرج, sad → حزين). Two were slightly off in the first smoke: `surprised → مفاجئ` (technically the adjective "surprising"; more accurate would be متفاجئ or مندهش) and `disgusted → مستغرب` (means "puzzled"; مشمئز would be correct). If a future generation produces a translation the parent disagrees with, the next iteration could add Arabic BAD/GOOD pairs in the prompt the same way the question hints were tightened.
+
+---
+
 ## Reading Q&A: real answers + content hints + rescue reveal — 2026-05-25
 
 - **Status:** Shipped (commits `7191335` + `fb16c41`)
