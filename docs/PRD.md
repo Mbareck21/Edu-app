@@ -4,6 +4,37 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Reading Q&A: real answers + content hints + rescue reveal — 2026-05-25
+
+- **Status:** Shipped (commits `7191335` + `fb16c41`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app>
+- **Summary:** Parent reported a child stuck on "What is this story about?" — couldn't type any phrase the app accepted, and hints ("Read the first sentence") didn't help. Root cause was twofold: the model was generating `acceptable[]` entries that were paraphrases of the *question* rather than actual *answers*, and hint #2 kept producing meta-instructions instead of content. Fix tightens the prompt with explicit BAD/GOOD pairs for both `acceptable[]` and hints, rewrites the JSON output example to use realistic answer-shaped values, drops generation temperature 0.85 → 0.75 for better schema discipline, adds article-stripping in `isCorrect` for natural English wording variance, and adds a "reveal-the-answer" rescue card after 6 wrong attempts so the experience never bricks. Live smoke confirmed 4/4 questions now have answer-shaped acceptable[] and 4/4 have content-bearing hint #2 (was 0/4 and 1/4 respectively before).
+
+### Acceptance criteria (verified live)
+- [x] `acceptable[]` entries are ANSWERS, not question rephrasings. Smoke verdict: 4/4 questions pass the heuristic (none start with what/where/when/why/how/who/tell/describe).
+- [x] Hint #2 contains the answer's key noun or name. Smoke verdict: 4/4 pass; no more "It is in the first sentence" outputs.
+- [x] `acceptable[]` includes a 1–2 word shortest answer where possible (smoke: "a horse", "afraid", "happy", "proud", "calm" all appear).
+- [x] `isCorrect` strips leading `a` / `an` / `the` from both sides before substring compare — natural variants like "the happy family" vs "a happy family" now match.
+- [x] After hint #2 + 2 more wrong attempts (6 total), a sky-blue "The answer was" card appears with the first acceptable entry + "Got it — next question" button. Tapping advances without confetti; the question still records as wrong (no first-try-correct credit, no level bump from a revealed session).
+- [x] Backward compatible: applies to existing on-disk readings, so the child stuck on the original "The Happy Family" can complete it without regenerating.
+- [x] Build clean, no schema/API change, no new deps.
+
+### Files touched
+**Modified:** `lib/groq.ts` (rewrote `READING_SYSTEM_PROMPT` question rules: ACCEPTABLE ANTI-PATTERN section with 2 BAD/GOOD pairs, HINT ANTI-PATTERN section with 3 BAD/GOOD pairs across different question shapes, JSON output example now shows realistic answer-shaped values), `app/api/reading/generate/route.ts` (temperature 0.85 → 0.75), `components/InteractiveReading.tsx` (`stripArticle` helper + `isCorrect` rewrite; `Progress.revealed: boolean[]` field with backward-compat localStorage parsing; `REVEAL_AT = 6` trigger in the wrong-answer branch; new `acknowledgeReveal` handler; reveal card render that swaps the input/hint block).
+
+### Decisions worth remembering
+- **The bug had been latent since the reading feature first shipped.** Every reading ever generated had paraphrase-of-question `acceptable[]` entries — the only "wins" came from kids typing the question back at the app or from the substring matcher catching incidental overlaps. The user only noticed once they tried to play a session in earnest.
+- **First prompt patch (commit `7191335`) was too soft.** Adding rule prose like "the SHORTEST valid answer (1–2 words when possible)" wasn't enough emphasis — the model kept its prior interpretation. The fix that worked was an explicit BAD/GOOD pair showing the failure mode (commit `fb16c41`), plus rewriting the JSON output example with realistic values instead of placeholders like "phrasing 1". Same pattern as the vocab-stuffing fix (commit `0c800e2`): name the failure mode, show GOOD next to BAD.
+- **Temperature trade-off.** Story narrative variance was already handled by random vocab sampling (`MAX_VOCAB_PER_STORY = 10`) + the rolling history negative examples (commit `e78467f`). The 0.85 bump from that feature was costing JSON-schema discipline on the questions; 0.75 buys back rule-following at no narrative cost.
+- **Reveal-answer counts as wrong.** Otherwise the kid learns to spam wrong answers to summon the answer card, and the level-bump system loses meaning. The 6-wrong threshold gives 2 wrongs → hint 1, 2 more → hint 2, 2 more → reveal — symmetric, predictable, no surprises.
+- **`stripArticle` is the minimum-viable matching fix.** Token-overlap or fuzzy-distance matching was considered and rejected — both risk false positives (e.g., "Khalid" matching "Fatima" via incidental letter overlap, or "happy" matching "unhappy" via fuzzy distance). The article strip handles the single most common natural-English variance without that risk.
+
+### What to watch
+- The model lands `acceptable[]` at 3 entries even when the prompt asks for 4–6. It's imitating the 4-entry JSON example more than the rule prose. Not a blocker; could be tightened by adding a longer example or by post-processing to expand the list server-side if it becomes an issue.
+- Questions don't always end in `?` despite an explicit instruction. Cosmetic only.
+
+---
+
 ## Reading variety — random vocab subset + anti-repetition history — 2026-05-25
 
 - **Status:** Shipped (commit `e78467f`)
