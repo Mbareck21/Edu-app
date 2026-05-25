@@ -4,6 +4,46 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Flashcards: SRS-2 spaced repetition with Arabic + TTS — 2026-05-25
+
+- **Status:** Shipped (commit `70d6179`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — open any list → tap "📇 Flashcards".
+- **Summary:** New section at `/lists/[id]/flashcards`. Student sees one English word at a time, taps to reveal the Arabic translation, then rates "Easy" or "Hard". Two-button SRS: easy doubles the interval (cap 60d); hard resets to 1d. Server is authoritative on interval math. TTS auto-plays both sides via the existing `/api/tts` endpoint. Translations are AI-generated in a single batched Groq call on first flashcard-page visit (idempotent). Parent can fix any AI translation inline in the list editor (which gained a new Arabic column).
+
+### Acceptance criteria (verified live)
+- [x] `/lists/[id]/flashcards` reachable from home-page list row (`📇 Flashcards`) AND from "Open Flashcards" in the list editor.
+- [x] WordSchema gained `arabic: string` (default `""`) + `srs: { interval, dueAt, lastReviewed, reviewCount, easyCount, hardCount }` (default new+due-now).
+- [x] `lib/srs.ts` exports `scheduleNext`, `isDue`, `dueWords`, `nextDueAt` as pure functions. Constants: `MAX_INTERVAL_DAYS=60`, `NEW_INTERVAL_DAYS=1`.
+- [x] Smoke verdict: on the Feelings list (10 words), translate fires once and fills 10/10 Arabic. Easy/Easy/Hard sequence took interval 0→1→2→1 exactly as specified.
+- [x] `POST /api/lists/[id]/flashcards/translate` is idempotent — second call is a no-op (still 0 missing) AND preserves the existing SRS state (e.g., interval=1, easy=2, hard=1, reviews=3 after the test sequence).
+- [x] `POST /api/lists/[id]/flashcards/review` runs SRS math server-side; client just sends `{word, rating}`.
+- [x] List PATCH (`/api/lists/[id]`) carries over per-word SRS + parent-set Arabic across saves. Naive `findByIdAndUpdate({words})` would have wiped them; new handler loads, merges, saves.
+- [x] List editor: words grid extended from 3 to 4 columns (word | clue | arabic | remove). Arabic input is RTL with `lang="ar"`.
+- [x] TTS auto-play: English on card front, Arabic on flip, fire-and-forget via `lib/voice.playTextThroughTTS`. Respects existing autoplay mute pref. Card UI doesn't block on TTS.
+- [x] Feedback: "Easy" → `celebrate({source: card})` (confetti + voice praise); "Hard" → `encourage()` (voice nudge).
+- [x] Backward compat: old documents (no arabic, no srs) map through `toClientWord` and surface as new cards due immediately. Existing crossword/scramble/wordsearch/reading worksheets all unaffected.
+- [x] Regression: `GET /api/lists` returned 200. Build clean. No migration. No deps added.
+
+### Files touched
+**New (5):** `lib/srs.ts`, `app/api/lists/[id]/flashcards/translate/route.ts`, `app/api/lists/[id]/flashcards/review/route.ts`, `app/lists/[id]/flashcards/page.tsx`, `components/Flashcards.tsx`.
+**Modified (5):** `lib/models/WordList.ts` (SrsStateSchema + WordSchema additions + SrsState/ClientWord types + new `toClientWord` helper), `lib/groq.ts` (`TRANSLATE_SYSTEM_PROMPT`), `app/api/lists/[id]/route.ts` (PATCH preserves SRS + arabic on save; WordPatch Zod accepts optional arabic), `app/page.tsx` (Flashcards link in row), `components/ListEditor.tsx` (Arabic input column + Open Flashcards link).
+
+### Decisions worth remembering
+- **Per-word Arabic on WordSchema**, not per-reading. Word-level review needs persistent translations; the per-reading `vocabGlosses` shipped in `66b1d26` keeps doing its job inside stories. The architectural fork I asked about then is now resolved by genuine need.
+- **2-button multiplicative SRS, capped at 60 days.** Matches the user's "Hard and easy" framing; no decision fatigue. Multiplicative-with-cap is the proven SRS shape (Anki/SuperMemo use it in more complex form).
+- **Server-authoritative SRS math.** Client sends rating; server computes interval + dueAt + counts. No client tampering; one source of truth.
+- **List PATCH carries over SRS + parent-set Arabic.** This was the load-bearing correctness fix — the original handler used `findByIdAndUpdate({words})` which would have wiped SRS on every editor save. New handler loads, merges, saves. Verified live: idempotent translate call preserved SRS state from the prior review sequence.
+- **Translation auto-fires on first visit, idempotent.** Parent doesn't think about translation as a step. Re-calls cost zero (short-circuits when nothing missing). Parent-edited Arabic is never overwritten by the AI.
+- **TTS fire-and-forget via `playTextThroughTTS`.** Failures silent. UI never blocks on audio. Respects the existing autoplay mute pref.
+- **Editable Arabic in list editor** = safety net for imperfect AI translations.
+
+### Known caveats
+- AI translation quality: 7/10 Feelings words are spot-on; 3 are imperfect (`surprised → مفاجئ` should be `متفاجئ`/`مندهش`; `curious → مستفسر` should be `فضولي`; `disgusted → مستغرب` should be `مشمئز`). The new TRANSLATE_SYSTEM_PROMPT helped on `happy/proud/sad/angry/etc` but didn't fix these three. The parent can now correct them inline in the list editor.
+- No max-per-session cap. Kid stops when bored. Add later if engagement dips.
+- Tooltip-style hover Arabic in the reading paragraph (from `66b1d26`) and flashcard Arabic are now independent stores — reading uses per-story `vocabGlosses`, flashcards use per-word `arabic`. They don't share. Acceptable; could unify later by having the reading prompt read from per-word `arabic` first when available.
+
+---
+
 ## Reading: highlight vocab words + Arabic hover translations — 2026-05-25
 
 - **Status:** Shipped (commit `66b1d26`)
