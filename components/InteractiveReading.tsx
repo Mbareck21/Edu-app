@@ -9,17 +9,25 @@ type Progress = {
   currentIdx: number;
   wrongCount: number[];
   hintsUsed: number[];
+  revealed: boolean[];
   done: boolean;
 };
 
 const HINT_AT = [2, 4]; // reveal hint 1 after 2 wrongs, hint 2 after 4 wrongs
+const REVEAL_AT = HINT_AT[1] + 2; // show the answer after 2 more wrongs past hint 2
+
+function stripArticle(s: string): string {
+  return s.replace(/^(a|an|the)\s+/, "");
+}
 
 function isCorrect(userAnswer: string, acceptable: readonly string[]): boolean {
-  const a = userAnswer.trim().toLowerCase();
-  if (!a) return false;
+  const aRaw = userAnswer.trim().toLowerCase();
+  if (!aRaw) return false;
+  const a = stripArticle(aRaw);
   return acceptable.some((acc) => {
-    const b = acc.trim().toLowerCase();
-    if (!b) return false;
+    const bRaw = acc.trim().toLowerCase();
+    if (!bRaw) return false;
+    const b = stripArticle(bRaw);
     if (a === b) return true;
     if (a.length >= 2 && b.includes(a)) return true;
     if (b.length >= 2 && a.includes(b)) return true;
@@ -51,15 +59,24 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
 
   const [progress, setProgress] = useState<Progress>(() => {
     if (!reading || typeof window === "undefined") {
-      return { currentIdx: 0, wrongCount: [], hintsUsed: [], done: false };
+      return { currentIdx: 0, wrongCount: [], hintsUsed: [], revealed: [], done: false };
     }
     const raw = window.localStorage.getItem(progressKey(list._id, reading.generatedAt));
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as Progress;
-        // Defensive sizing
+        const parsed = JSON.parse(raw) as Partial<Progress>;
         if (parsed && Array.isArray(parsed.wrongCount) && Array.isArray(parsed.hintsUsed)) {
-          return parsed;
+          // `revealed` was added later; tolerate old localStorage entries.
+          const revealed = Array.isArray(parsed.revealed)
+            ? parsed.revealed
+            : questions.map(() => false);
+          return {
+            currentIdx: parsed.currentIdx ?? 0,
+            wrongCount: parsed.wrongCount,
+            hintsUsed: parsed.hintsUsed,
+            revealed,
+            done: parsed.done ?? false,
+          };
         }
       } catch {
         // fall through
@@ -69,6 +86,7 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
       currentIdx: 0,
       wrongCount: questions.map(() => 0),
       hintsUsed: questions.map(() => 0),
+      revealed: questions.map(() => false),
       done: false,
     };
   });
@@ -108,7 +126,7 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
       }
       cleanupOldProgress(list._id);
       completionFiredRef.current = false;
-      setProgress({ currentIdx: 0, wrongCount: [], hintsUsed: [], done: false });
+      setProgress({ currentIdx: 0, wrongCount: [], hintsUsed: [], revealed: [], done: false });
       setValue("");
       setFeedback("");
       router.refresh();
@@ -176,12 +194,32 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
       wrongArr[idx] = nextWrong;
       const hintArr = [...progress.hintsUsed];
       hintArr[idx] = hints;
-      setProgress({ ...progress, wrongCount: wrongArr, hintsUsed: hintArr });
+      const revealedArr = [...progress.revealed];
+      if (nextWrong >= REVEAL_AT) revealedArr[idx] = true;
+      setProgress({ ...progress, wrongCount: wrongArr, hintsUsed: hintArr, revealed: revealedArr });
       setFeedback("wrong");
       // Voice encouragement only on the first wrong attempt per question.
       if (nextWrong === 1) encourage();
       setTimeout(() => setFeedback(""), 450);
     }
+  };
+
+  // Advance after the kid taps "Got it" on a revealed answer. No celebration —
+  // the question already counts as wrong via its existing wrongCount.
+  const acknowledgeReveal = () => {
+    if (!reading || progress.done || busy) return;
+    const idx = progress.currentIdx;
+    const nextIdx = idx + 1;
+    const isLast = nextIdx >= questions.length;
+    const next: Progress = {
+      ...progress,
+      currentIdx: isLast ? idx : nextIdx,
+      done: isLast,
+    };
+    setProgress(next);
+    setValue("");
+    setFeedback("");
+    if (isLast) void completeSession(next);
   };
 
   // ── Rendering ────────────────────────────────────────────────────────────
@@ -209,6 +247,8 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
   const currentIdx = progress.done ? questions.length - 1 : progress.currentIdx;
   const q: ReadingQuestion | undefined = questions[currentIdx];
   const revealedHints = q ? Math.min(progress.hintsUsed[currentIdx] ?? 0, q.hints.length) : 0;
+  const isRevealed = !!progress.revealed[currentIdx];
+  const revealedAnswer = q?.acceptable[0] ?? "";
 
   return (
     <section className="space-y-4">
@@ -240,26 +280,42 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
             Question {currentIdx + 1} of {questions.length}
           </p>
           <p className="text-base font-medium">{q.q}</p>
-          <form className="flex gap-2" onSubmit={check}>
-            <input
-              className="input flex-1"
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="Type your answer…"
-              disabled={busy !== null}
-            />
-            <button type="submit" className="btn-primary" disabled={busy !== null || !value.trim()}>
-              Check
-            </button>
-          </form>
-          {revealedHints > 0 && (
-            <div className="rounded border border-amber-300 bg-amber-50 p-3 space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">Hint</p>
-              {q.hints.slice(0, revealedHints).map((h, i) => (
-                <p key={i} className="text-sm text-amber-900">{h}</p>
-              ))}
+          {isRevealed ? (
+            <div className="space-y-3">
+              <div className="rounded border border-sky-300 bg-sky-50 p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-sky-800">
+                  The answer was
+                </p>
+                <p className="text-base text-sky-900">{revealedAnswer}</p>
+              </div>
+              <button type="button" onClick={acknowledgeReveal} className="btn-primary">
+                Got it — next question
+              </button>
             </div>
+          ) : (
+            <>
+              <form className="flex gap-2" onSubmit={check}>
+                <input
+                  className="input flex-1"
+                  autoFocus
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  placeholder="Type your answer…"
+                  disabled={busy !== null}
+                />
+                <button type="submit" className="btn-primary" disabled={busy !== null || !value.trim()}>
+                  Check
+                </button>
+              </form>
+              {revealedHints > 0 && (
+                <div className="rounded border border-amber-300 bg-amber-50 p-3 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">Hint</p>
+                  {q.hints.slice(0, revealedHints).map((h, i) => (
+                    <p key={i} className="text-sm text-amber-900">{h}</p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : null}

@@ -217,10 +217,30 @@ The MIX scales with level — follow this precisely:
 
 Each question:
   • Short — under 14 words. Grade 3–4 vocabulary in the question itself.
-  • "acceptable" lists 3–4 lenient phrasings (with/without articles, short
-    vs. long answer, simple synonyms).
-  • "hints" contains exactly 2 entries: hint 1 a gentle nudge; hint 2 nearly
-    gives the answer away.
+  • "acceptable" lists 4–6 phrasings the child might naturally type.
+    The list MUST include:
+       (a) the SHORTEST valid answer (1–2 words when possible, e.g. "a family"
+           or "Khalid"),
+       (b) one longer descriptive phrasing (a short sentence),
+       (c) variants both WITH and WITHOUT the leading articles a / an / the.
+    All entries lowercase. No punctuation. No quotes.
+  • "hints" contains exactly 2 entries:
+       Hint 1 — a gentle nudge. Does NOT name the answer.
+       Hint 2 — MUST contain the answer's KEY NOUN or NAME (the character,
+                place, object, or feeling the kid should type). NEVER a
+                meta-instruction like "read the first sentence" or
+                "think about the story" — those are useless.
+
+⚠ HINT ANTI-PATTERN — never produce vague meta-hints.
+Question: "What is this story about?"
+BAD  hints: ["Think about the family", "Read the first sentence"]
+GOOD hints: ["It is about people who live together",
+             "Khalid and Fatima live with their mom and dad"]
+
+Question: "Where do they play?"
+BAD  hints: ["Think about the place", "Look at the last sentence"]
+GOOD hints: ["It is outside, not inside the house",
+             "They play in the garden every day"]
 
 ═══ TYPE TAGS (use the exact strings) ═══
   main_idea     — "What is this story mostly about?"
