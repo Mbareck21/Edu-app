@@ -4,6 +4,75 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Reading comprehension with adaptive difficulty + persisted stats — 2026-05-25
+
+- **Status:** Shipped (commit `9d9e552`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — open any list → tap **Reading**.
+- **Summary:** A new fourth worksheet that generates a short paragraph using the kid's vocabulary words, asks 4 mixed-type comprehension questions one at a time with progressive hints, celebrates with voice + confetti, and **persists his performance (lifetime aggregates, per-question-type accuracy, last 20 sessions)** on the server. Difficulty auto-scales from 1 to 5 on perfect runs.
+
+### Acceptance criteria (verified live)
+- [x] Home page + list-edit page expose a "Reading" / "Open Reading" link
+- [x] `/lists/[id]/reading` shows a Generate button + level badge
+- [x] `POST /api/reading/generate` produces JSON-validated `{paragraph, questions[4], usedWords[]}` from Groq `llama-3.3-70b-versatile`
+- [x] Word-usage guard: if <50% of list words used, retry once with sterner prompt (smoke showed 7/8 words used at L1)
+- [x] Questions reveal one at a time; correct → confetti + Q+1 reveals
+- [x] Wrong → red shake + voice nudge (first wrong only); hint #1 after 2 wrongs, hint #2 after 4 wrongs
+- [x] All correct → POST to `/api/reading/complete` → server persists; UI big celebrate; client clears localStorage progress
+- [x] Level bumps 1→2 on **perfect** run (all first-try, zero hints) — verified live
+- [x] Level **does NOT bump** on imperfect run (1 wrong, 1 hint used) — verified live
+- [x] `byType` per-type accuracy tracks correctly across sessions
+- [x] `recentSessions` capped at 20 (verified the schema; rollover not yet stress-tested)
+- [x] Stats persist across device switches (server-side, not localStorage)
+- [x] Backend regression: `/api/lists`, `/api/tts`, `/chat`, existing worksheets all 200
+
+### Files touched
+**New:** `app/api/reading/generate/route.ts`, `app/api/reading/complete/route.ts`, `app/lists/[id]/reading/page.tsx`, `components/InteractiveReading.tsx`, `components/ReadingStats.tsx`
+**Modified:** `lib/models/WordList.ts` (schema extension + new client types), `lib/groq.ts` (`READING_SYSTEM_PROMPT` with `PARENT CONTRIBUTION #6`), `app/page.tsx` (Reading link in list rows), `components/ListEditor.tsx` (Open Reading link)
+**No deps added. No env vars.**
+
+### New schema (WordList subdocs)
+- `readingLevel: number (1..5, default 1)`
+- `currentReading: { paragraph, questions: [{q, type, acceptable[], hints[2]}], level, generatedAt } | null`
+- `readingStats: { totalSessions, totalQuestions, totalFirstTryCorrect, totalHintsUsed, byType.{6 types}.{asked, firstTryCorrect}, recentSessions[] (rolling 20) }`
+
+### Question types (Zod enum)
+`main_idea | detail | vocab | inference | cause_effect | sequence`
+
+### Level → question-mix table (encoded in system prompt)
+- L1: 1 main + 3 detail
+- L2: 1 main + 2 detail + 1 vocab
+- L3: 1 main + 1 detail + 1 vocab + 1 inference
+- L4: 1 main + 1 vocab + 1 inference + 1 cause_effect
+- L5: 1 main + 1 inference + 1 cause_effect + 1 sequence
+
+### Decisions worth remembering
+- **Per-list `readingLevel`, not per-child.** Different lists are at different complexity. One-family app → per-list is right.
+- **Both views in DOM doesn't apply here.** Reading is play-only; no print mode. The existing print/play CSS toggle is untouched.
+- **Server stores reading content + lifetime stats; localStorage stores in-progress state only.** Switching device shows the same paragraph but starts fresh on questions; lifetime stats are identical on every device.
+- **Level bump ONLY on perfect runs.** Mastery moves the bar; "okay" completion still records stats but doesn't escalate difficulty.
+- **Bidirectional substring matching against `acceptable[]`.** AI supplies 3–4 phrasings per question. Forgiving for "dog" vs "the dog" but tight enough that "dog" won't match a question about "happy".
+- **Word-usage retry guard.** AI must echo back `usedWords[]`. If <50% coverage, the route retries once with a sterner prompt before giving up. Live smoke at L1 produced 7/8 — well above threshold.
+- **`readingStats` is a subdocument on `WordList`, not a new collection.** One Mongo write per completion. `recentSessions` capped at 20 keeps the doc tiny.
+- **Client posts per-question outcomes ONCE at completion, not per question.** One network call per finished reading; server is the source of truth for aggregates.
+- **Idempotency via localStorage clear + completion ref.** Client clears its progress key after `/api/reading/complete` succeeds; a `completionFiredRef` guards against double-firing within the same session.
+- **PARENT CONTRIBUTION #6** lives at the bottom of `READING_SYSTEM_PROMPT` — only the themes/tone block; the level ladder, JSON shape, and question-type mix are structurally locked.
+
+### Karpathy frame (as shipped)
+- **What:** Four-question reading comprehension exercise at `/lists/[id]/reading` with adaptive difficulty (1–5) and server-persisted performance stats.
+- **Why this shape:** Every primitive already existed (Groq JSON-mode prompt = `/api/clues` pattern; interactive component with feedback = the play-mode worksheets; schema extension = how `hiddenMessage` was added). The novel bits were the per-list difficulty number and the `readingStats` subdocument — both single-document updates, no new collection.
+- **First failure mode probed:** AI not using the kid's vocab. Smoke at L1 confirmed 7/8 word coverage with the default prompt; the <50% retry path will fire when the AI flakes.
+
+### Known follow-ups
+- Live in-browser smoke (open `/lists/.../reading` on phone, generate a reading, type real answers, see voice + confetti, watch stats update) — the user verifies. Server-side smoke fully green.
+- Level bump caps at 5. No demotion logic v1 (parent can adjust manually via dashboard once it's built; for now via DB).
+- The `currentReading` doc grows with each Generate but only the LATEST is kept on the list (overwritten). No reading history v1.
+- Optional v2: a separate per-list "history" page showing each completed session's paragraph + score. The `recentSessions` log only carries summary numbers, not the paragraph text.
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Bug fix — word search uses finger-drag instead of tap-tap — 2026-05-25
 
 - **Status:** Shipped (commit `e942a5c`)
