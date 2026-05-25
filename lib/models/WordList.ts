@@ -37,6 +37,17 @@ const CurrentReadingSchema = new Schema(
   { _id: false }
 );
 
+// Rolling memory of recent readings so the AI doesn't repeat itself.
+// Kept server-side only; not exposed to the client.
+const ReadingHistoryEntrySchema = new Schema(
+  {
+    title: { type: String, default: "" },
+    opening: { type: String, default: "" },
+    generatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const TypeBucketSchema = new Schema(
   {
     asked: { type: Number, default: 0 },
@@ -98,6 +109,7 @@ const WordListSchema = new Schema(
     words: { type: [WordSchema], default: [] },
     readingLevel: { type: Number, default: 1, min: 1, max: 5 },
     currentReading: { type: CurrentReadingSchema, default: null },
+    readingHistory: { type: [ReadingHistoryEntrySchema], default: [] },
     readingStats: { type: ReadingStatsSchema, default: () => ({}) },
   },
   { timestamps: true }

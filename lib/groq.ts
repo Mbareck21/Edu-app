@@ -162,6 +162,19 @@ GOOD: "Sarah is happy today. Her dog Max is calm and quiet. They walk to the
        park together. A cat is afraid of Max, but Max just wags his tail.
        Sarah is proud of her dog. He is never angry."
 
+═══ AVOID REPETITION (very important — variety keeps reading fun) ═══
+If the user prompt lists "RECENTLY TOLD STORIES", you MUST make this new story
+GENUINELY different from each of them:
+  • Different MAIN CHARACTERS (different names, different ages, different
+    relationships — not just "John" → "Tom").
+  • Different SETTING (if last was a house, try a park / school / beach /
+    farm / market / playground / classroom / library / bedroom).
+  • Different ANIMAL or no animal at all (don't always feature a dog).
+  • Different PLOT / SITUATION (cooking, finding something, helping someone,
+    a small problem to solve, a discovery, a celebration, a rainy day, etc.).
+Renaming the same characters is not enough. The child reads many stories on
+the same word list — variety matters more than safe repetition.
+
 ═══ LENGTH BY LEVEL (in WORDS, not lines) ═══
 
   Level 1 —  60 to 90 words.   ~8 short sentences.   1 paragraph.

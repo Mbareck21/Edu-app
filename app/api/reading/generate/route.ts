@@ -40,6 +40,21 @@ const MIN_WORDS_BY_LEVEL: Record<number, number> = {
   5: 140,
 };
 
+const MAX_VOCAB_PER_STORY = 10;
+const MAX_HISTORY_ENTRIES = 5;
+
+function sampleWords(allWords: readonly string[], n: number): string[] {
+  if (allWords.length <= n) return [...allWords];
+  const copy = [...allWords];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
+}
+
+type HistoryEntry = { title: string; opening: string; generatedAt: Date };
+
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   const rl = rateLimit(ip);
@@ -68,14 +83,29 @@ export async function POST(req: Request) {
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
-  const words = (doc.words || []).map((w) => w.word).filter((w) => /^[a-z]{2,}$/.test(w));
-  if (words.length < 3) {
+  const allWords = (doc.words || []).map((w) => w.word).filter((w) => /^[a-z]{2,}$/.test(w));
+  if (allWords.length < 3) {
     return NextResponse.json(
       { error: "need at least 3 words on the list to generate a reading" },
       { status: 400 }
     );
   }
   const level = Math.max(1, Math.min(5, Number(doc.readingLevel) || 1));
+
+  // Pick up to 10 random vocab words for this generation. Fresh sample every
+  // call → different stories naturally emphasize different vocab over time.
+  const words = sampleWords(allWords, MAX_VOCAB_PER_STORY);
+
+  // Recent stories — fed back to the AI so it avoids repeating itself.
+  const historyRaw = (doc.get("readingHistory") as HistoryEntry[] | undefined) ?? [];
+  const history = historyRaw
+    .slice(-MAX_HISTORY_ENTRIES)
+    .map((h) => ({ title: String(h.title ?? ""), opening: String(h.opening ?? "") }));
+  const historyBlock =
+    history.length > 0
+      ? `\n\nRECENTLY TOLD STORIES on this list (make the new one GENUINELY different — different characters, setting, plot, animal):\n` +
+        history.map((h, i) => `${i + 1}. "${h.title}" — opens: ${h.opening}`).join("\n")
+      : "";
 
   // Generate once, retry once if word-usage coverage OR word-count is too low.
   const minWords = MIN_WORDS_BY_LEVEL[level] ?? 60;
@@ -109,12 +139,13 @@ export async function POST(req: Request) {
           {
             role: "user",
             content:
-              `LEVEL: ${level}\nWORDS he has been studying: ${words.join(", ")}\n\n` +
-              `Generate the title + paragraph + 4 questions per the rules.`,
+              `LEVEL: ${level}\nWORDS he has been studying (pick most into the story): ${words.join(", ")}` +
+              historyBlock +
+              `\n\nGenerate the title + paragraph + 4 questions per the rules.`,
           },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
+        temperature: 0.85,
         max_tokens: 2000,
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
@@ -157,6 +188,18 @@ export async function POST(req: Request) {
     level,
     generatedAt: now,
   });
+
+  // Append to rolling history (cap at MAX_HISTORY_ENTRIES). Opening = first
+  // sentence of the paragraph, which is enough to identify a story to the AI.
+  const opening =
+    reading.paragraph.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ??
+    reading.paragraph.slice(0, 160);
+  const newHistory: HistoryEntry[] = [
+    ...historyRaw,
+    { title: reading.title, opening, generatedAt: now },
+  ].slice(-MAX_HISTORY_ENTRIES);
+  doc.set("readingHistory", newHistory);
+
   await doc.save();
 
   const fresh = await WordList.findById(parsed.data.listId).lean();
