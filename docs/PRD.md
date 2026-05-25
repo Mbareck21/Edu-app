@@ -4,6 +4,63 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Reading variety — random vocab subset + anti-repetition history — 2026-05-25
+
+- **Status:** Shipped (commit `e78467f`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app>
+- **Summary:** Each Generate now (a) samples up to 10 random vocab words via Fisher–Yates instead of feeding the whole list and (b) reads back a rolling history of the last 5 readings (title + opening sentence) to the AI as negative examples so the new story must be genuinely different. Temperature bumped 0.7 → 0.85 for lexical variance. Three back-to-back generations on "Feelings and emotions" returned distinct protagonists (Emma → Omar → Ava) and distinct setups.
+
+### Acceptance criteria (verified live)
+- [x] Up to 10 random vocab words used per generation (Fisher–Yates, fresh sample each call).
+- [x] Lists with ≤10 words still use all words (no-op for them).
+- [x] Server persists `readingHistory: [{ title, opening, generatedAt }]` rolling 5 entries; not exposed to the client.
+- [x] System prompt contains an "AVOID REPETITION" section; user prompt appends a "RECENTLY TOLD STORIES" block when history exists.
+- [x] 3-call live smoke: distinct titles, distinct main characters, all stories clear the L1 60-word floor.
+- [x] Backward-compatible: old documents with no `readingHistory` start with `[]` and accumulate from the next generation.
+- [x] Build clean; no schema migration required.
+
+### Files touched
+**Modified:** `lib/models/WordList.ts` (new `ReadingHistoryEntrySchema` + `readingHistory` field), `lib/groq.ts` (new "AVOID REPETITION" section in `READING_SYSTEM_PROMPT`), `app/api/reading/generate/route.ts` (`sampleWords` Fisher–Yates helper, history load + format into user prompt, persist on save, temperature → 0.85).
+**No deps. No env vars. No migrations.**
+
+### Decisions worth remembering
+- **History kept server-side only.** The kid's UI doesn't need it; the AI does. Adding it to `ClientWordList` would just bloat the JSON sent to the browser.
+- **Opening sentence captures enough.** Storing the full paragraph would double the doc size with no extra anti-repetition signal — the title + first sentence already identify the story (who/what/where).
+- **No retry loop for duplicate detection.** The temperature bump + negative examples + random vocab subset together should be sufficient. If duplicates become an empirical issue, add a fuzzy-title-match retry; for now KISS.
+- **Why 10 as the cap.** Most lists are 8–15 words; 10 keeps the system prompt focused without starving longer lists. Adjustable via `MAX_VOCAB_PER_STORY` const.
+
+---
+
+## Reading quality fix — paragraphs are now coherent stories, not vocab lists — 2026-05-25
+
+- **Status:** Shipped (commit `0c800e2`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — verified on the "Feelings and emotions" L1 list.
+- **Summary:** The just-shipped reading feature was producing flashcard-style sentence lists ("I am happy. My dog is calm. The cat is afraid.") because the prompt rewarded one-vocab-per-sentence and used "lines" as the length unit. Rewrote the prompt to demand a story shape (title + named characters + setting + plot + pronoun continuity), switched the length contract from lines to words (60/80/100/120/140 floor by level), embedded the parent's "The House" passage as a few-shot exemplar, and added a server-side word-count guard so the existing retry loop also fires when the paragraph is too short.
+
+### Acceptance criteria (verified live)
+- [x] New `title` field (2–5 words) shown above the paragraph; backward-compatible with old readings that lack it.
+- [x] Paragraph word count ≥ level minimum. **Smoke at L1 = 67 words (floor 60)**.
+- [x] Reads as a story: named character (Mr. John), named pet (Max), place (house, garden), tiny plot (the new ball).
+- [x] Vocab integrated meaningfully (happy / calm / quiet / afraid / proud / curious all inside story sentences, not enumerated).
+- [x] Server-side retry loop now tracks shortcoming type ("vocab" / "length" / "both") and produces a targeted sterner prompt on attempt #2.
+- [x] All existing reading behavior preserved: 4 questions, level-based question-type mix, hints, voice praise, confetti, level bump on perfect runs, server-persisted stats.
+- [x] Backend regression: `/api/lists` 200, no schema migration needed (additive change).
+
+### Files touched
+**Modified:** `lib/groq.ts` (rewrote `READING_SYSTEM_PROMPT` — story-shape rules + words-per-level table + few-shot "House" exemplar + title in JSON), `app/api/reading/generate/route.ts` (added `title` to Zod, added `MIN_WORDS_BY_LEVEL` + word-count guard inside the retry loop, raised `max_tokens` to 2000), `lib/models/WordList.ts` (added `title` to `CurrentReadingSchema` + TS type, `toClient` falls back to `""` for old docs), `components/InteractiveReading.tsx` (conditional `<h2>` heading above the paragraph card).
+**No deps. No env vars. No migrations.**
+
+### Decisions worth remembering
+- **Length unit switched from "lines" to "words".** Lines depend on rendering width; words are robust. Old "≤10 lines" target also yielded ~35 words at L1 — too short for any narrative.
+- **Title added because it gives the AI a planning anchor.** "Write a story called X" produces more coherent prose than "write a story", and kids' reading materials almost always have titles.
+- **Few-shot beats prose rules for creative-writing tasks.** Pasting the parent's "House" passage verbatim into the system prompt gives the model a concrete imitation target.
+- **Schema change is purely additive.** `title` defaults to `""`; old `currentReading` docs render with the heading hidden. Generating a new reading overwrites cleanly.
+
+### What to watch
+- The "story-quality" heuristic is informal — if specific lists start drifting back toward vocab-list output, the next fix is to inject a per-list theme/character into the user prompt (the `PARENT CONTRIBUTION #6` block in `lib/groq.ts` is the hook for that).
+
+---
+
 ## Reading comprehension with adaptive difficulty + persisted stats — 2026-05-25
 
 - **Status:** Shipped (commit `9d9e552`)
