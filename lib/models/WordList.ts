@@ -28,6 +28,7 @@ const ReadingQuestionSchema = new Schema(
 
 const CurrentReadingSchema = new Schema(
   {
+    title: { type: String, default: "" },
     paragraph: { type: String, default: "" },
     questions: { type: [ReadingQuestionSchema], default: [] },
     level: { type: Number, default: 1 },
@@ -120,6 +121,7 @@ export type ReadingQuestion = {
 };
 
 export type CurrentReading = {
+  title: string;
   paragraph: string;
   questions: ReadingQuestion[];
   level: number;
@@ -239,6 +241,7 @@ export function toClient(doc: {
 
   const reading = doc.currentReading
     ? ({
+        title: String(doc.currentReading.title ?? ""),
         paragraph: String(doc.currentReading.paragraph ?? ""),
         questions: Array.isArray(doc.currentReading.questions)
           ? doc.currentReading.questions.map(

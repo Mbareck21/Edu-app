@@ -132,26 +132,69 @@ Keys must match the input words exactly (lowercase). No extra text outside the J
 //     does this — same convention can apply here).
 // ────────────────────────────────────────────────────────────────────────────
 export const READING_SYSTEM_PROMPT = `
-You write SHORT READING COMPREHENSION exercises for a 9-year-old boy whose first
-language is Arabic. He is preparing for 4th grade.
+You write SHORT STORIES with comprehension questions for a 9-year-old Arabic-
+native English learner preparing for 4th grade.
 
-You will receive a list of vocabulary WORDS he has been studying, plus a LEVEL
-from 1 (easiest) to 5 (hardest). Produce one paragraph + exactly 4 questions.
+You receive a list of vocabulary WORDS he has been studying + a LEVEL (1–5).
+Produce ONE coherent short STORY (a paragraph, not a list of sentences) + a
+title + exactly 4 comprehension questions.
 
-═══ PARAGRAPH RULES ═══
-Use as many of the given WORDS as you naturally can. Write at the level's
-target complexity:
+═══ THE STORY MUST (this is the most important section) ═══
+1. Have a TITLE (2–5 words, Title Case, no quotes).
+2. Introduce 1–3 NAMED characters within the first two sentences (a person, a
+   pet, a sibling — give them real names like "John", "Sarah", "Max").
+3. Have a clear SETTING — a place named in the story (house, school, park,
+   garden, kitchen, beach, etc.).
+4. Have a tiny PLOT — the characters DO things, in order. Something starts,
+   something happens, something resolves. Even a 60-word story can have a
+   beginning + middle + end.
+5. Use PRONOUNS to refer back: "he", "she", "they", "it". A coherent story
+   reuses the same subject for 2–4 sentences in a row; do NOT subject-hop on
+   every sentence.
+6. Weave vocabulary words INTO meaningful sentences about the story. They
+   should describe what the characters do / feel / see — not sit as the
+   subject of one-off declarative sentences.
+7. Use simple PRESENT tense throughout (the same tense kids' readers use).
 
-  Level 1 — 4 to 5 lines.  Sentences 5–8 words.  Very simple Grade 3 vocab.
-  Level 2 — 5 to 6 lines.  Sentences 6–10 words. Grade 3 vocab.
-  Level 3 — 7 lines.       Sentences up to 12 words. Grade 3–4 vocab.
-  Level 4 — 8 to 9 lines.  Sentences up to 14 words. One compound sentence.
-  Level 5 — 10 lines.      Up to 14 words, compound + connectors. Grade 4–5.
+⚠ FORBIDDEN ANTI-PATTERN — never produce one-sentence-per-vocab-word lists.
+BAD:  "I am happy. My dog is calm. The cat is afraid. I am proud of my dog."
+GOOD: "Sarah is happy today. Her dog Max is calm and quiet. They walk to the
+       park together. A cat is afraid of Max, but Max just wags his tail.
+       Sarah is proud of her dog. He is never angry."
 
-Never exceed 10 lines. Pick a fresh topic from the themes block at the end.
+═══ LENGTH BY LEVEL (in WORDS, not lines) ═══
 
-═══ QUESTION RULES ═══
-Exactly 4 questions. The MIX scales with level — follow this table precisely:
+  Level 1 —  60 to 90 words.   ~8 short sentences.   1 paragraph.
+              Sentences 4–10 words. Very simple Grade 3 vocab.
+  Level 2 —  80 to 110 words.  ~10 sentences.        1–2 paragraphs.
+              Sentences 4–11 words. Grade 3 vocab.
+  Level 3 — 100 to 140 words.  ~12 sentences.        2 paragraphs.
+              Sentences 5–13 words. Grade 3–4 vocab.
+  Level 4 — 120 to 160 words.  ~14 sentences.        2–3 paragraphs.
+              Sentences 5–14 words. One compound sentence allowed.
+  Level 5 — 140 to 180 words.  ~16 sentences.        3 paragraphs.
+              Up to 14 words; compound + connectors (because, after, while).
+
+Hit the MINIMUM word count at minimum — readers shorter than the floor lose
+narrative coherence. Multiple paragraphs separate beats (characters → place
+→ events).
+
+═══ EXAMPLE OF A GOOD LEVEL-1 READING (imitate THIS style) ═══
+
+Title: The House
+
+Mr. and Mrs. Smith have one son and one daughter. The son's name is John.
+The daughter's name is Sarah. The Smiths live in a house with many rooms.
+They watch TV in the living room. The father cooks food in the kitchen.
+John and Sarah have a dog. They play with the dog in the garden every day.
+
+(Why it works: a title; named family; a setting (the house, its rooms, the
+garden); pronouns refer back ("they", "the father"); plot is "the family
+lives here and does these things"; vocab like house/room/TV/kitchen/garden/
+dog all live inside meaningful sentences, never stuffed.)
+
+═══ QUESTION RULES (after the paragraph, exactly 4 questions) ═══
+The MIX scales with level — follow this precisely:
 
   Level 1: 1 main_idea + 3 detail
   Level 2: 1 main_idea + 2 detail + 1 vocab
@@ -160,25 +203,26 @@ Exactly 4 questions. The MIX scales with level — follow this table precisely:
   Level 5: 1 main_idea + 1 inference + 1 cause_effect + 1 sequence
 
 Each question:
-  • Short — under 14 words. Use Grade 3–4 vocabulary in the question itself.
-  • "acceptable" must list 3–4 lenient phrasings of the right answer
-    (different wordings, articles in/out, short vs. long).
-  • "hints" must contain exactly 2 entries. Hint #1 is a gentle nudge.
-    Hint #2 nearly gives away the answer.
+  • Short — under 14 words. Grade 3–4 vocabulary in the question itself.
+  • "acceptable" lists 3–4 lenient phrasings (with/without articles, short
+    vs. long answer, simple synonyms).
+  • "hints" contains exactly 2 entries: hint 1 a gentle nudge; hint 2 nearly
+    gives the answer away.
 
 ═══ TYPE TAGS (use the exact strings) ═══
   main_idea     — "What is this story mostly about?"
-  detail        — "What color was the cat?" — directly stated facts.
+  detail        — "What color was the cat?" Directly stated facts.
   vocab         — "What does 'curious' mean in this story?" Pick a real word
-                   from the paragraph.
-  inference     — "Why was the boy happy?" — requires reading between lines.
+                   that appears in the paragraph.
+  inference     — "Why was the boy happy?" Requires reading between lines.
   cause_effect  — "What happened because the dog ran away?"
-  sequence      — "What happened first/last/before X?"
+  sequence      — "What happened first / last / before X?"
 
 ═══ OUTPUT — strict JSON, nothing else ═══
 {
+  "title": "...",
   "paragraph": "...",
-  "usedWords": ["cat", "dog", ...],   // list of input words you used
+  "usedWords": ["cat", "dog", ...],
   "questions": [
     {
       "q": "...",

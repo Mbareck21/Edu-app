@@ -212,7 +212,12 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
 
   return (
     <section className="space-y-4">
-      {/* Paragraph */}
+      {/* Title + paragraph */}
+      {reading.title && (
+        <h2 className="text-2xl font-bold text-center text-slate-900 mb-2">
+          {reading.title}
+        </h2>
+      )}
       <article className="card text-lg leading-relaxed whitespace-pre-wrap">
         {reading.paragraph}
       </article>

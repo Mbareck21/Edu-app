@@ -17,6 +17,7 @@ export const maxDuration = 30;
 const Body = z.object({ listId: z.string().min(1) });
 
 const ResponseShape = z.object({
+  title: z.string().min(2).max(60),
   paragraph: z.string().min(20).max(2000),
   usedWords: z.array(z.string()).default([]),
   questions: z
@@ -30,6 +31,14 @@ const ResponseShape = z.object({
     )
     .length(4),
 });
+
+const MIN_WORDS_BY_LEVEL: Record<number, number> = {
+  1: 60,
+  2: 80,
+  3: 100,
+  4: 120,
+  5: 140,
+};
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -68,16 +77,30 @@ export async function POST(req: Request) {
   }
   const level = Math.max(1, Math.min(5, Number(doc.readingLevel) || 1));
 
-  // Generate once, retry once if word-usage coverage is too low.
+  // Generate once, retry once if word-usage coverage OR word-count is too low.
+  const minWords = MIN_WORDS_BY_LEVEL[level] ?? 60;
+  const minVocabUse = Math.ceil(words.length * 0.5);
   let attempt = 0;
   let reading: z.infer<typeof ResponseShape> | null = null;
   let lastErr: string | null = null;
+  let lastShortcoming: "vocab" | "length" | "both" | null = null;
   while (attempt < 2 && !reading) {
     attempt++;
-    const sterner =
-      attempt === 2
-        ? `\n\n⚠ Previous attempt used too few of the input words. This time you MUST use AT LEAST ${Math.ceil(words.length * 0.6)} of these words in the paragraph: ${words.join(", ")}.`
-        : "";
+    let sterner = "";
+    if (attempt === 2 && lastShortcoming) {
+      const parts: string[] = [`\n\n⚠ Your previous attempt fell short — fix this:`];
+      if (lastShortcoming === "vocab" || lastShortcoming === "both") {
+        parts.push(
+          `- Use AT LEAST ${Math.ceil(words.length * 0.6)} of these vocabulary words in the paragraph, woven into meaningful story sentences: ${words.join(", ")}.`
+        );
+      }
+      if (lastShortcoming === "length" || lastShortcoming === "both") {
+        parts.push(
+          `- The paragraph was too SHORT. It must be at least ${minWords} words. A short paragraph reads as a vocab list, not a story. Add more story — name your characters, describe the setting, show what they do, use pronouns to refer back. Imitate the "House" example.`
+        );
+      }
+      sterner = parts.join("\n");
+    }
     try {
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
@@ -87,12 +110,12 @@ export async function POST(req: Request) {
             role: "user",
             content:
               `LEVEL: ${level}\nWORDS he has been studying: ${words.join(", ")}\n\n` +
-              `Generate the paragraph + 4 questions per the rules.`,
+              `Generate the title + paragraph + 4 questions per the rules.`,
           },
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 2000,
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
       const json = JSON.parse(text);
@@ -101,11 +124,16 @@ export async function POST(req: Request) {
         lastErr = "AI returned malformed reading";
         continue;
       }
-      // Word-usage check (case-insensitive substring).
-      const para = validated.data.paragraph.toLowerCase();
-      const usedCount = words.filter((w) => para.includes(w)).length;
-      if (attempt === 1 && usedCount < Math.ceil(words.length * 0.5)) {
-        // Too low — retry with sterner prompt.
+      // Coverage + length checks. If either is below the floor on attempt 1,
+      // record what was wrong and retry once with a sterner prompt.
+      const para = validated.data.paragraph;
+      const paraLower = para.toLowerCase();
+      const usedCount = words.filter((w) => paraLower.includes(w)).length;
+      const wordCount = para.trim().split(/\s+/).filter(Boolean).length;
+      const vocabShort = usedCount < minVocabUse;
+      const lengthShort = wordCount < minWords;
+      if (attempt === 1 && (vocabShort || lengthShort)) {
+        lastShortcoming = vocabShort && lengthShort ? "both" : vocabShort ? "vocab" : "length";
         continue;
       }
       reading = validated.data;
@@ -123,6 +151,7 @@ export async function POST(req: Request) {
 
   const now = new Date();
   doc.set("currentReading", {
+    title: reading.title,
     paragraph: reading.paragraph,
     questions: reading.questions,
     level,
