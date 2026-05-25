@@ -26,11 +26,20 @@ const ReadingQuestionSchema = new Schema(
   { _id: false }
 );
 
+const VocabGlossSchema = new Schema(
+  {
+    word: { type: String, default: "" },
+    arabic: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const CurrentReadingSchema = new Schema(
   {
     title: { type: String, default: "" },
     paragraph: { type: String, default: "" },
     questions: { type: [ReadingQuestionSchema], default: [] },
+    vocabGlosses: { type: [VocabGlossSchema], default: [] },
     level: { type: Number, default: 1 },
     generatedAt: { type: Date, default: Date.now },
   },
@@ -132,10 +141,13 @@ export type ReadingQuestion = {
   hints: string[];
 };
 
+export type VocabGloss = { word: string; arabic: string };
+
 export type CurrentReading = {
   title: string;
   paragraph: string;
   questions: ReadingQuestion[];
+  vocabGlosses: VocabGloss[];
   level: number;
   generatedAt: string; // ISO
 };
@@ -265,6 +277,15 @@ export function toClient(doc: {
                   : "detail",
                 acceptable: Array.isArray(q.acceptable) ? q.acceptable.map(String) : [],
                 hints: Array.isArray(q.hints) ? q.hints.map(String) : [],
+              })
+            )
+          : [],
+        vocabGlosses: Array.isArray(doc.currentReading.vocabGlosses)
+          ? doc.currentReading.vocabGlosses.map(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (g: any): VocabGloss => ({
+                word: String(g?.word ?? ""),
+                arabic: String(g?.arabic ?? ""),
               })
             )
           : [],

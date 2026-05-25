@@ -20,6 +20,14 @@ const ResponseShape = z.object({
   title: z.string().min(2).max(60),
   paragraph: z.string().min(20).max(2000),
   usedWords: z.array(z.string()).default([]),
+  vocabGlosses: z
+    .array(
+      z.object({
+        word: z.string().min(1).max(40),
+        arabic: z.string().min(1).max(80),
+      })
+    )
+    .default([]),
   questions: z
     .array(
       z.object({
@@ -185,6 +193,7 @@ export async function POST(req: Request) {
     title: reading.title,
     paragraph: reading.paragraph,
     questions: reading.questions,
+    vocabGlosses: reading.vocabGlosses,
     level,
     generatedAt: now,
   });

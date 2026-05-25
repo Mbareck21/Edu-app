@@ -278,14 +278,34 @@ GOOD hints: ["Whiskers is a calm pet, not afraid of things",
   cause_effect  — "What happened because the dog ran away?"
   sequence      — "What happened first / last / before X?"
 
+═══ ARABIC GLOSSES (for hover tooltips on the kid's reading page) ═══
+For every vocab word from the supplied WORDS list that ACTUALLY APPEARS
+in the paragraph, add one entry to "vocabGlosses":
+  { "word": "<english>", "arabic": "<arabic translation>" }
+Rules:
+  • Use the BASE form of the word as it appears in the WORDS list
+    (e.g. "calm", not "calmly" or "calms").
+  • Arabic must be in Arabic script — never transliterated to Latin letters.
+    Single word or short phrase (max 4 words). Modern Standard Arabic.
+  • No parens, no quotes inside the value, no English mixed into the
+    arabic field.
+  • If a vocab word does NOT appear in your paragraph, omit it from
+    vocabGlosses. If you can't translate one confidently, omit it.
+
 ═══ OUTPUT — strict JSON, nothing else ═══
 Example shape — copy the format, NOT the literal values. Notice that
-"acceptable" contains ANSWERS to the question, not rephrasings of it.
+"acceptable" contains ANSWERS to the question, not rephrasings of it,
+and "vocabGlosses" contains Arabic translations for vocab words used.
 
 {
   "title": "The Cat Show",
   "paragraph": "...",
   "usedWords": ["cat", "calm", ...],
+  "vocabGlosses": [
+    { "word": "calm",    "arabic": "هادئ" },
+    { "word": "proud",   "arabic": "فخور" },
+    { "word": "curious", "arabic": "فضولي" }
+  ],
   "questions": [
     {
       "q": "What is this story about?",
@@ -310,10 +330,9 @@ Example shape — copy the format, NOT the literal values. Notice that
 ✏️ THEMES & TONE (parent: edit this block freely)
 - Themes he enjoys: animals (especially dogs/cats), sports (especially soccer),
   school adventures, family.
-- If you introduce a hard English word for the first time, you MAY follow it
-  with the Arabic in parentheses on first use. Example:
-  "The puppy was curious (فضولي) about the new toy."
-  Only do this ONCE per paragraph, for at most one word.
+- Keep the paragraph itself in plain English — do NOT inline any Arabic
+  words or parens inside the story text. Arabic translations are surfaced
+  as hover tooltips via the vocabGlosses field above (see ARABIC GLOSSES).
 - Avoid scary content, violence, sad endings.
 `.trim();
 

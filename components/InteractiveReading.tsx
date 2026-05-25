@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientWordList, ReadingQuestion } from "@/lib/models/WordList";
 import { celebrate, encourage } from "@/lib/feedback";
@@ -50,10 +50,57 @@ function cleanupOldProgress(listId: string): void {
   for (const k of toDelete) window.localStorage.removeItem(k);
 }
 
+function renderParagraphWithVocab(
+  paragraph: string,
+  glosses: Map<string, string>
+): ReactNode {
+  if (glosses.size === 0) return paragraph;
+  // Split on alphabetic runs, capturing them so punctuation + whitespace
+  // survive in their original positions.
+  const parts = paragraph.split(/([A-Za-z]+)/g);
+  return parts.map((tok, i) => {
+    if (!tok) return null;
+    if (/^[A-Za-z]+$/.test(tok)) {
+      const lower = tok.toLowerCase();
+      const arabic =
+        glosses.get(lower) ?? glosses.get(lower.replace(/s$/, ""));
+      if (arabic) {
+        return (
+          <span
+            key={i}
+            tabIndex={0}
+            className="group relative inline-block bg-amber-100 border-b-2 border-dotted border-amber-700 rounded-sm px-0.5 cursor-help focus:outline-none focus:bg-amber-200"
+          >
+            {tok}
+            <span
+              className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 -translate-y-1 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1.5 text-sm text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 z-10"
+              lang="ar"
+              dir="rtl"
+            >
+              {arabic}
+            </span>
+          </span>
+        );
+      }
+    }
+    return <Fragment key={i}>{tok}</Fragment>;
+  });
+}
+
 export default function InteractiveReading({ list }: { list: ClientWordList }) {
   const router = useRouter();
   const reading = list.currentReading;
   const questions = reading?.questions ?? [];
+
+  const glossMap = useMemo(
+    () =>
+      new Map(
+        (reading?.vocabGlosses ?? [])
+          .filter((g) => g.word && g.arabic)
+          .map((g) => [g.word.toLowerCase(), g.arabic])
+      ),
+    [reading?.vocabGlosses]
+  );
 
   const storageKey = reading ? progressKey(list._id, reading.generatedAt) : null;
 
@@ -259,7 +306,7 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
         </h2>
       )}
       <article className="card text-lg leading-relaxed whitespace-pre-wrap">
-        {reading.paragraph}
+        {renderParagraphWithVocab(reading.paragraph, glossMap)}
       </article>
 
       {/* Question (or completion message) */}
