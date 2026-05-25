@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { celebrate, encourage } from "@/lib/feedback";
 
 type Cell = { r: number; c: number };
@@ -30,24 +30,27 @@ export default function InteractiveWordSearch({
 
   const [found, setFound] = useState<Set<string>>(() => new Set());
   const [foundCellKeys, setFoundCellKeys] = useState<Set<string>>(() => new Set());
-  const [firstTap, setFirstTap] = useState<Cell | null>(null);
-  const [flashCells, setFlashCells] = useState<Set<string>>(() => new Set());
+
+  // Drag selection state. `dragStart` non-null means a drag is in progress.
+  // `dragPath` is the current straight-line selection from start through the
+  // cell currently under the finger. `flashPath` is the brief red-flash on miss.
+  const [dragStart, setDragStart] = useState<Cell | null>(null);
+  const [dragPath, setDragPath] = useState<Cell[]>([]);
+  const [flashKeys, setFlashKeys] = useState<Set<string>>(() => new Set());
+
+  // Refs the document-level pointer listeners read each move/up. State alone
+  // would give the listeners stale closures.
+  const dragStartRef = useRef<Cell | null>(null);
+  const dragPathRef = useRef<Cell[]>([]);
   const flashTimerRef = useRef<number | null>(null);
   const finishedFiredRef = useRef(false);
-
-  function flashRed(cells: Cell[]) {
-    const keys = new Set(cells.map((c) => `${c.r},${c.c}`));
-    setFlashCells(keys);
-    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = window.setTimeout(() => setFlashCells(new Set()), 400);
-  }
 
   // Compute straight-line cells between two endpoints inclusive, or null if
   // they don't lie on a shared 8-direction line.
   function pathBetween(a: Cell, b: Cell): Cell[] | null {
     const dr = b.r - a.r;
     const dc = b.c - a.c;
-    if (dr === 0 && dc === 0) return null;
+    if (dr === 0 && dc === 0) return [a];
     const adr = Math.abs(dr);
     const adc = Math.abs(dc);
     if (dr !== 0 && dc !== 0 && adr !== adc) return null; // not a clean diagonal
@@ -61,23 +64,15 @@ export default function InteractiveWordSearch({
     return out;
   }
 
-  function tap(r: number, c: number, el: HTMLElement | null) {
-    if (!firstTap) {
-      setFirstTap({ r, c });
-      return;
-    }
-    if (firstTap.r === r && firstTap.c === c) {
-      // Same cell — cancel selection.
-      setFirstTap(null);
-      return;
-    }
-    const path = pathBetween(firstTap, { r, c });
-    setFirstTap(null);
-    if (!path) {
-      flashRed([{ r, c }, firstTap!]);
-      if (firstTap) encourage();
-      return;
-    }
+  function flashRed(cells: Cell[]) {
+    const keys = new Set(cells.map((c) => `${c.r},${c.c}`));
+    setFlashKeys(keys);
+    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => setFlashKeys(new Set()), 400);
+  }
+
+  function commitSelection(path: Cell[]) {
+    if (path.length < 2) return; // single tap, nothing to do
     const word = path.map((p) => grid[p.r][p.c]).join("").toUpperCase();
     const reversed = word.split("").reverse().join("");
     let hit: string | null = null;
@@ -85,31 +80,112 @@ export default function InteractiveWordSearch({
     else if (targetSet.has(reversed) && !found.has(reversed)) hit = reversed;
 
     if (hit) {
-      setFound((prev) => new Set(prev).add(hit!));
+      const winning = hit;
+      setFound((prev) => new Set(prev).add(winning));
       setFoundCellKeys((prev) => {
         const next = new Set(prev);
         for (const p of path) next.add(`${p.r},${p.c}`);
         return next;
       });
-      celebrate({ source: el ?? undefined });
-      // All-found check.
-      const allFound = Array.from(targetSet).every((w) => w === hit || found.has(w));
+      // Confetti from the first cell of the path.
+      const firstEl = document.querySelector(
+        `[data-cell-r="${path[0].r}"][data-cell-c="${path[0].c}"]`
+      ) as HTMLElement | null;
+      celebrate({ source: firstEl ?? undefined });
+      const allFound = Array.from(targetSet).every((w) => w === winning || found.has(w));
       if (allFound && !finishedFiredRef.current) {
         finishedFiredRef.current = true;
         setTimeout(() => celebrate({ big: true }), 600);
       }
     } else {
       flashRed(path);
-      // Don't burn voice on every wrong tap — encourage only sometimes.
       if (Math.random() < 0.35) encourage();
     }
+  }
+
+  // Find the cell under a screen point by looking up data-cell-* attributes
+  // on whatever element is at (clientX, clientY).
+  function cellFromPoint(clientX: number, clientY: number): Cell | null {
+    const el = document.elementFromPoint(clientX, clientY);
+    if (!el) return null;
+    const cellEl = (el as Element).closest("[data-cell-r]");
+    if (!cellEl) return null;
+    const r = Number(cellEl.getAttribute("data-cell-r"));
+    const c = Number(cellEl.getAttribute("data-cell-c"));
+    if (Number.isNaN(r) || Number.isNaN(c)) return null;
+    return { r, c };
+  }
+
+  // Document-level pointer listeners while a drag is in progress. Touch
+  // pointers are captured to the original element by default, so we hit-test
+  // via elementFromPoint to find the cell under the finger as it moves over
+  // OTHER cells.
+  useEffect(() => {
+    if (!dragStart) return;
+
+    function handleMove(e: PointerEvent) {
+      const start = dragStartRef.current;
+      if (!start) return;
+      const cell = cellFromPoint(e.clientX, e.clientY);
+      if (!cell) return;
+      const path = pathBetween(start, cell);
+      // If finger wandered off the 8-direction lines, keep the last valid
+      // path on screen — visual "snaps back" when finger returns to a line.
+      if (!path) return;
+      dragPathRef.current = path;
+      setDragPath(path);
+      // Prevent text selection / scroll while dragging.
+      e.preventDefault();
+    }
+
+    function handleUp() {
+      const path = dragPathRef.current;
+      setDragStart(null);
+      setDragPath([]);
+      dragStartRef.current = null;
+      dragPathRef.current = [];
+      commitSelection(path);
+    }
+
+    document.addEventListener("pointermove", handleMove, { passive: false });
+    document.addEventListener("pointerup", handleUp);
+    document.addEventListener("pointercancel", handleUp);
+    return () => {
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleUp);
+      document.removeEventListener("pointercancel", handleUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragStart]);
+
+  function onCellPointerDown(r: number, c: number, e: React.PointerEvent<HTMLElement>) {
+    // Release the implicit pointer capture so subsequent pointer events fire
+    // wherever the finger is, not on this initial target.
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore — not all browsers support / require this
+    }
+    const start = { r, c };
+    dragStartRef.current = start;
+    dragPathRef.current = [start];
+    setDragStart(start);
+    setDragPath([start]);
+    e.preventDefault();
   }
 
   const CELL = 36;
   const gridStyle: CSSProperties = {
     gridTemplateColumns: `repeat(${cols}, ${CELL}px)`,
     gridAutoRows: `${CELL}px`,
+    touchAction: "none", // prevent page scroll while dragging across cells
   };
+
+  const dragKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of dragPath) s.add(`${p.r},${p.c}`);
+    return s;
+  }, [dragPath]);
 
   return (
     <section className="space-y-4">
@@ -117,33 +193,36 @@ export default function InteractiveWordSearch({
         <h1 className="text-3xl font-bold">Word Search</h1>
         <p className="text-sm text-slate-600">{listName}</p>
         <p className="mt-2 text-sm text-slate-700">
-          Tap the <strong>first letter</strong> of a word, then tap its <strong>last letter</strong>. Words can go in 8 directions.
+          <strong>Slide your finger</strong> across the letters of a word — in any of 8 directions. Release on the last letter.
         </p>
       </div>
 
       <div className="print-center">
-        <div className="inline-grid border-2 border-black font-mono" style={gridStyle}>
+        <div className="inline-grid border-2 border-black font-mono select-none" style={gridStyle}>
           {Array.from({ length: rows }).flatMap((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
               const key = `${r},${c}`;
               const isFound = foundCellKeys.has(key);
-              const isFirst = firstTap?.r === r && firstTap?.c === c;
-              const isFlash = flashCells.has(key);
+              const isDragging = dragKeys.has(key);
+              const isFlash = flashKeys.has(key);
               const cls =
-                "flex items-center justify-center border border-black uppercase select-none cursor-pointer " +
+                "flex items-center justify-center border border-black uppercase select-none cursor-pointer touch-none " +
                 (isFound ? "ws-found " : "") +
-                (isFirst && !isFound ? "ws-active " : "") +
+                (isDragging && !isFound ? "ws-active " : "") +
                 (isFlash ? "ws-wrong ws-shake " : "");
               return (
-                <button
-                  type="button"
+                <div
                   key={key}
-                  onClick={(e) => tap(r, c, e.currentTarget as HTMLElement)}
+                  data-cell-r={r}
+                  data-cell-c={c}
+                  onPointerDown={(e) => onCellPointerDown(r, c, e)}
                   className={cls}
                   aria-label={`Letter ${grid[r][c]} at row ${r + 1} column ${c + 1}`}
+                  role="button"
+                  tabIndex={0}
                 >
                   {grid[r][c]}
-                </button>
+                </div>
               );
             })
           )}
