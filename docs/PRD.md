@@ -4,6 +4,43 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Bug fix — word search uses finger-drag instead of tap-tap — 2026-05-25
+
+- **Status:** Shipped (commit `e942a5c`)
+- **Summary:** The interactive word search was effectively unusable — kids tapped letter-by-letter expecting to slide, the app interpreted each second-tap as a 2-letter endpoint selection, no match found, red flash, reset. Replaced tap-first / tap-last with real **finger-drag selection** using Pointer Events.
+
+### What was broken
+Tap-first-letter / tap-last-letter was cognitively wrong for a 9-year-old. Their natural gesture is sliding their finger — they'd tap C of CAT, then tap A expecting "next letter selected", and the app would treat C→A as a 2-letter word lookup, fail, flash red, reset selection. They never made it past 2 letters.
+
+### Fix — `components/InteractiveWordSearch.tsx`
+- `pointerdown` on a cell sets `dragStart` + initial `dragPath`.
+- A `useEffect([dragStart])` attaches **document-level** `pointermove` and `pointerup` listeners while a drag is in progress.
+- `pointermove` uses `document.elementFromPoint(clientX, clientY)` + `.closest("[data-cell-r]")` to find the cell under the finger, recomputes `pathBetween(dragStart, currentCell)`; if it's a valid straight line in any of 8 directions, updates `dragPath` for live yellow highlight.
+- Off-line drags don't update the path — visual "snaps back" when the finger returns to a valid line. Avoids jankiness from sloppy diagonals.
+- `pointerup` reads `dragPathRef.current`, validates the joined letters forward + reverse against unfound targets, marks gold + celebrates on hit or flashes red on miss, then resets.
+- `releasePointerCapture(e.pointerId)` on `pointerdown` so touch events keep firing as the finger crosses OTHER cells (browsers implicitly capture the pointer to the original target otherwise).
+- `touch-action: none` on the grid prevents page scroll while dragging.
+- Refs (`dragStartRef`, `dragPathRef`) so the document listeners aren't stale-closured from React state.
+
+### Decisions worth remembering
+- **Pointer Events, not separate touch/mouse handlers.** One code path covers desktop click-drag AND mobile finger-drag. Modern browsers all support it.
+- **Document-level listeners + `elementFromPoint` is the standard escape hatch** for "which cell is under the finger now" on touch. Per-cell `pointerenter` handlers don't fire across cells on touch because the pointer is implicitly captured to the `pointerdown` target.
+- **Snap-to-last-valid-line for off-line drags.** Simpler than projection math, feels good — kid sees the path stay when they wander, snap to the new line when they recover.
+- **`pathBetween` for single cell now returns `[cell]`, not `null`** — needed so the initial `dragPath` after `pointerdown` shows the start cell highlighted before the finger moves.
+
+### Files touched
+`components/InteractiveWordSearch.tsx` (only)
+
+### Verification
+- `npm run build` clean
+- Live deploy verified: page contains the new "Slide your finger" prompt + `data-cell-r` attributes; old "tap first letter" prompt removed; both `print-view` and `play-view` divs still present (no print regression)
+- Manual flow (parent verifies): drag a finger across letters of a known word → cells light up yellow as the finger crosses them → release on the last letter → gold path + word strikes off
+
+### Plan
+`C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md`
+
+---
+
 ## Bug fix — crossword orientation prefers word that starts at tapped cell — 2026-05-24
 
 - **Status:** Shipped (commit `1c7bf2e`)
