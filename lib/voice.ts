@@ -92,6 +92,7 @@ export function playTextThroughTTS(text: string): Playback {
   const audio = new Audio();
   audio.preload = "auto";
   audio.src = `/api/tts?text=${encodeURIComponent(text)}`;
+  let cancelled = false;
   const promise = new Promise<void>((resolve) => {
     const done = () => {
       audio.onended = null;
@@ -100,12 +101,30 @@ export function playTextThroughTTS(text: string): Playback {
     };
     audio.onended = done;
     audio.onerror = done;
-    audio.play().catch(done);
+    // If cancel ran before the deferred play() promise settled, swallow it —
+    // the browser would otherwise begin playback after we'd already torn down.
+    audio.play().then(
+      () => {
+        if (cancelled) {
+          audio.pause();
+        }
+      },
+      done
+    );
   });
   return {
     cancel: () => {
-      audio.pause();
-      audio.src = "";
+      if (cancelled) return;
+      cancelled = true;
+      try {
+        audio.pause();
+      } catch { /* ignore */ }
+      // Fully release the source so buffered data stops playing on browsers
+      // where pause() alone doesn't kill an in-flight buffer.
+      try {
+        audio.removeAttribute("src");
+        audio.load();
+      } catch { /* ignore */ }
     },
     promise,
   };

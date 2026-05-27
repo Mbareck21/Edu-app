@@ -100,6 +100,9 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
 
   async function rate(rating: Rating) {
     if (!next || busy) return;
+    // Stop any in-flight TTS the instant the user acts, so the previous
+    // card's audio can't bleed into the next card.
+    stopTTS();
     setBusy("reviewing");
     setError(null);
     try {

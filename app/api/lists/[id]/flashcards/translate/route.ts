@@ -66,30 +66,54 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     });
     const text = completion.choices[0]?.message?.content ?? "{}";
     const json = JSON.parse(text);
+
+    // Accept either the documented shape ({translations: {...}}) or a flat
+    // {word: arabic} map — Llama occasionally drops the wrapper.
     const validated = ResponseShape.safeParse(json);
-    if (!validated.success) {
-      return NextResponse.json(
-        { error: "AI returned malformed translations" },
-        { status: 502 }
-      );
+    const rawMap: Record<string, unknown> = validated.success
+      ? validated.data.translations
+      : json && typeof json === "object" && !Array.isArray(json)
+        ? (json as Record<string, unknown>)
+        : {};
+
+    // Normalize keys (trim + lowercase) so case/whitespace drift in the
+    // model output still matches the lowercase DB words.
+    const normalized = new Map<string, string>();
+    for (const [k, v] of Object.entries(rawMap)) {
+      if (typeof v !== "string") continue;
+      const ar = v.trim();
+      if (!ar) continue;
+      normalized.set(String(k).trim().toLowerCase(), ar);
     }
-    const translations = validated.data.translations;
 
     // In-place merge. Only fill words that were missing — never overwrite a
     // parent-edited Arabic value.
-    let dirty = false;
+    let filled = 0;
     for (const w of doc.words) {
       if (w.arabic && w.arabic.trim()) continue;
-      const key = String(w.word).toLowerCase();
-      const ar = translations[key];
-      if (ar && ar.trim()) {
-        w.arabic = ar.trim();
-        dirty = true;
+      const ar = normalized.get(String(w.word).trim().toLowerCase());
+      if (ar) {
+        w.arabic = ar;
+        filled++;
       }
     }
-    if (dirty) {
+    if (filled > 0) {
       doc.markModified("words");
       await doc.save();
+    } else {
+      // The model returned something but nothing matched our missing words.
+      // Surface a diagnostic so the client (and logs) show why instead of
+      // silently rendering empty Arabic on every card.
+      const keySample = Object.keys(rawMap).slice(0, 5);
+      return NextResponse.json(
+        {
+          error:
+            "AI returned translations but none matched the requested words.",
+          requested: missing.slice(0, 5),
+          received: keySample,
+        },
+        { status: 502 }
+      );
     }
     const fresh = await WordList.findById(id).lean();
     return NextResponse.json(toClient(fresh!));
