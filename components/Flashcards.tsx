@@ -83,20 +83,14 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
   const due = useMemo(() => dueWords(words, now), [words, now]);
   const next = due[0] ?? null;
 
-  // Auto-play English when a new card surfaces.
+  // Auto-play English when a new card surfaces. Arabic is shown visually on
+  // flip but never spoken — only the English pronunciation is read aloud so
+  // there is exactly one voice source per card.
   useEffect(() => {
     if (!next || busy === "translating" || revealed) return;
     speak(next.word);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [next?.word, busy, revealed]);
-
-  // Auto-play Arabic when revealed.
-  useEffect(() => {
-    if (!next || !revealed) return;
-    if (!next.arabic) return;
-    speak(next.arabic);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealed, next?.word]);
 
   async function rate(rating: Rating) {
     if (!next || busy) return;
