@@ -55,7 +55,7 @@ function originOf(el: HTMLElement | null | undefined): { x: number; y: number } 
   };
 }
 
-export async function celebrate(opts: { source?: HTMLElement | null; big?: boolean } = {}): Promise<void> {
+export async function celebrate(opts: { source?: HTMLElement | null; big?: boolean; silent?: boolean } = {}): Promise<void> {
   if (typeof window === "undefined") return;
   try {
     const { default: confetti } = await import("canvas-confetti");
@@ -70,6 +70,7 @@ export async function celebrate(opts: { source?: HTMLElement | null; big?: boole
     // canvas-confetti failed to load (rare) — silently skip the visual; voice
     // is still the meaningful feedback.
   }
+  if (opts.silent) return;
   maybeSpeak(opts.big ? COMPLETION_PHRASE : pickRandom(PRAISES), opts.big);
 }
 

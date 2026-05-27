@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientWord, ClientWordList, SrsState } from "@/lib/models/WordList";
 import { dueWords, nextDueAt, type Rating } from "@/lib/srs";
-import { celebrate, encourage } from "@/lib/feedback";
+import { celebrate } from "@/lib/feedback";
 import { playTextThroughTTS, readAutoPlayPref, type Playback } from "@/lib/voice";
 
 type SessionTally = { easy: number; hard: number };
@@ -120,8 +120,10 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
         hard: t.hard + (rating === "hard" ? 1 : 0),
       }));
       setRevealed(false);
-      if (rating === "easy") celebrate({ source: cardRef.current });
-      else encourage();
+      // Confetti on easy, nothing on hard — no praise / encouragement voice
+      // so the next card's English pronunciation is the only sound the kid
+      // hears for each card.
+      if (rating === "easy") celebrate({ source: cardRef.current, silent: true });
       // If no more due cards, refresh server state so the "All caught up"
       // panel reflects the persisted soonest-due across sessions.
       const remaining = dueWords(
