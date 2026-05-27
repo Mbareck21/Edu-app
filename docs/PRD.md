@@ -4,6 +4,43 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Flashcards: English-only audio + robust translation — 2026-05-27
+
+- **Status:** Shipped (commits `42e7997`, `61e0e72`, `73c0e9a`; prod deployment `edu-2uq21i5hy`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — open any list → tap "📇 Flashcards".
+- **Summary:** Three-part fix for the flashcards audio + translation experience that landed in `70d6179`. (1) Translation route now tolerates Groq returning either `{translations:{...}}` or a flat `{word:arabic}` map, normalizes keys on both sides, and surfaces a diagnostic 502 when nothing matches instead of silently saving empty Arabic. (2) Voice playback in flashcards is reduced to a single source: only the English term is spoken; Arabic shows visually on flip but is no longer auto-played. (3) Praise on "Easy" is confetti-only and "Hard" is fully silent — the next card's English IS the feedback, eliminating the "Try again / new term" double-voice that bled through `feedback.ts`'s separate Audio element.
+
+### Acceptance criteria (verified by user on prod)
+- [x] Arabic appears on flip for words that had been silently missing it (translation route now matches keys robustly).
+- [x] When the translate API can't fill anything, the page shows an actionable red error instead of "—".
+- [x] Exactly one voice plays per card lifecycle: the English term itself.
+- [x] No "Great job" / "Try again" voice overlaps the next card's English on Easy/Hard tap.
+- [x] Confetti still fires on Easy (visual feedback retained).
+- [x] Other interactive worksheets (Reading, Scramble, WordSearch, Crossword) keep their existing praise/encouragement voice — opt-in change via new `silent` flag on `celebrate()`.
+
+### Files touched
+**Modified (3):** `app/api/lists/[id]/flashcards/translate/route.ts` (shape-tolerant parsing, normalized key matching, diagnostic 502), `lib/voice.ts` (hardened `playTextThroughTTS().cancel()` — `cancelled` flag + `removeAttribute('src')` + `load()`, deferred-play handler), `components/Flashcards.tsx` (drop Arabic auto-play effect; `stopTTS()` at start of `rate()`; `celebrate({silent:true})` on easy; remove `encourage()` on hard; drop unused import). **API addition:** `lib/feedback.ts` (`celebrate({silent: true})` opt-out — no effect on existing callers).
+
+### Decisions worth remembering
+- **One voice source per card beats hardened cancellation.** The hardened `cancel()` in `lib/voice.ts` is real and useful, but cross-channel races (e.g. `feedback.ts` owning its own `Audio` element) can't be solved by tightening any single channel. Eliminating sources is more robust than coordinating them.
+- **`feedback.ts` praise is intentionally bilingual and per-flow.** Reading/Scramble/WordSearch/Crossword keep "Great job" / "أحسنت" because they have no competing auto-played voice. Flashcards is the one flow with a follow-up English voice; it opts out via `silent: true` rather than gutting the shared helper.
+- **Diagnostic 502 over silent success.** When the translate route gets a Groq response but can't match keys to the missing words, it now returns 502 with sample keys it saw vs. what it asked for. This converts an invisible UX failure into a diagnosable one.
+- **No PR — committed straight to `main`.** This is the project's normal flow (single contributor, Vercel auto-deploys from main, no review gate). The dev-workflow branch gate was overridden by user instruction. Documented here so future sessions don't re-litigate.
+
+### Karpathy frame (as shipped)
+- **What:** Make the flashcards audio behavior deterministic (one voice per card) and the Arabic-translation pipeline resilient to model output drift.
+- **Why this shape:** A 9-year-old learner doesn't need the Arabic spoken — they're Arabic-native. They need to hear the English. Anything else is noise that competes with the thing they're trying to learn. On the translation side: silent failures are worse than loud ones because they look like the feature is just bad.
+- **Failure mode probed:** Voice overlap on rapid Easy/Hard taps. User confirmed clean on prod.
+
+### Known caveats
+- The translate route's diagnostic 502 path is best-effort — if Groq is fully down (network error vs. malformed response), the page still shows the generic Groq error message. Acceptable; the rarer case.
+- `lib/voice.ts:playTextThroughTTS().cancel()` is hardened but still subject to the browser's audio-buffer tail. In practice it's only observable when two voice sources race; with flashcards down to one source, the residual race is no longer audible.
+
+### Plan
+Not written to `.claude/plans/<feature>.md` — this was a fast bug-fix cycle that ran inline in `/dev-workflow` over three deploys. Phase 7 retrospective at `.claude/retros/escapes.md`.
+
+---
+
 ## Flashcards: SRS-2 spaced repetition with Arabic + TTS — 2026-05-25
 
 - **Status:** Shipped (commit `70d6179`)
