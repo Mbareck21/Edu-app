@@ -4,6 +4,67 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Flashcards: smarter 10-card study session with intra-session re-queue — 2026-05-27
+
+- **Status:** Shipped (commit `f9f6778`; prod deployment `edu-kf2hyrac6`)
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — open any list → tap "📇 Flashcards".
+- **Summary:** Adds a bounded 10-card study session layered on top of the existing SRS-2 daily scheduler. The session picks all SRS-due words first, then tops up to 10 from the soonest not-yet-due words. Within the session, **Easy** removes the card and increments the mastered count; **Hard** splices the card back at `currentIndex + (random 2 or 3)` so the kid sees stumblers again within the same sitting. Session ends with a "Session done!" view when the queue empties. SRS scheduler still owns long-term spacing — every Easy/Hard still hits the existing `/review` endpoint and updates persistent SRS state.
+
+### Acceptance criteria (verified live on prod)
+- [x] Opening flashcards builds a session of up to 10 cards (full 10 when ≥10 words exist).
+- [x] Selection order: due words first (dueAt ascending), then top-up from not-yet-due words (also dueAt ascending).
+- [x] Easy removes the card and surfaces the next one; mastered count increments; confetti fires.
+- [x] Hard splices the card back at currentIndex + (random 2 or 3); no praise/encouragement voice; next card surfaces with clean English audio.
+- [x] Session-done view shows when queue empties with `mastered / initialSize` count.
+- [x] Progress footer shows `{mastered} of {N} mastered · {Q} to go` during the session.
+- [x] Refresh = fresh session (queue state is client-only; SRS persists).
+- [x] Server SRS state updates on every in-session rating — verified by 7 successful `POST /api/lists/.../flashcards/review` calls (all 200) in the smoke window.
+- [x] Regression: only English voice plays per card; no Arabic auto-play; confetti on Easy and silent on Hard preserved from the 2026-05-27 audio fix.
+
+### Files touched
+**New (1):** `lib/study-session.ts` — pure functions `selectSessionWords(words, count, now)` + generic `applyRating<T>(queue, rating, rng?)`. Injectable rng for determinism.
+**Modified (1):** `components/Flashcards.tsx` — replaced `dueWords()[0]` driver with a session queue of word ids resolved through a `wordMap` (so translation arabic fills + SRS rating updates automatically refresh the displayed card). Footer + session-done view updated; zero-word list gets its own dedicated branch.
+
+### New models / routes / pages
+None. Server SRS endpoint and Mongo schema unchanged.
+
+### Seed data added
+None. Existing prod data drove the smoke (10-word "Feelings" list + an ad-hoc small list).
+
+### Regression checklist (verified against live data)
+- [x] Translation auto-fires on first visit when any word lacks Arabic.
+- [x] Arabic appears visually on flip.
+- [x] Only the English term plays per card (no Arabic, no praise/encouragement speech).
+- [x] Tapping Easy/Hard cuts current audio immediately before the next card's English.
+- [x] Confetti on Easy, nothing on Hard.
+- [x] Server SRS state updates correctly (interval, dueAt, counts) — confirmed via the 7 review-endpoint 200s.
+- [x] Parent-edited Arabic preserved across the list editor save path (untouched in this diff).
+- [x] Empty-list state ("No words on this list yet.") still renders for lists with zero words.
+- [x] Other interactive worksheets (Reading, Scramble, WordSearch, Crossword) unaffected — no shared file touched.
+
+### Decisions worth remembering
+- **Two-layer scheduler:** outer SRS-2 owns days; inner Leitner-style queue owns minutes. Cleanly separable, no algorithmic conflict.
+- **Queue stores word ids, not objects.** Resolution through `wordMap` means translation arabic fills + SRS rating updates automatically refresh the displayed card with zero glue code.
+- **Server SRS updates on EVERY in-session rating** — a Hard followed by Easy in the same session counts as two server reviews. Both ratings are real signal. Final interval = 2 days (from 1 after Hard, doubled to 2 after Easy).
+- **Fill-to-10 from not-yet-due** chosen over strict-SRS-only. Tradeoff: keeps sessions consistent at 10 cards even on low-due days, but can mildly inflate SRS intervals over time on the top-up words. Documented; revisit if observed.
+- **One Easy = mastered** (single-rating exit from session queue). Simpler than two-consecutive-Easy; next-day SRS still tests retention.
+- **No safety cap on Hard repeats.** Kid can quit any time. Add a cap later if engagement data suggests grinding.
+
+### Karpathy frame (as shipped)
+- **What:** A Leitner-style intra-session queue on top of the SRS-2 day scheduler. 10 cards per session; Hard re-inserts at currentIndex + (random 2 or 3); session ends on empty queue.
+- **Why this shape:** SRS-2 is great for long-term spacing but produces boring one-card sessions and "see this in a day" feels useless when the kid is mid-learning. The inner queue gives clear "I finished my 10" progress and immediate retry of stumblers without disrupting the long-term schedule.
+- **Failure modes probed:** rapid Easy/Hard taps (audio race regression — clean), tiny lists (≤2 words where Hard re-show is immediate — acceptable UX), SRS persistence after session-end (confirmed via re-load).
+
+### Known follow-ups / tech debt
+- **SRS drift on not-yet-due top-ups** — if no words are due daily, every session pulls from not-yet-due and pushes their dueAt further out. Could mildly inflate intervals over weeks. Revisit if observed.
+- **No "Start another session" button** on the session-done view (intentional — would worsen the drift above). Add later if the kid asks for more practice in a sitting.
+- **No client-side session resume on refresh** — refresh starts a fresh session. Acceptable for a 5-minute flow; revisit if the kid frequently mid-sessions a refresh.
+
+### Plan
+`.claude/plans/flashcards-session-queue.md` (gitignored).
+
+---
+
 ## Flashcards: English-only audio + robust translation — 2026-05-27
 
 - **Status:** Shipped (commits `42e7997`, `61e0e72`, `73c0e9a`; prod deployment `edu-2uq21i5hy`)
