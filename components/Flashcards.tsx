@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientWord, ClientWordList, SrsState } from "@/lib/models/WordList";
 import { nextDueAt, type Rating } from "@/lib/srs";
-import { applyRating, DEFAULT_SESSION_SIZE, selectSessionWords } from "@/lib/study-session";
+import {
+  applyRating,
+  DEFAULT_SESSION_SIZE,
+  selectSessionWords,
+  type SessionEntry,
+} from "@/lib/study-session";
 import { celebrate } from "@/lib/feedback";
 import { playTextThroughTTS, readAutoPlayPref, type Playback } from "@/lib/voice";
 
@@ -24,18 +29,22 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
   const [busy, setBusy] = useState<null | "translating" | "reviewing">(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Session queue: built once at mount. Stores word identifiers (strings)
-  // rather than full ClientWord objects so that translation arabic fills
-  // and SRS rating updates are picked up automatically via wordMap below.
+  // Session queue: built once at mount. Each entry tracks the word's id and
+  // a running count of Easy taps in this session — the word leaves the queue
+  // only after the kid's (MASTERY_CONFIRMATIONS + 1)th Easy on it. Storing
+  // ids (not full ClientWord objects) lets translation arabic fills and SRS
+  // updates flow through via wordMap below.
   const initialSession = useMemo(() => {
-    const ids = selectSessionWords(list.words, DEFAULT_SESSION_SIZE, new Date()).map(
-      (w) => w.word,
-    );
-    return { ids, size: ids.length };
+    const entries: SessionEntry[] = selectSessionWords(
+      list.words,
+      DEFAULT_SESSION_SIZE,
+      new Date(),
+    ).map((w) => ({ id: w.word, easys: 0 }));
+    return { entries, size: entries.length };
     // Frozen at mount on purpose; refreshing the page starts a new session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [queueIds, setQueueIds] = useState<string[]>(initialSession.ids);
+  const [queue, setQueue] = useState<SessionEntry[]>(initialSession.entries);
   const [mastered, setMastered] = useState(0);
   const initialSize = initialSession.size;
 
@@ -93,17 +102,17 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Resolve queueIds → live ClientWord objects via wordMap so the displayed
-  // card always reflects the latest arabic + SRS state from `words`.
+  // Resolve queue entries → live ClientWord objects via wordMap so the
+  // displayed card always reflects the latest arabic + SRS state from `words`.
   const wordMap = useMemo(
     () => new Map(words.map((w) => [w.word, w])),
     [words],
   );
-  const queue = useMemo(
-    () => queueIds.map((id) => wordMap.get(id)).filter((w): w is ClientWord => !!w),
-    [queueIds, wordMap],
+  const resolvedQueue = useMemo(
+    () => queue.map((e) => wordMap.get(e.id)).filter((w): w is ClientWord => !!w),
+    [queue, wordMap],
   );
-  const next = queue[0] ?? null;
+  const next = resolvedQueue[0] ?? null;
 
   // Auto-play English when a new card surfaces. Arabic is shown visually on
   // flip but never spoken — only the English pronunciation is read aloud so
@@ -137,18 +146,20 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       setWords((ws) =>
         ws.map((w) => (w.word === targetWord ? { ...w, srs } : w))
       );
-      if (rating === "easy") setMastered((m) => m + 1);
       setRevealed(false);
-      // Confetti on easy, nothing on hard — no praise / encouragement voice
-      // so the next card's English pronunciation is the only sound the kid
-      // hears for each card.
+      // Confetti on every Easy tap (not just the mastering one) so the kid
+      // gets continuous positive feedback. Nothing on Hard — no praise /
+      // encouragement voice either, so the next card's English pronunciation
+      // is the only sound per card.
       if (rating === "easy") celebrate({ source: cardRef.current, silent: true });
-      // Update the intra-session queue. Easy removes the card; Hard splices
-      // it back 2 or 3 positions ahead. When the queue empties, refresh
-      // server state so re-loading the page shows the latest SRS.
-      const nextQueueIds = applyRating(queueIds, rating);
-      setQueueIds(nextQueueIds);
-      if (nextQueueIds.length === 0) router.refresh();
+      // Update the intra-session queue. Easy re-splices the word 2-3 ahead
+      // and increments its mastery counter; the (MASTERY_CONFIRMATIONS + 1)th
+      // Easy removes it and is the only event that bumps the mastered count.
+      // Hard re-splices the word too but resets its counter to 0.
+      const { queue: nextQueue, mastered: didMaster } = applyRating(queue, rating);
+      setQueue(nextQueue);
+      if (didMaster) setMastered((m) => m + 1);
+      if (nextQueue.length === 0) router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your rating.");
     } finally {
@@ -268,7 +279,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <p className="text-center text-xs text-slate-500">
-        {mastered} of {initialSize} mastered · {queue.length} to go
+        {mastered} of {initialSize} mastered · {resolvedQueue.length} to go
       </p>
     </section>
   );
