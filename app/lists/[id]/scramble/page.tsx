@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { scrambleAll } from "@/lib/scramble";
+import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
 import WorksheetFrame from "@/components/WorksheetFrame";
 import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
 import InteractiveScramble from "@/components/InteractiveScramble";
@@ -21,7 +22,10 @@ export default async function ScramblePage({
   if (!doc) notFound();
   const list = toClient(doc);
 
-  const rows = scrambleAll(list.words.map((w) => w.word));
+  // Cap any single session at WORD_GAME_SESSION_SIZE words; reload for a
+  // fresh random pick.
+  const sampled = sampleWords(list.words, WORD_GAME_SESSION_SIZE);
+  const rows = scrambleAll(sampled.map((w) => w.word));
 
   return (
     <PlayProvider>

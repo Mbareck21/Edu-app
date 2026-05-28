@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { buildWordSearch } from "@/lib/wordsearch";
+import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
 import WorksheetFrame from "@/components/WorksheetFrame";
 import WordSearchGrid from "@/components/WordSearchGrid";
 import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
@@ -22,8 +23,11 @@ export default async function WordSearchPage({
   if (!doc) notFound();
   const list = toClient(doc);
 
+  // Cap any single session at WORD_GAME_SESSION_SIZE words; reload for a
+  // fresh random pick.
+  const sampled = sampleWords(list.words, WORD_GAME_SESSION_SIZE);
   const result = buildWordSearch(
-    list.words.map((w) => w.word),
+    sampled.map((w) => w.word),
     list.hiddenMessage
   );
 

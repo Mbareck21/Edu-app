@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { buildCrossword } from "@/lib/crossword";
+import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
 import WorksheetFrame from "@/components/WorksheetFrame";
 import CrosswordGrid from "@/components/CrosswordGrid";
 import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
@@ -21,13 +22,20 @@ export default async function CrosswordPage({
   const doc = await WordList.findById(id).lean();
   if (!doc) notFound();
   const list = toClient(doc);
-  const result = buildCrossword(list.words);
+  // Cap any single session at WORD_GAME_SESSION_SIZE words; reload for a
+  // fresh random pick.
+  const sampled = sampleWords(list.words, WORD_GAME_SESSION_SIZE);
+  const result = buildCrossword(sampled);
 
   // If the crossword generator fell back, no interactive mode either.
   if (!result.ok) {
     return (
       <WorksheetFrame title="Crossword" listName={list.name} backHref={`/lists/${list._id}`}>
-        <FallbackList list={list} reason={result.reason} skipped={result.skipped} />
+        <FallbackList
+          list={{ name: list.name, words: sampled }}
+          reason={result.reason}
+          skipped={result.skipped}
+        />
       </WorksheetFrame>
     );
   }
