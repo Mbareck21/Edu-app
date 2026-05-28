@@ -22,11 +22,29 @@ export function scramble(word: string): string {
   return attempt || clean;
 }
 
+// Scramble each whitespace-separated piece independently so phrases keep
+// their shape — "climate change" → "TILAMCE CGAENH", not "CGNHIATELACME".
+function scramblePhrase(entry: string): string {
+  return entry
+    .split(/\s+/)
+    .map((part) => scramble(part))
+    .filter((part) => part.length > 0)
+    .join(" ");
+}
+
 export type ScrambleRow = { scrambled: string; answer: string };
 
 export function scrambleAll(words: string[]): ScrambleRow[] {
   return words
-    .map((w) => w.toLowerCase().replace(/[^a-z]/g, ""))
-    .filter((w) => w.length >= 2)
-    .map((answer) => ({ scrambled: scramble(answer).toUpperCase(), answer: answer.toUpperCase() }));
+    .map((w) => w.toLowerCase().trim().replace(/\s+/g, " "))
+    .map((entry) => {
+      // Keep only letters + single spaces; drop entries with no real letters.
+      const cleaned = entry.replace(/[^a-z\s]/g, "").trim();
+      return cleaned;
+    })
+    .filter((entry) => entry.replace(/\s/g, "").length >= 2)
+    .map((answer) => ({
+      scrambled: scramblePhrase(answer).toUpperCase(),
+      answer: answer.toUpperCase(),
+    }));
 }

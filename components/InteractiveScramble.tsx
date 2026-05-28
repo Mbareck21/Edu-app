@@ -47,8 +47,11 @@ export default function InteractiveScramble({
     const guess = r.value.trim().toUpperCase().replace(/[^A-Z]/g, "");
     if (!guess) return;
     const source = ev.currentTarget.closest("li") as HTMLElement | null;
+    // Compare letters-only so phrase answers ("CLIMATE CHANGE") accept the
+    // kid typing either "climate change" or "climatechange".
+    const answerLetters = r.answer.replace(/[^A-Z]/g, "");
 
-    if (guess === r.answer) {
+    if (guess === answerLetters) {
       setRows((prev) => prev.map((x, idx) => (idx === i ? { ...x, status: "correct", value: guess } : x)));
       celebrate({ source });
       // Check overall completion.

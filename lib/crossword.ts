@@ -39,6 +39,7 @@ export type CrosswordResult =
       grid: (string | null)[][]; // null = black square; string = answer letter
       placed: CrosswordPlacement[];
       unplaced: string[];
+      skipped: string[];          // entries dropped (phrases, non-letters)
       across: CrosswordPlacement[];
       down: CrosswordPlacement[];
     }
@@ -47,12 +48,17 @@ export type CrosswordResult =
       reason: string;
       placed: CrosswordPlacement[];
       unplaced: string[];
+      skipped: string[];
     };
 
 export function buildCrossword(words: { word: string; clue: string }[]): CrosswordResult {
-  const usable = words
-    .map((w) => ({ word: w.word.trim().toLowerCase(), clue: (w.clue || "").trim() }))
-    .filter((w) => /^[a-z]{2,}$/.test(w.word));
+  const normalized = words.map((w) => ({
+    word: w.word.trim().toLowerCase(),
+    clue: (w.clue || "").trim(),
+  }));
+  const isLetterWord = (s: string) => /^[a-z]{2,}$/.test(s);
+  const usable = normalized.filter((w) => isLetterWord(w.word));
+  const skipped = normalized.filter((w) => w.word.length > 0 && !isLetterWord(w.word)).map((w) => w.word);
 
   if (usable.length < 2) {
     return {
@@ -60,6 +66,7 @@ export function buildCrossword(words: { word: string; clue: string }[]): Crosswo
       reason: "Need at least 2 words with letters only.",
       placed: [],
       unplaced: usable.map((w) => w.word),
+      skipped,
     };
   }
 
@@ -99,6 +106,7 @@ export function buildCrossword(words: { word: string; clue: string }[]): Crosswo
       reason: `Only ${placed.length} of ${usable.length} words could be placed. Try words that share more letters.`,
       placed,
       unplaced,
+      skipped,
     };
   }
 
@@ -118,5 +126,5 @@ export function buildCrossword(words: { word: string; clue: string }[]): Crosswo
   const across = placed.filter((p) => p.orientation === "across").sort((a, b) => a.position - b.position);
   const down = placed.filter((p) => p.orientation === "down").sort((a, b) => a.position - b.position);
 
-  return { ok: true, rows: raw.rows, cols: raw.cols, grid, placed, unplaced, across, down };
+  return { ok: true, rows: raw.rows, cols: raw.cols, grid, placed, unplaced, skipped, across, down };
 }

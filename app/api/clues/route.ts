@@ -51,10 +51,17 @@ export async function POST(req: Request) {
     }
     const clues = payload.clues || {};
 
-    // Normalize keys to lowercase and only return clues for requested words.
+    // Normalize keys for tolerant lookup: the model may return "climate change",
+    // "climate_change", "climate-change", or "ClimateChange" for the same input.
+    // Collapse everything to lowercase letters-only on both sides before matching.
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+    const byNormalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(clues)) {
+      if (typeof v === "string") byNormalized[normalize(k)] = v;
+    }
     const out: Record<string, string> = {};
     for (const w of words) {
-      const v = clues[w] ?? clues[w.toLowerCase()];
+      const v = byNormalized[normalize(w)];
       if (typeof v === "string" && v.trim().length > 0) {
         out[w] = v.trim();
       }

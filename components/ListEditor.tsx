@@ -72,7 +72,13 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
         body: JSON.stringify({ words: targets }),
       });
       if (!res.ok) {
-        setError("AI clue generation failed. Make sure GROQ_API_KEY is set.");
+        const j = await res.json().catch(() => ({}));
+        const serverMsg = typeof j.error === "string" ? j.error : "";
+        setError(
+          serverMsg
+            ? `AI clue generation failed: ${serverMsg}`
+            : `AI clue generation failed (HTTP ${res.status}).`
+        );
         return;
       }
       const data = (await res.json()) as { clues: Record<string, string> };

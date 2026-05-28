@@ -11,12 +11,14 @@ export default function InteractiveWordSearch({
   grid,
   words,
   listName,
+  skipped = [],
 }: {
   rows: number;
   cols: number;
   grid: string[][];
   words: string[];      // canonical, lowercase, letters-only
   listName: string;
+  skipped?: string[];
 }) {
   // Words still to find (uppercase keys for display).
   const targetSet = useMemo(() => {
@@ -241,6 +243,11 @@ export default function InteractiveWordSearch({
         <p className="mt-2 text-xs text-slate-500">
           Found {found.size} of {targetSet.size}
         </p>
+        {skipped.length > 0 && (
+          <p className="mt-1 text-xs text-amber-700">
+            Skipped (phrases / non-letters): {skipped.join(", ")}.
+          </p>
+        )}
       </div>
     </section>
   );

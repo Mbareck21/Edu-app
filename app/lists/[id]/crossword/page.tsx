@@ -27,7 +27,7 @@ export default async function CrosswordPage({
   if (!result.ok) {
     return (
       <WorksheetFrame title="Crossword" listName={list.name} backHref={`/lists/${list._id}`}>
-        <FallbackList list={list} reason={result.reason} />
+        <FallbackList list={list} reason={result.reason} skipped={result.skipped} />
       </WorksheetFrame>
     );
   }
@@ -62,9 +62,11 @@ export default async function CrosswordPage({
 function FallbackList({
   list,
   reason,
+  skipped,
 }: {
   list: { name: string; words: { word: string; clue: string }[] };
   reason: string;
+  skipped: string[];
 }) {
   return (
     <section>
@@ -72,6 +74,11 @@ function FallbackList({
       <p className="mb-4 text-sm text-slate-600">
         Note: a crossword layout could not be generated for these words ({reason}). Here is a definitions list instead.
       </p>
+      {skipped.length > 0 && (
+        <p className="mb-4 text-sm text-amber-700">
+          Skipped (the crossword grid only fits single letter-only words): {skipped.join(", ")}.
+        </p>
+      )}
       <ol className="space-y-2 text-lg">
         {list.words.map((w, i) => (
           <li key={i}>
@@ -121,6 +128,11 @@ function Page1({
       {result.unplaced.length > 0 && (
         <p className="mt-6 text-xs text-slate-500">
           Note: these words could not fit in the grid: {result.unplaced.join(", ")}.
+        </p>
+      )}
+      {result.skipped.length > 0 && (
+        <p className="mt-2 text-xs text-slate-500">
+          Skipped (phrases / non-letters): {result.skipped.join(", ")}.
         </p>
       )}
     </section>

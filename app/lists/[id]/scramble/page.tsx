@@ -58,9 +58,13 @@ function PrintView({
             <li key={i} className="flex flex-wrap items-center gap-4">
               <span className="scramble-scrambled font-bold min-w-40">{r.scrambled}</span>
               <span className="inline-flex gap-1">
-                {Array.from({ length: r.answer.length }).map((_, j) => (
-                  <span key={j} className="scramble-box" aria-hidden />
-                ))}
+                {r.answer.split("").map((ch, j) =>
+                  ch === " " ? (
+                    <span key={j} className="inline-block w-3" aria-hidden />
+                  ) : (
+                    <span key={j} className="scramble-box" aria-hidden />
+                  )
+                )}
               </span>
             </li>
           ))}

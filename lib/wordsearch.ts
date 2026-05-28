@@ -25,10 +25,12 @@ export type WordSearchResult =
       grid: string[][];                // every cell is a single letter
       placements: Placement[];         // for the answer key
       hiddenMessage: string;           // the cleaned hidden message, as embedded
+      skipped: string[];               // entries dropped (phrases, non-letters)
     }
   | {
       ok: false;
       reason: string;
+      skipped: string[];
     };
 
 const DIRS: { dRow: number; dCol: number }[] = [
@@ -106,11 +108,23 @@ export function buildWordSearch(
   rawWords: string[],
   rawHiddenMessage: string
 ): WordSearchResult {
-  const words = rawWords
-    .map((w) => letters(w))
-    .filter((w) => w.length >= 2);
+  // Drop entries that aren't pure letters. The grid is one-letter-per-cell, so
+  // phrases like "climate change" would otherwise be silently concatenated to
+  // "climatechange" while the "words to find" list still displays "CLIMATE
+  // CHANGE" — making the puzzle unsolvable. Surface them as skipped instead.
+  const skipped: string[] = [];
+  const words: string[] = [];
+  for (const raw of rawWords) {
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed.length === 0) continue;
+    if (/^[a-z]{2,}$/.test(trimmed)) {
+      words.push(trimmed);
+    } else {
+      skipped.push(trimmed);
+    }
+  }
   if (words.length === 0) {
-    return { ok: false, reason: "No usable words (need letters only, length ≥ 2)." };
+    return { ok: false, reason: "No usable words (need letters only, length ≥ 2).", skipped };
   }
   const longest = Math.max(...words.map((w) => w.length));
   const hidden = letters(rawHiddenMessage);
@@ -181,12 +195,14 @@ export function buildWordSearch(
       grid: finalGrid,
       placements,
       hiddenMessage: hidden,
+      skipped,
     };
   }
 
   return {
     ok: false,
     reason: `Could not fit all words within a ${MAX_SIDE}×${MAX_SIDE} grid. Try fewer or shorter words, or shorten the hidden message.`,
+    skipped,
   };
 }
 

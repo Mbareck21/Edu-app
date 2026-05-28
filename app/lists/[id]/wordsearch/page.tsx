@@ -33,10 +33,19 @@ export default async function WordSearchPage({
         <section>
           <h1 className="mb-2 text-2xl font-bold">Word Search — {list.name}</h1>
           <p className="text-red-600">{result.reason}</p>
+          {result.skipped.length > 0 && (
+            <p className="mt-2 text-sm text-amber-700">
+              Skipped (the word search grid only fits single letter-only words): {result.skipped.join(", ")}.
+            </p>
+          )}
         </section>
       </WorksheetFrame>
     );
   }
+
+  // Use the placed words (single, letters-only) for both views — phrases are
+  // listed separately in `result.skipped` so the parent knows what was dropped.
+  const placedWords = result.placements.map((p) => p.word);
 
   return (
     <PlayProvider>
@@ -51,8 +60,9 @@ export default async function WordSearchPage({
             <PrintView
               listName={list.name}
               hiddenMessage={list.hiddenMessage}
-              wordsToFind={list.words.map((w) => w.word.toUpperCase())}
+              wordsToFind={placedWords.map((w) => w.toUpperCase())}
               result={result}
+              skipped={result.skipped}
             />
           }
           playView={
@@ -61,7 +71,8 @@ export default async function WordSearchPage({
               rows={result.rows}
               cols={result.cols}
               grid={result.grid}
-              words={list.words.map((w) => w.word)}
+              words={placedWords}
+              skipped={result.skipped}
             />
           }
         />
@@ -75,11 +86,13 @@ function PrintView({
   hiddenMessage,
   wordsToFind,
   result,
+  skipped,
 }: {
   listName: string;
   hiddenMessage: string;
   wordsToFind: string[];
   result: Extract<ReturnType<typeof buildWordSearch>, { ok: true }>;
+  skipped: string[];
 }) {
   return (
     <>
@@ -92,6 +105,11 @@ function PrintView({
         <WordsToFind words={wordsToFind} />
         {result.hiddenMessage.length > 0 && <HiddenMessageBlanks length={result.hiddenMessage.length} />}
         <Instructions hasHidden={result.hiddenMessage.length > 0} />
+        {skipped.length > 0 && (
+          <p className="mt-3 text-xs text-slate-500">
+            Skipped (phrases / non-letters): {skipped.join(", ")}.
+          </p>
+        )}
       </section>
 
       <div className="page-break-after" />

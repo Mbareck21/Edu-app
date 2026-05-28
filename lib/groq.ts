@@ -133,10 +133,11 @@ Rules for each clue:
 - NEVER include the answer word itself, any form of it (plural, tense), or its first letter as a hint.
 - Prefer a simple definition or a "something that…" pattern. Example: cat → "An animal that says meow and likes milk".
 - For abstract words (feelings, actions), describe a situation. Example: surprised → "How you feel when something happens you did not expect".
+- Some entries may be MULTI-WORD PHRASES (e.g. "climate change", "ice cream"). Treat the whole phrase as the answer — the clue must not contain any word from the phrase or its forms.
 
 Return STRICT JSON in this exact shape:
 {"clues": {"word1": "clue text", "word2": "clue text", ...}}
-Keys must match the input words exactly (lowercase). No extra text outside the JSON.
+Keys must echo each input entry EXACTLY as it was given (lowercase, preserving spaces and hyphens — e.g. "climate change" stays "climate change", not "climate_change" or "climatechange"). No extra text outside the JSON.
 `.trim();
 
 // ────────────────────────────────────────────────────────────────────────────
