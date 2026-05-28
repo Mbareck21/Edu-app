@@ -26,8 +26,12 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
   const router = useRouter();
   const [words, setWords] = useState<ClientWord[]>(list.words);
   const [revealed, setRevealed] = useState(false);
-  const [busy, setBusy] = useState<null | "translating" | "reviewing">(null);
+  const [busy, setBusy] = useState<null | "translating" | "reviewing" | "saving">(null);
   const [error, setError] = useState<string | null>(null);
+  // Inline Arabic edit on the revealed side: `editing` toggles the input,
+  // `draft` holds the in-progress value.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
 
   // Session queue: built once at mount. Each entry tracks the word's id and
   // a running count of Easy taps in this session — the word leaves the queue
@@ -147,6 +151,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
         ws.map((w) => (w.word === targetWord ? { ...w, srs } : w))
       );
       setRevealed(false);
+      setEditing(false);
       // Confetti on every Easy tap (not just the mastering one) so the kid
       // gets continuous positive feedback. Nothing on Hard — no praise /
       // encouragement voice either, so the next card's English pronunciation
@@ -162,6 +167,52 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       if (nextQueue.length === 0) router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your rating.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function startEdit() {
+    if (!next || busy) return;
+    setDraft(next.arabic ?? "");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+  }
+
+  // Persist the edited Arabic for the current word via the list PATCH
+  // endpoint, which preserves every word's SRS server-side and returns the
+  // refreshed list. Reflecting through setWords updates the displayed card
+  // in place — no reload — matching the translation flow above.
+  async function saveArabic() {
+    if (!next || busy) return;
+    const target = next.word;
+    const value = draft.trim();
+    setBusy("saving");
+    setError(null);
+    try {
+      const payload = words.map((w) => ({
+        word: w.word,
+        clue: w.clue,
+        arabic: w.word === target ? value : w.arabic,
+      }));
+      const res = await fetch(`/api/lists/${list._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words: payload }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(typeof d.error === "string" ? d.error : `Error ${res.status}`);
+        return;
+      }
+      const updated = (await res.json()) as ClientWordList;
+      setWords(updated.words);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the translation.");
     } finally {
       setBusy(null);
     }
@@ -234,17 +285,56 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
         {revealed ? (
           <div className="space-y-3">
             <p className="text-sm uppercase tracking-wider text-slate-500">{next.word}</p>
-            <p
-              className="text-5xl font-bold text-slate-900"
-              lang="ar"
-              dir="rtl"
-            >
-              {hasArabic ? next.arabic : "—"}
-            </p>
-            {!hasArabic && (
-              <p className="text-xs text-slate-500">
-                No Arabic on file. Add one in the list editor.
-              </p>
+            {editing ? (
+              <div className="space-y-3">
+                <input
+                  className="input text-center text-3xl"
+                  lang="ar"
+                  dir="rtl"
+                  maxLength={80}
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  aria-label="Edit Arabic translation"
+                />
+                <div className="flex justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    disabled={busy !== null}
+                    className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveArabic}
+                    disabled={busy !== null}
+                    className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    {busy === "saving" ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p
+                  className="text-5xl font-bold text-slate-900"
+                  lang="ar"
+                  dir="rtl"
+                >
+                  {hasArabic ? next.arabic : "—"}
+                </p>
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  disabled={busy !== null}
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-60"
+                  aria-label="Edit Arabic translation"
+                >
+                  ✏️ Edit translation
+                </button>
+              </>
             )}
           </div>
         ) : (

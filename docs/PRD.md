@@ -4,6 +4,54 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Flashcards: inline Arabic edit on the card — 2026-05-27
+
+- **Status:** Shipped (commit pending push; pushed to `main` → Vercel auto-deploy).
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — open any list → "📇 Flashcards" → flip a card → "✏️ Edit translation".
+- **Summary:** On the revealed (Arabic) side of a flashcard, a parent can tap **✏️ Edit translation** to fix the Arabic in an RTL input, Save, and see the corrected value on the card immediately. The edit persists to the list via the existing `PATCH /api/lists/[id]` endpoint (which preserves every word's SRS state server-side) and survives reloads, other study sessions, and the word games.
+
+### Acceptance criteria (verified live on prod)
+- [x] Edit button appears on the revealed side; tapping it shows an RTL input pre-filled with the current Arabic + Save/Cancel.
+- [x] Save persists via PATCH and updates the card in place (no reload); edit survives a page reload.
+- [x] Cancel discards the draft unchanged.
+- [x] Editing one word does not reset SRS for it or any other word.
+- [x] Edit/Save disabled while another action is in flight; no extra audio on entering/leaving edit.
+
+### Files touched
+**Modified (1):** `components/Flashcards.tsx` — added `editing`/`draft` state, `busy` widened to include `"saving"`, `startEdit`/`cancelEdit`/`saveArabic` handlers, and an inline RTL editor on the revealed side. `rate()` also clears `editing` on card advance.
+
+### New models / routes / pages
+None. Reuses `PATCH /api/lists/[id]` (already SRS-preserving). No schema/env change.
+
+### Seed data added
+None.
+
+### Regression checklist (verified against live data)
+- [x] Easy-mastery flow (3 confirmations) intact — shares this file.
+- [x] Only English plays per card; confetti on Easy, silent on Hard.
+- [x] Translation auto-fires on first visit for words lacking Arabic.
+- [x] List editor save path (shares the PATCH endpoint) still works.
+- [x] Edited Arabic flows through to the word games (same persisted field).
+
+### Decisions worth remembering
+- **Reuse the list PATCH endpoint** instead of a new single-word route — least code; SRS-preservation already proven (`app/api/lists/[id]/route.ts:52-84`).
+- **Await-then-`setWords`, no optimistic update** — matches the existing translate flow's convention.
+- **Edit visible to anyone** — single shared household login (`proxy.ts` gates everything behind one JWT cookie); no parent/kid role split exists.
+- **Auth is enforced at the proxy layer**, not in route handlers — the reused PATCH route is already protected.
+- **Clearing Arabic to empty is a no-op** (known limitation): the PATCH server treats empty `arabic` as "keep prior value." Feature is "fix the translation," so this is out of scope.
+
+### Karpathy frame (as shipped)
+Additive UI state (`editing`, `draft`) + one save handler wired to the existing list PATCH; the card already re-renders from `words` via `wordMap`, so `setWords(updated.words)` reflects the edit in place. First failure mode (SRS wipe on save) ruled out by the server's merge-from-DB SRS logic.
+
+### Known follow-ups / tech debt
+- Pre-existing PATCH↔/review read-modify-write race (unchanged from the translate flow) — negligible for a single-user household app.
+- Clearing a translation to blank from the card isn't supported (see decisions).
+
+### Plan
+`.claude/plans/flashcard-arabic-inline-edit.md`
+
+---
+
 ## Flashcards Easy-mastery confirmations + word-game 10-word session cap — 2026-05-27
 
 - **Status:** Shipped (commits `f1ec4fe` flashcards, `f5948a2` word games; pushed to `main` → Vercel auto-deploy). Phrase-support WIP shipped alongside as `afc147e`.
