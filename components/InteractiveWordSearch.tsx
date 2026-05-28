@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { celebrate, encourage } from "@/lib/feedback";
+import ResetButton from "@/components/ResetButton";
 
 type Cell = { r: number; c: number };
 
@@ -46,6 +47,17 @@ export default function InteractiveWordSearch({
   const dragPathRef = useRef<Cell[]>([]);
   const flashTimerRef = useRef<number | null>(null);
   const finishedFiredRef = useRef(false);
+
+  function reset() {
+    setFound(new Set());
+    setFoundCellKeys(new Set());
+    setDragStart(null);
+    setDragPath([]);
+    setFlashKeys(new Set());
+    dragStartRef.current = null;
+    dragPathRef.current = [];
+    finishedFiredRef.current = false;
+  }
 
   // Compute straight-line cells between two endpoints inclusive, or null if
   // they don't lie on a shared 8-direction line.
@@ -192,7 +204,10 @@ export default function InteractiveWordSearch({
   return (
     <section className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold">Word Search</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-3xl font-bold">Word Search</h1>
+          <ResetButton onReset={reset} />
+        </div>
         <p className="text-sm text-slate-600">{listName}</p>
         <p className="mt-2 text-sm text-slate-700">
           <strong>Slide your finger</strong> across the letters of a word — in any of 8 directions. Release on the last letter.

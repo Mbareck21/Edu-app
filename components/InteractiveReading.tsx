@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { useRouter } from "next/navigation";
 import type { ClientWordList, ReadingQuestion } from "@/lib/models/WordList";
 import { celebrate, encourage } from "@/lib/feedback";
+import ResetButton from "@/components/ResetButton";
 
 type Progress = {
   currentIdx: number;
@@ -251,6 +252,30 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
     }
   };
 
+  // Restart the current story from question 1 — same paragraph, all progress
+  // (answers, wrong counts, hints, reveals) cleared. Distinct from "New
+  // reading", which generates a different story. The persist effect writes the
+  // fresh progress back to localStorage.
+  const resetReading = () => {
+    if (!reading) return;
+    completionFiredRef.current = false;
+    setProgress({
+      currentIdx: 0,
+      wrongCount: questions.map(() => 0),
+      hintsUsed: questions.map(() => 0),
+      revealed: questions.map(() => false),
+      done: false,
+    });
+    setValue("");
+    setFeedback("");
+    setError(null);
+  };
+
+  const hasProgress =
+    progress.currentIdx > 0 ||
+    progress.wrongCount.some((n) => n > 0) ||
+    progress.done;
+
   // Advance after the kid taps "Got it" on a revealed answer. No celebration —
   // the question already counts as wrong via its existing wrongCount.
   const acknowledgeReveal = () => {
@@ -370,7 +395,8 @@ export default function InteractiveReading({ list }: { list: ClientWordList }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Generate-new button always available, useful if the kid wants to skip or after completion */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {hasProgress && <ResetButton onReset={resetReading} />}
         <button
           type="button"
           onClick={generate}

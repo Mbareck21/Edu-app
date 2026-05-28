@@ -12,6 +12,7 @@ import {
 } from "@/lib/study-session";
 import { celebrate } from "@/lib/feedback";
 import { playTextThroughTTS, readAutoPlayPref, type Playback } from "@/lib/voice";
+import ResetButton from "@/components/ResetButton";
 
 function formatRelative(date: Date): string {
   const ms = date.getTime() - Date.now();
@@ -66,6 +67,19 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
     if (!readAutoPlayPref()) return;
     stopTTS();
     ttsRef.current = playTextThroughTTS(text);
+  }
+
+  // Restart the session with the same words it began with. `initialSession` is
+  // frozen at mount and never mutated, so this restores the exact starting
+  // queue (all counters zeroed) regardless of progress. SRS already persisted
+  // server-side is unaffected — this only resets the in-session study state.
+  function resetSession() {
+    stopTTS();
+    setQueue(initialSession.entries);
+    setMastered(0);
+    setRevealed(false);
+    setEditing(false);
+    setError(null);
   }
 
   // Fire-and-forget translation pass on mount if any word is missing Arabic.
@@ -256,6 +270,9 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-center">
+          <ResetButton onReset={resetSession} />
+        </div>
       </section>
     );
   }
@@ -264,6 +281,9 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
 
   return (
     <section className="space-y-4">
+      <div className="flex justify-end">
+        <ResetButton onReset={resetSession} />
+      </div>
       <div
         ref={cardRef}
         onClick={() => !revealed && setRevealed(true)}

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { celebrate, encourage } from "@/lib/feedback";
+import ResetButton from "@/components/ResetButton";
 
 type RowState = {
   scrambled: string;
@@ -20,7 +21,7 @@ export default function InteractiveScramble({
   listName: string;
   rows: { scrambled: string; answer: string }[];
 }) {
-  const [rows, setRows] = useState<RowState[]>(() =>
+  const buildRows = (): RowState[] =>
     initial.map((r) => ({
       scrambled: r.scrambled,
       answer: r.answer,
@@ -29,9 +30,14 @@ export default function InteractiveScramble({
       wrongCount: 0,
       revealed: false,
       shakeKey: 0,
-    }))
-  );
+    }));
+  const [rows, setRows] = useState<RowState[]>(buildRows);
   const finishedFiredRef = useRef(false);
+
+  function reset() {
+    setRows(buildRows());
+    finishedFiredRef.current = false;
+  }
 
   function updateValue(i: number, value: string) {
     setRows((prev) =>
@@ -76,7 +82,10 @@ export default function InteractiveScramble({
 
   return (
     <section>
-      <h1 className="mb-1 text-3xl font-bold">Word Scramble</h1>
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold">Word Scramble</h1>
+        <ResetButton onReset={reset} />
+      </div>
       <p className="mb-1 text-sm text-slate-600">{listName}</p>
       <p className="mb-6 text-sm text-slate-700">Type each word and tap <strong>Check</strong>.</p>
       <ol className="space-y-3">

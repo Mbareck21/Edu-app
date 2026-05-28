@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CrosswordPlacement } from "@/lib/crossword";
 import { celebrate, encourage } from "@/lib/feedback";
+import ResetButton from "@/components/ResetButton";
 
 type Orientation = "across" | "down";
 
@@ -58,6 +59,14 @@ export default function InteractiveCrossword({
   // Shake key per word for re-trigger.
   const [shakeKey, setShakeKey] = useState<Record<number, number>>({});
   const finishedFiredRef = useRef(false);
+
+  function reset() {
+    setValues({});
+    setWordStatus({});
+    setActive(null);
+    setShakeKey({});
+    finishedFiredRef.current = false;
+  }
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -268,7 +277,10 @@ export default function InteractiveCrossword({
   return (
     <section className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold">Crossword</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-3xl font-bold">Crossword</h1>
+          <ResetButton onReset={reset} />
+        </div>
         <p className="text-sm text-slate-600">{listName}</p>
       </div>
 
