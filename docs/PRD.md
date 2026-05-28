@@ -4,6 +4,52 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Flashcards Easy-mastery confirmations + word-game 10-word session cap — 2026-05-27
+
+- **Status:** Shipped (commits `f1ec4fe` flashcards, `f5948a2` word games; pushed to `main` → Vercel auto-deploy). Phrase-support WIP shipped alongside as `afc147e`.
+- **Live URL:** <https://edu-app-beta-eight.vercel.app> — flashcards via any list → "📇 Flashcards"; word games via the Crossword / Scramble / Word Search worksheets.
+- **Summary:** Two product tweaks. (1) Flashcards: tapping **Easy** no longer removes a card immediately — each session-queue entry now carries an `easys` counter, and a word leaves the queue only on the 4th Easy (1 initial + 3 confirmations). Hard re-splices the card AND resets its counter to 0. Confetti still fires on every Easy; only the displayed `mastered` count reflects true mastery. (2) Word games: crossword, scramble, and word search now sample at most 10 random words from the list per page load (lists with ≤10 words unchanged).
+
+### Acceptance criteria (verified live on prod)
+- [x] Easy on 1st/2nd/3rd tap re-splices the card 2-3 ahead; mastered count unchanged; confetti fires.
+- [x] 4th Easy on the same word removes it and increments `X / N mastered`.
+- [x] Hard at any point resets that word's Easy counter to 0 and re-splices it.
+- [x] Crossword / Scramble / Word Search use at most 10 random words; reload yields a different mix; lists ≤10 show everything.
+- [x] Phrase-skip handling unaffected by the cap.
+
+### Files touched
+**New (1):** `lib/session-sample.ts` — `WORD_GAME_SESSION_SIZE = 10` + `sampleWords<T>(items, n, rng?)` partial Fisher-Yates.
+**Modified (4):** `lib/study-session.ts` (added `MASTERY_CONFIRMATIONS = 3`, `SessionEntry` type, rewrote `applyRating` to return `{ queue, mastered }`); `components/Flashcards.tsx` (queue now `SessionEntry[]`, mastered count gated on `didMaster`); the three word-game `page.tsx` files (sample before building).
+
+### New models / routes / pages
+None. SRS endpoint and Mongo schema unchanged. Word-game pages remain `force-dynamic`.
+
+### Seed data added
+None. Existing prod data drove the smoke.
+
+### Regression checklist (verified against live data)
+- [x] Flashcards audio: only English plays; confetti on Easy, silent on Hard; audio cut on rate.
+- [x] Server SRS state still updates on every rating.
+- [x] Refresh = fresh session.
+- [x] Phrase support (`afc147e`) still surfaces skipped phrases in all three games.
+- [x] Lists with ≤10 words show all words in the puzzle.
+
+### Decisions worth remembering
+- **"Mastered" = 4 total Easy taps** (`MASTERY_CONFIRMATIONS = 3`, the count of Easys *after* the first). Matches the user's "repeat 3 times after that" phrasing.
+- **Hard resets the mastery counter to 0** — strict mastery (user-confirmed). A word mastered this way gets its server SRS interval doubled 4 times (1→2→4→8→16 days).
+- **Confetti on every Easy, not just the mastering one** — continuous positive feedback for the kid; only the counter UI tracks true mastery.
+- **Word-game sample happens BEFORE the phrase-skip filter** — avoids coupling sampling to puzzle-builder internals; phrase-heavy lists may yield fewer placeable words in the sampled 10 (acceptable; existing skipped-display covers it).
+- **`applyRating` signature changed** from generic `T[] → T[]` to `SessionEntry[] → { queue, mastered }`. Single caller (Flashcards.tsx).
+
+### Known follow-ups / tech debt
+- Mastery counter is client-only session state; refresh resets it (same model as the session queue). Acceptable — kid completes in one sitting.
+- Pre-existing lint baseline (775 errors, incl. `react-hooks/refs` in `InteractiveWordSearch.tsx`, `lib/db.ts` no-var) left untouched per surgical-changes guardrail.
+
+### Plan
+`.claude/plans/easy-mastery-and-game-session-cap.md`
+
+---
+
 ## Flashcards: smarter 10-card study session with intra-session re-queue — 2026-05-27
 
 - **Status:** Shipped (commit `f9f6778`; prod deployment `edu-kf2hyrac6`)
