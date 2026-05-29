@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { buildCrossword } from "@/lib/crossword";
-import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
+import { sampleWords, shuffle, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
 import WorksheetFrame from "@/components/WorksheetFrame";
 import CrosswordGrid from "@/components/CrosswordGrid";
 import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
@@ -22,9 +22,10 @@ export default async function CrosswordPage({
   const doc = await WordList.findById(id).lean();
   if (!doc) notFound();
   const list = toClient(doc);
-  // Cap any single session at WORD_GAME_SESSION_SIZE words; reload for a
-  // fresh random pick.
-  const sampled = sampleWords(list.words, WORD_GAME_SESSION_SIZE);
+  // Cap any single session at WORD_GAME_SESSION_SIZE words; each render (incl.
+  // a Reset-triggered refresh) picks a fresh random set. Shuffle the order too
+  // so the layout also changes for lists that fit entirely in one session.
+  const sampled = shuffle(sampleWords(list.words, WORD_GAME_SESSION_SIZE));
   const result = buildCrossword(sampled);
 
   // If the crossword generator fell back, no interactive mode either.

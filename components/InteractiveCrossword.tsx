@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import type { CrosswordPlacement } from "@/lib/crossword";
 import { celebrate, encourage } from "@/lib/feedback";
 import ResetButton from "@/components/ResetButton";
@@ -27,6 +28,8 @@ export default function InteractiveCrossword({
   down: CrosswordPlacement[];
   listName: string;
 }) {
+  const router = useRouter();
+
   // Cell-info lookup: position → which across/down word goes through it.
   const cellInfo = useMemo(() => {
     const map: Record<string, CellInfo> = {};
@@ -66,6 +69,9 @@ export default function InteractiveCrossword({
     setActive(null);
     setShakeKey({});
     finishedFiredRef.current = false;
+    // Re-run the (force-dynamic) server component for a fresh word pick + layout.
+    // Local state is cleared above; the refreshed grid renders into the empty board.
+    router.refresh();
   }
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
@@ -279,7 +285,7 @@ export default function InteractiveCrossword({
       <div>
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-3xl font-bold">Crossword</h1>
-          <ResetButton onReset={reset} />
+          <ResetButton onReset={reset} confirmMessage="Start a new puzzle? Your progress will be cleared." />
         </div>
         <p className="text-sm text-slate-600">{listName}</p>
       </div>

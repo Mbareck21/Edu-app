@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useRouter } from "next/navigation";
 import { celebrate, encourage } from "@/lib/feedback";
 import ResetButton from "@/components/ResetButton";
 
@@ -47,6 +48,7 @@ export default function InteractiveWordSearch({
   const dragPathRef = useRef<Cell[]>([]);
   const flashTimerRef = useRef<number | null>(null);
   const finishedFiredRef = useRef(false);
+  const router = useRouter();
 
   function reset() {
     setFound(new Set());
@@ -57,6 +59,8 @@ export default function InteractiveWordSearch({
     dragStartRef.current = null;
     dragPathRef.current = [];
     finishedFiredRef.current = false;
+    // Re-run the (force-dynamic) server component for a fresh grid + word pick.
+    router.refresh();
   }
 
   // Compute straight-line cells between two endpoints inclusive, or null if
@@ -206,7 +210,7 @@ export default function InteractiveWordSearch({
       <div>
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-3xl font-bold">Word Search</h1>
-          <ResetButton onReset={reset} />
+          <ResetButton onReset={reset} confirmMessage="Start a new puzzle? Your progress will be cleared." />
         </div>
         <p className="text-sm text-slate-600">{listName}</p>
         <p className="mt-2 text-sm text-slate-700">

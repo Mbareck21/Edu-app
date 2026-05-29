@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { celebrate, encourage } from "@/lib/feedback";
 import ResetButton from "@/components/ResetButton";
 
@@ -33,10 +34,13 @@ export default function InteractiveScramble({
     }));
   const [rows, setRows] = useState<RowState[]>(buildRows);
   const finishedFiredRef = useRef(false);
+  const router = useRouter();
 
   function reset() {
     setRows(buildRows());
     finishedFiredRef.current = false;
+    // Re-run the (force-dynamic) server component for fresh scrambles + word pick.
+    router.refresh();
   }
 
   function updateValue(i: number, value: string) {
@@ -84,7 +88,7 @@ export default function InteractiveScramble({
     <section>
       <div className="mb-1 flex items-start justify-between gap-3">
         <h1 className="text-3xl font-bold">Word Scramble</h1>
-        <ResetButton onReset={reset} />
+        <ResetButton onReset={reset} confirmMessage="Start a new puzzle? Your progress will be cleared." />
       </div>
       <p className="mb-1 text-sm text-slate-600">{listName}</p>
       <p className="mb-6 text-sm text-slate-700">Type each word and tap <strong>Check</strong>.</p>

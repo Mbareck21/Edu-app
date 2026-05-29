@@ -6,15 +6,17 @@
 export default function ResetButton({
   onReset,
   className = "",
+  confirmMessage = "Reset this activity? Your progress will be cleared.",
 }: {
   onReset: () => void;
   className?: string;
+  confirmMessage?: string;
 }) {
   return (
     <button
       type="button"
       onClick={() => {
-        if (window.confirm("Reset this activity? Your progress will be cleared.")) {
+        if (window.confirm(confirmMessage)) {
           onReset();
         }
       }}

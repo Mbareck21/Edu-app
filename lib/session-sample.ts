@@ -24,3 +24,15 @@ export function sampleWords<T>(
   }
   return arr.slice(0, n);
 }
+
+// Full Fisher-Yates over a copy. The crossword layout generator is deterministic
+// for a given input order, so shuffling the order is what makes a replay produce
+// a different puzzle even when the word set can't change (lists of <= 10 words).
+export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
+  const arr = items.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
