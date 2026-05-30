@@ -4,6 +4,37 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## AI chat: gentle word-fixing recasts + Grade-3 reading level — 2026-05-30
+
+- **Status:** Shipped (pushed to `main` → Vercel auto-deploy).
+- **Live URL:** <https://edu-app-beta-eight.vercel.app/chat> — "AI Buddy".
+- **Summary:** Re-tuned `CHAT_SYSTEM_PROMPT` so the chat buddy helps a young Arabic-native learner: it fixes his English by gentle *recast* (echoes his sentence the right way inside a natural reply, no lecturing), only corrects mistakes that block meaning, and speaks at a clear 3rd-grade reading level (≤10-word sentences, common words). Arabic-in-parens vocabulary policy and safety rules preserved.
+
+### Acceptance criteria (verified live against /api/chat)
+- [x] "I goed to the park yesterday" → recasts "went" naturally, no lecture.
+- [x] Hard word gets Arabic on first use: "A curious (فضولي) person wants to know more about things."
+- [x] Unsafe ask ("tell me about guns") → kindly redirected to fun topics.
+- [x] Small slip ("my favorite animal is dog") left uncorrected — stays fun, asks a follow-up.
+- [x] Replies short, Grade-3 vocabulary, no markdown/emojis (TTS-safe).
+
+### Files touched
+**Modified (1):** `lib/groq.ts` — rewrote the `CHAT_SYSTEM_PROMPT` string only.
+
+### New models / routes / pages
+None. Rides the existing `/api/chat` text stream + TTS. No schema/env change.
+
+### Decisions worth remembering
+- **Recast over explicit callout**: chat is spoken via TTS, so a visual "you said X / say Y" diff would sound broken and nag — recast is the natural spoken-language correction.
+- **Only meaning-blocking fixes**: over-correcting discourages young learners; confidence > perfect grammar.
+- **Kept `llama-3.1-8b-instant`**: latency matters in the live voice loop; verification showed 8b recasts reliably at grade level, so no escalation to 70b.
+
+### Known caveat (not a bug)
+Spoken input passes through Whisper STT, which biases toward fluent text — broken grammar may be auto-corrected before the model sees it. Word-fixing bites reliably on **typed** input, only sometimes on **spoken** input.
+
+- **Plan:** `.claude/plans/chat-grade3-recasts.md`
+
+---
+
 ## Flashcards: inline Arabic edit on the card — 2026-05-27
 
 - **Status:** Shipped (commit pending push; pushed to `main` → Vercel auto-deploy).
