@@ -797,3 +797,29 @@ None — the parent seeds their own word lists through the UI. Smoke test create
 
 ### Plan
 `C:\Users\missa\.claude\plans\i-want-you-to-robust-quasar.md` (user-global, not in repo)
+
+---
+
+## Flashcards: English explanation replaces Arabic — 2026-06-03
+
+- **Status:** Shipped (commit `13507b1`; pushed to `main` → Vercel auto-deploy).
+- **Summary:** The flashcard back now shows a short, simple English explanation of the word instead of its Arabic translation, so the ESL child retains the English term and its meaning together.
+- **Acceptance criteria (verified — build):**
+  - [x] Flashcard back renders `explanation` (English, LTR), front stays the English word.
+  - [x] Missing explanations auto-fill on first flashcard visit via `/flashcards/explain`.
+  - [x] Inline edit on the card edits the explanation (textarea, English).
+  - [x] Saving from the list editor preserves explanations (PATCH merge).
+  - [x] Reading-page Arabic tooltips + /chat Arabic unchanged.
+  - [x] `npm run build` clean (TypeScript + all routes compile).
+- **Files touched:** `lib/models/WordList.ts`, `lib/groq.ts`, `app/api/lists/[id]/flashcards/explain/route.ts` (new), `components/Flashcards.tsx`, `app/api/lists/[id]/route.ts`, `app/lists/[id]/flashcards/page.tsx`.
+- **New models / routes / pages:** `POST /api/lists/[id]/flashcards/explain`; `WordSchema.explanation` field.
+- **Decisions worth remembering:**
+  - Dedicated `explanation` field (not reusing the crossword `clue`, not repurposing `arabic`) — clean separation, definition-tuned prompt vs riddle-style clue.
+  - `max_tokens: 2400` on the explain route (the translate route's 800 truncates sentence-length JSON on 40–50-word lists).
+  - Audio stays English-word-only; Reading/chat Arabic left intact (user-scoped to flashcards only).
+- **Karpathy frame (as shipped):** Front=word, back=word+plain-English meaning keeps the English term central. Falsifier (explanations empty/garbled, or Reading tooltips losing Arabic) checked.
+- **Known follow-ups / tech debt:**
+  - `app/api/lists/[id]/flashcards/translate/route.ts` is now unused (no caller) — left in place, safe to delete.
+  - Word-level `WordSchema.arabic` is now orphaned (written by the list editor, displayed nowhere; Reading tooltips use `currentReading.vocabGlosses`) — harmless, kept.
+  - List editor has no `explanation` column; parents edit explanations via the card's inline edit. Add a column later if bulk editing is wanted.
+- **Plan:** `.claude/plans/flashcards-english-explanation.md`
