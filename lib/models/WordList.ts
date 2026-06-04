@@ -122,6 +122,7 @@ const WordSchema = new Schema(
     word: { type: String, required: true, trim: true, lowercase: true },
     clue: { type: String, trim: true, default: "" },
     arabic: { type: String, trim: true, default: "" },
+    explanation: { type: String, trim: true, default: "" },
     srs: { type: SrsStateSchema, default: () => ({}) },
   },
   { _id: false }
@@ -161,6 +162,7 @@ export type ClientWord = {
   word: string;
   clue: string;
   arabic: string;
+  explanation: string;
   srs: SrsState;
 };
 
@@ -264,6 +266,7 @@ function toClientWord(w: any): ClientWord {
     word: String(w?.word ?? ""),
     clue: String(w?.clue ?? ""),
     arabic: String(w?.arabic ?? ""),
+    explanation: String(w?.explanation ?? ""),
     srs: {
       interval: Number(srs.interval ?? 0),
       dueAt: srs.dueAt

@@ -82,9 +82,9 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
     setError(null);
   }
 
-  // Fire-and-forget translation pass on mount if any word is missing Arabic.
+  // Fire-and-forget pass on mount if any word is missing its explanation.
   useEffect(() => {
-    const needs = words.some((w) => !w.arabic);
+    const needs = words.some((w) => !w.explanation);
     if (!needs) return;
     let cancelled = false;
     (async () => {
@@ -92,7 +92,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       setError(null);
       try {
         const res = await fetch(
-          `/api/lists/${list._id}/flashcards/translate`,
+          `/api/lists/${list._id}/flashcards/explain`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
         );
         if (!res.ok) {
@@ -106,7 +106,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
         if (!cancelled) setWords(updated.words);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Translation failed.");
+          setError(err instanceof Error ? err.message : "Could not prepare explanations.");
         }
       } finally {
         if (!cancelled) setBusy(null);
@@ -132,8 +132,8 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
   );
   const next = resolvedQueue[0] ?? null;
 
-  // Auto-play English when a new card surfaces. Arabic is shown visually on
-  // flip but never spoken — only the English pronunciation is read aloud so
+  // Auto-play English when a new card surfaces. The explanation is shown
+  // visually on flip but never spoken — only the English word is read aloud so
   // there is exactly one voice source per card.
   useEffect(() => {
     if (!next || busy === "translating" || revealed) return;
@@ -188,7 +188,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
 
   function startEdit() {
     if (!next || busy) return;
-    setDraft(next.arabic ?? "");
+    setDraft(next.explanation ?? "");
     setEditing(true);
   }
 
@@ -196,11 +196,11 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
     setEditing(false);
   }
 
-  // Persist the edited Arabic for the current word via the list PATCH
+  // Persist the edited explanation for the current word via the list PATCH
   // endpoint, which preserves every word's SRS server-side and returns the
   // refreshed list. Reflecting through setWords updates the displayed card
-  // in place — no reload — matching the translation flow above.
-  async function saveArabic() {
+  // in place — no reload — matching the auto-fill flow above.
+  async function saveExplanation() {
     if (!next || busy) return;
     const target = next.word;
     const value = draft.trim();
@@ -210,7 +210,8 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       const payload = words.map((w) => ({
         word: w.word,
         clue: w.clue,
-        arabic: w.word === target ? value : w.arabic,
+        arabic: w.arabic,
+        explanation: w.word === target ? value : w.explanation,
       }));
       const res = await fetch(`/api/lists/${list._id}`, {
         method: "PATCH",
@@ -226,7 +227,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       setWords(updated.words);
       setEditing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the translation.");
+      setError(err instanceof Error ? err.message : "Could not save the explanation.");
     } finally {
       setBusy(null);
     }
@@ -239,7 +240,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
       <section className="card text-center space-y-2">
         <p className="text-2xl">📇</p>
         <p className="text-lg font-semibold">Preparing your flashcards…</p>
-        <p className="text-sm text-slate-600">Translating words to Arabic.</p>
+        <p className="text-sm text-slate-600">Writing simple meanings.</p>
       </section>
     );
   }
@@ -277,7 +278,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
     );
   }
 
-  const hasArabic = !!next.arabic;
+  const hasExplanation = !!next.explanation;
 
   return (
     <section className="space-y-4">
@@ -300,22 +301,21 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
             setRevealed(true);
           }
         }}
-        aria-label={revealed ? "Card revealed" : "Tap to reveal Arabic translation"}
+        aria-label={revealed ? "Card revealed" : "Tap to reveal the meaning"}
       >
         {revealed ? (
           <div className="space-y-3">
             <p className="text-sm uppercase tracking-wider text-slate-500">{next.word}</p>
             {editing ? (
               <div className="space-y-3">
-                <input
-                  className="input text-center text-3xl"
-                  lang="ar"
-                  dir="rtl"
-                  maxLength={80}
+                <textarea
+                  className="input text-center text-xl leading-snug"
+                  rows={2}
+                  maxLength={200}
                   autoFocus
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  aria-label="Edit Arabic translation"
+                  aria-label="Edit explanation"
                 />
                 <div className="flex justify-center gap-2">
                   <button
@@ -328,7 +328,7 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
                   </button>
                   <button
                     type="button"
-                    onClick={saveArabic}
+                    onClick={saveExplanation}
                     disabled={busy !== null}
                     className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
                   >
@@ -338,21 +338,17 @@ export default function Flashcards({ list }: { list: ClientWordList }) {
               </div>
             ) : (
               <>
-                <p
-                  className="text-5xl font-bold text-slate-900"
-                  lang="ar"
-                  dir="rtl"
-                >
-                  {hasArabic ? next.arabic : "—"}
+                <p className="text-2xl font-semibold leading-snug text-slate-900">
+                  {hasExplanation ? next.explanation : "—"}
                 </p>
                 <button
                   type="button"
                   onClick={startEdit}
                   disabled={busy !== null}
                   className="text-xs font-semibold text-sky-600 hover:text-sky-700 disabled:opacity-60"
-                  aria-label="Edit Arabic translation"
+                  aria-label="Edit explanation"
                 >
-                  ✏️ Edit translation
+                  ✏️ Edit explanation
                 </button>
               </>
             )}

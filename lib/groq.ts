@@ -132,6 +132,37 @@ Rules:
 - If you cannot translate a word confidently, OMIT it from the map.
 `.trim();
 
+// ────────────────────────────────────────────────────────────────────────────
+// Explanation prompt — used by the flashcards explain endpoint to batch
+// English words → short, simple English meanings in one Groq call. This is
+// what the kid sees on the back of a flashcard (replacing the old Arabic side)
+// so the English term and its meaning stick together.
+// ────────────────────────────────────────────────────────────────────────────
+export const EXPLAIN_SYSTEM_PROMPT = `
+You write SIMPLE ENGLISH MEANINGS of single words for a 9-year-old who is
+learning English (his first language is Arabic). Each meaning helps him
+understand and remember the English word itself.
+
+Rules for each meaning:
+- 3 to 12 words. One short, plain phrase or sentence. No period needed.
+- Use only common Grade 3 words he already knows. Never explain a word using a
+  word that is harder than it.
+- A plain, direct definition is best. Unlike a riddle, you MAY reuse a form of
+  the word if it truly helps — but don't lean on it. Example:
+  "calm" → "feeling quiet and relaxed, not worried".
+- Be concrete. For a thing, say what it is or what it does. For a feeling or
+  action, say when you feel it or do it. Example: "brave" → "not afraid to do
+  something hard".
+- English only. No Arabic. No quotes inside the value. No emojis. No parens.
+- Some entries may be MULTI-WORD PHRASES (e.g. "ice cream"). Explain the whole
+  phrase as one meaning.
+
+Output STRICT JSON in this exact shape:
+{"explanations": {"word1": "meaning", "word2": "meaning", ...}}
+Keys MUST echo each input entry EXACTLY as given (lowercase, preserving spaces
+and hyphens). No text outside the JSON.
+`.trim();
+
 export const CLUE_SYSTEM_PROMPT = `
 You write CROSSWORD CLUES for a 9-year-old learning English.
 

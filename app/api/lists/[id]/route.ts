@@ -10,6 +10,7 @@ const WordPatch = z.object({
   word: z.string().min(1).max(40).regex(/^[a-zA-Z][a-zA-Z\s-]*$/, "letters, spaces, hyphens only").trim(),
   clue: z.string().max(300).trim().default(""),
   arabic: z.string().max(80).trim().optional().default(""),
+  explanation: z.string().max(300).trim().optional().default(""),
 });
 
 const PatchBody = z.object({
@@ -59,12 +60,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
     // Build a lookup of existing word subdocs by lowercased word string so
     // we can carry over { srs, arabic-if-omitted } onto the merged list.
-    const existing = new Map<string, { word: string; clue?: string; arabic?: string; srs?: unknown }>();
+    const existing = new Map<string, { word: string; clue?: string; arabic?: string; explanation?: string; srs?: unknown }>();
     for (const w of doc.words || []) {
       existing.set(String(w.word).toLowerCase(), {
         word: w.word,
         clue: w.clue,
         arabic: w.arabic,
+        explanation: w.explanation,
         srs: w.srs,
       });
     }
@@ -76,6 +78,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         clue: w.clue,
         // Empty arabic in the patch = parent didn't fill it; keep any prior value.
         arabic: w.arabic.trim().length > 0 ? w.arabic : (prev?.arabic ?? ""),
+        // Same for the flashcard explanation — callers that don't send it
+        // (e.g. the list editor) must not wipe an existing meaning.
+        explanation:
+          w.explanation.trim().length > 0 ? w.explanation : (prev?.explanation ?? ""),
         // Preserve SRS across saves; new words get fresh defaults.
         srs: prev?.srs ?? {},
       };

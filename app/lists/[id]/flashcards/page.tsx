@@ -29,8 +29,8 @@ export default async function FlashcardsPage({
       <header>
         <h1 className="text-2xl font-bold">Flashcards — {list.name}</h1>
         <p className="text-sm text-slate-600">
-          Tap the card to see the Arabic. Then rate how easy it was — the next
-          time depends on your answer.
+          Tap the card to see what the word means. Then rate how easy it was —
+          the next time depends on your answer.
         </p>
       </header>
 
