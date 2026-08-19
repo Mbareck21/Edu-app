@@ -9,14 +9,14 @@ import { MathProgress, RECENT_PCTS, nextLevel } from "@/lib/models/MathProgress"
 import { toClientProfile } from "@/lib/models/Profile";
 import { SKILL_IDS, WordList } from "@/lib/models/WordList";
 import { getProfile, saveProfile } from "@/lib/profile";
-import { applyReading, applySession } from "@/lib/rewards";
+import { STEP_PASS_PCT, applyReading, applySession } from "@/lib/rewards";
 import { STEP_IDS } from "@/lib/types";
 import type { SessionResult, SkillStateLike } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-/** A step counts as done at 60%, or just for showing up on read-only steps. */
-const PASS_PCT = 60;
+/** A step counts as done at STEP_PASS_PCT, or just for showing up on the
+    read-only steps. */
 const ALWAYS_COMPLETE: readonly string[] = ["flashcards", "read"];
 
 const Body = z.object({
@@ -67,7 +67,7 @@ async function updateList(body: ParsedBody, now: Date): Promise<void> {
     const pct = pctOf(body);
     const prev = doc.pathProgress?.get(body.step);
     const completed =
-      pct >= PASS_PCT || ALWAYS_COMPLETE.includes(body.step)
+      pct >= STEP_PASS_PCT || ALWAYS_COMPLETE.includes(body.step)
         ? now
         : (prev?.completedAt ?? null);
     doc.pathProgress?.set(body.step, {
