@@ -2,7 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "eduapp_session";
-const PUBLIC_PATHS = new Set(["/login", "/api/auth"]);
+// The PWA shell has to load before sign-in: the browser fetches the manifest
+// and the service worker without the session cookie, and /offline is what the
+// worker shows when the network is gone.
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/api/auth",
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/offline",
+]);
+const PUBLIC_PREFIXES = ["/icons/"];
 
 async function valid(token: string | undefined): Promise<boolean> {
   if (!token) return false;
@@ -19,6 +29,7 @@ async function valid(token: string | undefined): Promise<boolean> {
 async function proxyImpl(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (await valid(token)) return NextResponse.next();
