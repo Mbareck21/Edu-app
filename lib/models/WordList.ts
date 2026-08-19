@@ -9,6 +9,15 @@ export const READING_QUESTION_TYPES = [
   "inference",
   "cause_effect",
   "sequence",
+  // Added with the reading engine rebuild. "author" = Questioning-the-Author
+  // prompt, "retell" = pick the best summary, "theme" = the story's lesson,
+  // "evidence" = which sentence backs the writer's point, "science_fact" =
+  // did the passage actually say this.
+  "author",
+  "retell",
+  "theme",
+  "evidence",
+  "science_fact",
 ] as const;
 export type ReadingQuestionType = (typeof READING_QUESTION_TYPES)[number];
 
@@ -22,6 +31,12 @@ const ReadingQuestionSchema = new Schema(
     },
     acceptable: { type: [String], default: [] },
     hints: { type: [String], default: [] },
+    // MCQ questions carry options + the index of the right one. Free-text
+    // questions leave options empty and answerIndex at -1.
+    options: { type: [String], default: [] },
+    answerIndex: { type: Number, default: -1 },
+    // The sentence from the passage the answer comes from. Highlighted on reveal.
+    source: { type: String, default: "" },
   },
   { _id: false }
 );
@@ -30,6 +45,8 @@ const VocabGlossSchema = new Schema(
   {
     word: { type: String, default: "" },
     arabic: { type: String, default: "" },
+    // Grade-3 English meaning. Shown first; the Arabic sits behind a chip.
+    meaning: { type: String, default: "" },
   },
   { _id: false }
 );
@@ -41,6 +58,10 @@ const CurrentReadingSchema = new Schema(
     questions: { type: [ReadingQuestionSchema], default: [] },
     vocabGlosses: { type: [VocabGlossSchema], default: [] },
     level: { type: Number, default: 1 },
+    // "story" (narrative) or "info" (informational). Old docs read as "story".
+    passageKind: { type: String, default: "story" },
+    // What the passage is about — the science unit or reading theme title.
+    topic: { type: String, default: "" },
     generatedAt: { type: Date, default: Date.now },
   },
   { _id: false }
@@ -52,6 +73,8 @@ const ReadingHistoryEntrySchema = new Schema(
   {
     title: { type: String, default: "" },
     opening: { type: String, default: "" },
+    kind: { type: String, default: "story" },
+    topic: { type: String, default: "" },
     generatedAt: { type: Date, default: Date.now },
   },
   { _id: false }
@@ -73,6 +96,11 @@ const ByTypeSchema = new Schema(
     inference: { type: TypeBucketSchema, default: () => ({}) },
     cause_effect: { type: TypeBucketSchema, default: () => ({}) },
     sequence: { type: TypeBucketSchema, default: () => ({}) },
+    author: { type: TypeBucketSchema, default: () => ({}) },
+    retell: { type: TypeBucketSchema, default: () => ({}) },
+    theme: { type: TypeBucketSchema, default: () => ({}) },
+    evidence: { type: TypeBucketSchema, default: () => ({}) },
+    science_fact: { type: TypeBucketSchema, default: () => ({}) },
   },
   { _id: false }
 );
@@ -178,7 +206,7 @@ const WordListSchema = new Schema(
     name: { type: String, required: true, trim: true },
     hiddenMessage: { type: String, trim: true, default: "" },
     words: { type: [WordSchema], default: [] },
-    readingLevel: { type: Number, default: 1, min: 1, max: 5 },
+    readingLevel: { type: Number, default: 1, min: 1, max: 10 },
     currentReading: { type: CurrentReadingSchema, default: null },
     readingHistory: { type: [ReadingHistoryEntrySchema], default: [] },
     readingStats: { type: ReadingStatsSchema, default: () => ({}) },
@@ -230,9 +258,17 @@ export type ReadingQuestion = {
   type: ReadingQuestionType;
   acceptable: string[];
   hints: string[];
+  /** Empty for free-text questions. */
+  options: string[];
+  /** -1 for free-text questions. */
+  answerIndex: number;
+  /** Sentence from the passage the answer comes from; "" when unknown. */
+  source: string;
 };
 
-export type VocabGloss = { word: string; arabic: string };
+export type VocabGloss = { word: string; arabic: string; meaning: string };
+
+export type PassageKind = "story" | "info";
 
 export type CurrentReading = {
   title: string;
@@ -240,6 +276,8 @@ export type CurrentReading = {
   questions: ReadingQuestion[];
   vocabGlosses: VocabGloss[];
   level: number;
+  passageKind: PassageKind;
+  topic: string;
   generatedAt: string; // ISO
 };
 
@@ -297,6 +335,11 @@ function emptyByType(): ReadingByType {
     inference: { asked: 0, firstTryCorrect: 0 },
     cause_effect: { asked: 0, firstTryCorrect: 0 },
     sequence: { asked: 0, firstTryCorrect: 0 },
+    author: { asked: 0, firstTryCorrect: 0 },
+    retell: { asked: 0, firstTryCorrect: 0 },
+    theme: { asked: 0, firstTryCorrect: 0 },
+    evidence: { asked: 0, firstTryCorrect: 0 },
+    science_fact: { asked: 0, firstTryCorrect: 0 },
   };
 }
 
@@ -444,6 +487,11 @@ export function toClient(doc: {
                   : "detail",
                 acceptable: Array.isArray(q.acceptable) ? q.acceptable.map(String) : [],
                 hints: Array.isArray(q.hints) ? q.hints.map(String) : [],
+                options: Array.isArray(q.options) ? q.options.map(String) : [],
+                answerIndex: Number.isFinite(Number(q.answerIndex))
+                  ? Number(q.answerIndex)
+                  : -1,
+                source: String(q.source ?? ""),
               })
             )
           : [],
@@ -453,10 +501,13 @@ export function toClient(doc: {
               (g: any): VocabGloss => ({
                 word: String(g?.word ?? ""),
                 arabic: String(g?.arabic ?? ""),
+                meaning: String(g?.meaning ?? ""),
               })
             )
           : [],
         level: Number(doc.currentReading.level) || 1,
+        passageKind: doc.currentReading.passageKind === "info" ? "info" : "story",
+        topic: String(doc.currentReading.topic ?? ""),
         generatedAt: doc.currentReading.generatedAt
           ? new Date(doc.currentReading.generatedAt).toISOString()
           : new Date().toISOString(),
@@ -468,7 +519,7 @@ export function toClient(doc: {
     name: doc.name,
     hiddenMessage: doc.hiddenMessage || "",
     words: doc.words.map((w) => toClientWord(w)),
-    readingLevel: Math.max(1, Math.min(5, Number(doc.readingLevel) || 1)),
+    readingLevel: Math.max(1, Math.min(10, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,
     pathProgress: normalizePathProgress(doc.pathProgress),

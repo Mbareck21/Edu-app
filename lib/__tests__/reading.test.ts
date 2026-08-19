@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import {
+  clampLevel,
+  countWords,
+  isAcceptable,
+  longestSentenceWords,
+  questionPlan,
+  readingParams,
+  splitParagraphs,
+  wordsPerMinute,
+} from "@/lib/reading";
+
+test("level params follow the plan's formulas", () => {
+  assert.equal(readingParams(1).targetWords, 110);
+  assert.equal(readingParams(10).targetWords, 380);
+  assert.equal(readingParams(1).maxSentenceWords, 9);
+  assert.equal(readingParams(10).maxSentenceWords, 18);
+  assert.equal(readingParams(0).level, 1);
+  assert.equal(readingParams(99).level, 10);
+  assert.equal(clampLevel(Number.NaN), 1);
+});
+
+test("question plan grows with the level and matches the passage kind", () => {
+  const l1 = questionPlan(1, "story", false);
+  assert.deepEqual(
+    l1.map((q) => q.type),
+    ["author", "author", "detail"]
+  );
+
+  const l3 = questionPlan(3, "story", false);
+  assert.ok(l3.some((q) => q.type === "inference"));
+  assert.ok(!l3.some((q) => q.type === "retell"));
+
+  const l4story = questionPlan(4, "story", false);
+  assert.ok(l4story.some((q) => q.type === "retell"));
+  assert.ok(l4story.some((q) => q.type === "theme"));
+  assert.ok(!l4story.some((q) => q.type === "evidence"));
+
+  const l5info = questionPlan(5, "info", false);
+  assert.ok(l5info.some((q) => q.type === "evidence"));
+  assert.ok(!l5info.some((q) => q.type === "theme"));
+
+  // Sequence replaces the plain detail question from level 5 up.
+  assert.ok(l5info.some((q) => q.type === "sequence"));
+});
+
+test("science passages add exactly two fact checks", () => {
+  const plain = questionPlan(6, "info", false);
+  const science = questionPlan(6, "info", true);
+  assert.equal(science.length - plain.length, 2);
+  assert.equal(science.filter((q) => q.type === "science_fact").length, 2);
+});
+
+test("every mcq slot names its option count", () => {
+  for (const spec of questionPlan(10, "info", true)) {
+    if (spec.format === "mcq") assert.ok((spec.options ?? 0) >= 3);
+    else assert.equal(spec.options, undefined);
+  }
+});
+
+test("free-text answers are matched loosely", () => {
+  const acceptable = ["the garden", "in the garden"];
+  assert.ok(isAcceptable("garden", acceptable));
+  assert.ok(isAcceptable("  The Garden ", acceptable));
+  assert.ok(isAcceptable("they played in the garden", acceptable));
+  assert.ok(!isAcceptable("", acceptable));
+  assert.ok(!isAcceptable("kitchen", acceptable));
+});
+
+test("text helpers count what the level checks care about", () => {
+  const passage = "Sam ran fast. He found a small red kite behind the old shed.";
+  assert.equal(countWords(passage), 13);
+  assert.equal(longestSentenceWords(passage), 10);
+  assert.deepEqual(splitParagraphs("one\n\ntwo"), ["one", "two"]);
+  assert.deepEqual(splitParagraphs("  "), [""]);
+});
+
+test("wpm needs a usable timing", () => {
+  assert.equal(wordsPerMinute(120, 60_000), 120);
+  assert.equal(wordsPerMinute(120, 500), 0);
+  assert.equal(wordsPerMinute(0, 60_000), 0);
+});

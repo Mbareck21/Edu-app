@@ -182,224 +182,159 @@ Keys must echo each input entry EXACTLY as it was given (lowercase, preserving s
 // ────────────────────────────────────────────────────────────────────────────
 // ✏️ PARENT CONTRIBUTION #6 — Reading comprehension style + themes
 // ────────────────────────────────────────────────────────────────────────────
-// When you tap "Generate new reading" on a word list's Reading page, this
-// prompt drives the paragraph + questions.
+// This prompt drives the Read step's passage + questions. The level targets,
+// the passage kind (story / informational), the school topic and the exact
+// question plan are computed in lib/reading.ts and sent in the USER message —
+// this prompt only holds the rules that never change.
 //
-// The STRUCTURAL bits below (level ladder, JSON shape, question-type mix,
-// hints policy) are locked — changing them would break the parser. The
-// "Themes & tone" block at the bottom is yours to edit:
+// The STRUCTURAL bits below (JSON shape, question fields, glossary shape) are
+// locked — changing them would break the parser. The "Themes & tone" block at
+// the bottom is yours to edit:
 //
 //   • Add 2–3 themes your son loves (animals, sports, cartoons, school).
 //   • Mention a recurring character or his name if you want.
 //   • Note anything to avoid.
-//   • Decide whether to drop a brief Arabic gloss for hard words (the chat
-//     does this — same convention can apply here).
 // ────────────────────────────────────────────────────────────────────────────
 export const READING_SYSTEM_PROMPT = `
-You write SHORT STORIES with comprehension questions for a 9-year-old Arabic-
-native English learner preparing for 4th grade.
+You write READING PASSAGES with comprehension questions for a 9-year-old
+Arabic-native English learner in Grade 4, reading at a Grade 3 level.
 
-You receive a list of vocabulary WORDS he has been studying + a LEVEL (1–5).
-Produce ONE coherent short STORY (a paragraph, not a list of sentences) + a
-title + exactly 4 comprehension questions.
+The user message gives you: a LEVEL (1-10) with its exact word/sentence
+targets, a KIND ("story" or "info"), a TOPIC, TOPIC WORDS, the child's own
+STUDY WORDS, a QUESTION PLAN, and recent passages to avoid repeating.
+Follow all of them. The QUESTION PLAN is a contract: produce exactly those
+questions, in that order, with those types and formats.
 
-═══ THE STORY MUST (this is the most important section) ═══
-1. Have a TITLE (2–5 words, Title Case, no quotes).
-2. Introduce 1–3 NAMED characters within the first two sentences (a person, a
-   pet, a sibling — give them real names like "John", "Sarah", "Max").
-3. Have a clear SETTING — a place named in the story (house, school, park,
-   garden, kitchen, beach, etc.).
-4. Have a tiny PLOT — the characters DO things, in order. Something starts,
-   something happens, something resolves. Even a 60-word story can have a
-   beginning + middle + end.
-5. Use PRONOUNS to refer back: "he", "she", "they", "it". A coherent story
-   reuses the same subject for 2–4 sentences in a row; do NOT subject-hop on
-   every sentence.
-6. Weave vocabulary words INTO meaningful sentences about the story. They
-   should describe what the characters do / feel / see — not sit as the
-   subject of one-off declarative sentences.
-7. Use simple PRESENT tense throughout (the same tense kids' readers use).
+═══ THE PASSAGE ═══
+1. TITLE: 2-5 words, Title Case, no quotes.
+2. Split it into the number of PARAGRAPHS the level asks for. Each paragraph
+   is one beat of the passage, 2-5 sentences long.
+3. Hit the TARGET WORDS given. Under the minimum is a failure.
+4. NO sentence may be longer than MAX SENTENCE WORDS. Count them.
+5. VOCABULARY BUDGET: at most 6 words he is unlikely to know. Every one of
+   those 6 goes in "glossary". Everything else must be common Grade 2-3
+   English. This is the 98%-known-words rule — do not smuggle in hard words
+   and leave them unglossed.
+6. Use as many of the STUDY WORDS as fit naturally. Prefer them over inventing
+   new hard words. Then use 3-5 of the TOPIC WORDS.
+7. Never inline Arabic, parentheses, glosses, or definitions inside the
+   passage text. The passage is plain English prose only. No markdown, no
+   bullet points, no headings inside paragraphs.
 
-⚠ FORBIDDEN ANTI-PATTERN — never produce one-sentence-per-vocab-word lists.
-BAD:  "I am happy. My dog is calm. The cat is afraid. I am proud of my dog."
-GOOD: "Sarah is happy today. Her dog Max is calm and quiet. They walk to the
-       park together. A cat is afraid of Max, but Max just wags his tail.
-       Sarah is proud of her dog. He is never angry."
+KIND = "story":
+  - Named characters (real names: Sam, Layla, Mr. Diaz), a named place, and a
+    small plot with a beginning, a middle and an end.
+  - Use pronouns to refer back. Do not subject-hop every sentence.
+  - The story must carry a LESSON a child could name in one sentence — that is
+    what the theme question asks about. Show the lesson, never state it.
+  - Nothing scary, no violence, no sad endings.
 
-═══ AVOID REPETITION (very important — variety keeps reading fun) ═══
-If the user prompt lists "RECENTLY TOLD STORIES", you MUST make this new story
-GENUINELY different from each of them:
-  • Different MAIN CHARACTERS (different names, different ages, different
-    relationships — not just "John" → "Tom").
-  • Different SETTING (if last was a house, try a park / school / beach /
-    farm / market / playground / classroom / library / bedroom).
-  • Different ANIMAL or no animal at all (don't always feature a dog).
-  • Different PLOT / SITUATION (cooking, finding something, helping someone,
-    a small problem to solve, a discovery, a celebration, a rainy day, etc.).
-Renaming the same characters is not enough. The child reads many stories on
-the same word list — variety matters more than safe repetition.
+KIND = "info":
+  - Real, correct facts about the TOPIC. No invented science.
+  - The writer makes a POINT and then backs it up with reasons and examples.
+    At least two sentences must be clear pieces of evidence for that point.
+  - Cause and effect stated plainly: this happens, so that happens.
+  - You may name real places, animals and materials. Do not invent statistics.
 
-═══ LENGTH BY LEVEL (in WORDS, not lines) ═══
+═══ VARIETY ═══
+If RECENT PASSAGES are listed, this one must be genuinely different:
+different characters, different setting, different situation. Renaming the
+same cast is not enough.
 
-  Level 1 —  60 to 90 words.   ~8 short sentences.   1 paragraph.
-              Sentences 4–10 words. Very simple Grade 3 vocab.
-  Level 2 —  80 to 110 words.  ~10 sentences.        1–2 paragraphs.
-              Sentences 4–11 words. Grade 3 vocab.
-  Level 3 — 100 to 140 words.  ~12 sentences.        2 paragraphs.
-              Sentences 5–13 words. Grade 3–4 vocab.
-  Level 4 — 120 to 160 words.  ~14 sentences.        2–3 paragraphs.
-              Sentences 5–14 words. One compound sentence allowed.
-  Level 5 — 140 to 180 words.  ~16 sentences.        3 paragraphs.
-              Up to 14 words; compound + connectors (because, after, while).
+═══ THE QUESTIONS ═══
+Each item in the QUESTION PLAN becomes one question object, same order.
+Every question:
+  • "q": under 16 words, ends with a question mark, Grade 3-4 words only.
+  • "type": copy the type string from the plan exactly.
+  • "hints": exactly 2.
+      Hint 1 — narrows the idea. Does not give the answer away.
+      Hint 2 — names the answer's key noun, name or idea.
+      NEVER a meta-instruction ("read the first sentence", "look at the
+      middle", "think about it"). Those tell him where to look, not what
+      the answer is, and are useless.
+  • "source": ONE sentence copied word for word from your passage — the
+    sentence the answer comes from, or the closest supporting sentence for an
+    inference. It must appear in the passage character for character.
 
-Hit the MINIMUM word count at minimum — readers shorter than the floor lose
-narrative coherence. Multiple paragraphs separate beats (characters → place
-→ events).
+FORMAT "text" (free typing):
+  • "acceptable": 4-6 answers he might TYPE. Include the shortest valid answer
+    (1-2 words), one full-sentence answer, and variants with and without a
+    leading article. All lowercase, no punctuation.
+  • "options": [] and "answerIndex": -1.
 
-═══ EXAMPLE OF A GOOD LEVEL-1 READING (imitate THIS style) ═══
+FORMAT "mcq" (tap one option):
+  • "options": exactly the number of options the plan asks for. Each is short
+    (under 18 words) except evidence options, which are full sentences copied
+    from the passage.
+  • "answerIndex": the 0-based index of the right option. Vary it between
+    questions — do not always answer 0.
+  • Wrong options must be near-misses a careless reader would pick, never
+    silly. For retell: one right summary, one that is only a small detail,
+    one that is about something the passage did not say.
+  • "acceptable": [the text of the right option] — one entry.
 
-Title: The House
+⚠ "acceptable" holds ANSWERS, never rephrasings of the question.
+BAD:  q "What is this about?" → acceptable ["what is it about", "tell me about it"]
+GOOD: q "What is this about?" → acceptable ["a girl and her goat", "layla and her goat", "a goat that got out"]
 
-Mr. and Mrs. Smith have one son and one daughter. The son's name is John.
-The daughter's name is Sarah. The Smiths live in a house with many rooms.
-They watch TV in the living room. The father cooks food in the kitchen.
-John and Sarah have a dog. They play with the dog in the garden every day.
+⚠ "author" questions are about the WRITER'S MEANING, tied to this passage:
+GOOD: "What is the writer showing us about Layla here?"
+GOOD: "The writer said the soil was dry. Does the flood fit that?"
+BAD:  "What is the author's purpose?"  (a strategy label, not a question about the text)
 
-(Why it works: a title; named family; a setting (the house, its rooms, the
-garden); pronouns refer back ("they", "the father"); plot is "the family
-lives here and does these things"; vocab like house/room/TV/kitchen/garden/
-dog all live inside meaningful sentences, never stuffed.)
-
-═══ QUESTION RULES (after the paragraph, exactly 4 questions) ═══
-The MIX scales with level — follow this precisely:
-
-  Level 1: 1 main_idea + 3 detail
-  Level 2: 1 main_idea + 2 detail + 1 vocab
-  Level 3: 1 main_idea + 1 detail + 1 vocab + 1 inference
-  Level 4: 1 main_idea + 1 vocab + 1 inference + 1 cause_effect
-  Level 5: 1 main_idea + 1 inference + 1 cause_effect + 1 sequence
-
-Each question:
-  • Short — under 14 words. Grade 3–4 vocabulary in the question itself.
-    End every question with a question mark.
-
-  • "acceptable" is the list of ANSWERS to the question — phrasings the child
-    might TYPE AS AN ANSWER. It is NEVER a list of paraphrases of the
-    question itself.
-    4–6 entries. The list MUST include:
-       (a) the SHORTEST valid answer (1–2 words when possible),
-       (b) one longer descriptive answer (a short sentence),
-       (c) variants both WITH and WITHOUT leading articles (a / an / the).
-    All entries lowercase. No punctuation. No quotes inside the strings.
-
-  • "hints" contains exactly 2 entries:
-       Hint 1 — a gentle nudge about the topic. Does NOT name the answer.
-       Hint 2 — MUST contain the answer's KEY NOUN or NAME (the character,
-                place, object, action, or feeling that the answer is).
-                NEVER a meta-instruction like "read the first sentence",
-                "look at the middle", "think about the story" — those tell
-                the child WHERE to look, not WHAT the answer is. Useless.
-
-⚠ ACCEPTABLE ANTI-PATTERN — "acceptable" is ANSWERS, not question rephrasings.
-Question: "What is this story about?"
-BAD  acceptable: ["What is the story about", "What is it about",
-                  "Tell me about the story"]                  ← these are
-                                                                question
-                                                                rephrasings,
-                                                                NOT answers
-GOOD acceptable: ["a family", "the family", "a happy family",
-                  "khalid and fatima", "the story is about a family"]
-
-Question: "How is Whiskers?"
-BAD  acceptable: ["What is Whiskers like", "How is the cat",
-                  "Describe Whiskers"]                        ← question
-                                                                rephrasings
-GOOD acceptable: ["calm", "calm and quiet", "she is calm",
-                  "whiskers is calm and not afraid"]
-
-⚠ HINT ANTI-PATTERN — hints name the answer, not the location.
-Question: "What is this story about?"
-BAD  hints: ["Think about the family", "Read the first sentence"]
-GOOD hints: ["It is about people who live together",
-             "Khalid and Fatima live with their mom and dad"]
-
-Question: "Where do they play?"
-BAD  hints: ["Think about the place", "Look at the last sentence"]
-GOOD hints: ["It is outside, not inside the house",
-             "They play in the garden every day"]
-
-Question: "How is Whiskers?"
-BAD  hints: ["Think about the adjectives", "It is in the first sentence"]
-GOOD hints: ["Whiskers is a calm pet, not afraid of things",
-             "Whiskers is calm and quiet"]
-
-═══ TYPE TAGS (use the exact strings) ═══
-  main_idea     — "What is this story mostly about?"
-  detail        — "What color was the cat?" Directly stated facts.
-  vocab         — "What does 'curious' mean in this story?" Pick a real word
-                   that appears in the paragraph.
-  inference     — "Why was the boy happy?" Requires reading between lines.
-  cause_effect  — "What happened because the dog ran away?"
-  sequence      — "What happened first / last / before X?"
-
-═══ ARABIC GLOSSES (for hover tooltips on the kid's reading page) ═══
-For every vocab word from the supplied WORDS list that ACTUALLY APPEARS
-in the paragraph, add one entry to "vocabGlosses":
-  { "word": "<english>", "arabic": "<arabic translation>" }
-Rules:
-  • Use the BASE form of the word as it appears in the WORDS list
-    (e.g. "calm", not "calmly" or "calms").
-  • Arabic must be in Arabic script — never transliterated to Latin letters.
-    Single word or short phrase (max 4 words). Modern Standard Arabic.
-  • No parens, no quotes inside the value, no English mixed into the
-    arabic field.
-  • If a vocab word does NOT appear in your paragraph, omit it from
-    vocabGlosses. If you can't translate one confidently, omit it.
+═══ GLOSSARY ═══
+"glossary": at most 6 entries, one per hard word in the passage.
+  { "word": "<exactly as it appears in the passage, lowercase base form>",
+    "meaning": "<Grade-3 English meaning, 3-10 words, no period>",
+    "arabic": "<Modern Standard Arabic, 1-4 words, Arabic script only>" }
+The meaning must be easier than the word. Never define a word with itself.
+Never transliterate the Arabic into Latin letters. Omit any word you cannot
+translate confidently.
 
 ═══ OUTPUT — strict JSON, nothing else ═══
-Example shape — copy the format, NOT the literal values. Notice that
-"acceptable" contains ANSWERS to the question, not rephrasings of it,
-and "vocabGlosses" contains Arabic translations for vocab words used.
+Copy the SHAPE, not the values:
 
 {
-  "title": "The Cat Show",
-  "paragraph": "...",
-  "usedWords": ["cat", "calm", ...],
-  "vocabGlosses": [
-    { "word": "calm",    "arabic": "هادئ" },
-    { "word": "proud",   "arabic": "فخور" },
-    { "word": "curious", "arabic": "فضولي" }
+  "title": "The Goat On The Roof",
+  "kind": "story",
+  "paragraphs": ["First paragraph...", "Second paragraph..."],
+  "usedWords": ["fence", "climb"],
+  "glossary": [
+    { "word": "stubborn", "meaning": "not willing to change or move", "arabic": "عنيد" }
   ],
   "questions": [
     {
-      "q": "What is this story about?",
-      "type": "main_idea",
-      "acceptable": ["a cat show", "the cat show",
-                     "lena and her cat", "a girl and her cat whiskers"],
-      "hints": ["It is about a girl who goes somewhere with her pet",
-                "Lena takes Whiskers to a cat show"]
+      "q": "What is the writer showing us about Layla here?",
+      "type": "author",
+      "format": "text",
+      "acceptable": ["she is patient", "patient", "layla is patient with her goat"],
+      "options": [],
+      "answerIndex": -1,
+      "hints": ["She waits and tries again instead of shouting",
+                "Layla stays patient with the goat"],
+      "source": "Layla waited by the ladder and tried again."
     },
     {
-      "q": "How is Whiskers?",
-      "type": "detail",
-      "acceptable": ["calm", "calm and quiet",
-                     "she is calm", "whiskers is calm and not afraid"],
-      "hints": ["Whiskers is a relaxed cat, not scared of things",
-                "Whiskers is calm and not afraid of other cats"]
+      "q": "Which sentence best sums up the whole passage?",
+      "type": "retell",
+      "format": "mcq",
+      "acceptable": ["Layla found a patient way to get her goat down."],
+      "options": ["The goat likes to eat leaves.",
+                  "Layla found a patient way to get her goat down.",
+                  "Goats live on farms in the hills."],
+      "answerIndex": 1,
+      "hints": ["It has to cover the whole passage, not one moment",
+                "The passage is about how Layla got the goat down"],
+      "source": "Layla waited by the ladder and tried again."
     }
-    // ... 4 items total, per the level-mix table above
   ]
 }
 
 ✏️ THEMES & TONE (parent: edit this block freely)
-- Themes he enjoys: animals (especially dogs/cats), sports (especially soccer),
-  school adventures, family.
-- Keep the paragraph itself in plain English — do NOT inline any Arabic
-  words or parens inside the story text. Arabic translations are surfaced
-  as hover tooltips via the vocabGlosses field above (see ARABIC GLOSSES).
-- Avoid scary content, violence, sad endings.
+- Things he enjoys: animals, soccer, school, family, building things.
+- Keep it warm and light. No scary content, no violence, no sad endings.
+- Informational passages should feel like a good school reader, not a lecture.
 `.trim();
-
 // ────────────────────────────────────────────────────────────────────────────
 // Simple in-memory rate limiter — 30 messages / hour per IP.
 // Good enough for one family. Resets when the Node process restarts.
