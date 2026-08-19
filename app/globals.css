@@ -1,7 +1,187 @@
 @import "tailwindcss";
 
+/* ── Quest design tokens ───────────────────────────────────────────────────
+   One accent per area: green = Learn/correct, blue = action, purple = Math,
+   gold = XP/rewards, coral = wrong, flame = streak.
+   Fonts come from next/font in app/layout.tsx as --font-fredoka / --font-nunito. */
+@theme {
+  --color-bg: #fbfaf6;
+  --color-ink: #1f2a37;
+  --color-muted: #6b7280;
+  --color-line: #e6e3db;
+  --color-faint: #a8a39a;
+  --color-sand: #edeae2;
+
+  --color-green: #22a06b;
+  --color-green-dark: #187a50;
+  --color-green-soft: #eaf6f0;
+
+  --color-blue: #3b7de0;
+  --color-blue-dark: #2c62b5;
+  --color-blue-soft: #ddeafb;
+
+  --color-purple: #7c5ce6;
+  --color-purple-dark: #5b3fc4;
+  --color-purple-soft: #f1ecff;
+
+  --color-gold: #f4b400;
+  --color-gold-dark: #b07e00;
+  --color-gold-soft: #fff3d6;
+  --color-gold-ink: #8a5a00;
+
+  --color-coral: #ef6461;
+  --color-coral-dark: #c84b48;
+  --color-coral-soft: #ffe8e3;
+
+  --color-flame: #ff6b3d;
+  --color-flame-dark: #d9481f;
+
+  --color-night: #1b2430;
+  --color-night-soft: #2a3646;
+
+  --font-display: var(--font-fredoka), "Trebuchet MS", ui-rounded, system-ui, sans-serif;
+  --font-body: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-tile: 14px;
+  --radius-card: 18px;
+  --radius-hero: 20px;
+
+  --shadow-card: 0 1px 2px rgb(31 42 55 / 0.06);
+  --shadow-lift: 0 6px 18px rgb(31 42 55 / 0.1);
+
+  /* Phone-first frame: the app never gets wider than a phone. */
+  --spacing-app: 480px;
+}
+
 :root {
   color-scheme: light;
+}
+
+html,
+body {
+  background-color: var(--color-sand);
+}
+
+body {
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* ── 3D press buttons ──────────────────────────────────────────────────────
+   The colour + depth come from the Button component as inline CSS vars, so
+   this one rule covers every colour and both sizes. Also used by <Link>s via
+   buttonClass() from components/ui/Button.tsx. */
+.btn-3d {
+  --btn-depth: 5px;
+  position: relative;
+  box-shadow: 0 var(--btn-depth) 0 0 var(--btn-shade, transparent);
+  transition:
+    transform 70ms ease-out,
+    box-shadow 70ms ease-out,
+    filter 120ms ease-out;
+  touch-action: manipulation;
+  user-select: none;
+}
+.btn-3d:active:not(:disabled) {
+  transform: translateY(var(--btn-depth));
+  box-shadow: 0 0 0 0 var(--btn-shade, transparent);
+}
+.btn-3d:disabled {
+  opacity: 0.45;
+  box-shadow: 0 var(--btn-depth) 0 0 var(--btn-shade, transparent);
+}
+.btn-3d-lg {
+  --btn-depth: 6px;
+}
+.btn-3d-flat {
+  --btn-depth: 0px;
+}
+
+/* A card that answers to a tap the same way a button does. */
+.press-3d {
+  --btn-depth: 4px;
+  box-shadow: 0 var(--btn-depth) 0 0 var(--btn-shade, var(--color-line));
+  transition:
+    transform 70ms ease-out,
+    box-shadow 70ms ease-out;
+}
+.press-3d:active {
+  transform: translateY(var(--btn-depth));
+  box-shadow: 0 0 0 0 var(--btn-shade, var(--color-line));
+}
+
+/* ── Safe area helpers (installed PWA, notches) ──────────────────────────── */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 8px);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+}
+/* Room for the fixed bottom nav so nothing hides under it. */
+.pad-nav {
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+
+/* ── Motion ────────────────────────────────────────────────────────────── */
+@keyframes q-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+@keyframes q-bounce-in {
+  0% { transform: scale(0.4) translateY(24px); opacity: 0; }
+  60% { transform: scale(1.1) translateY(0); opacity: 1; }
+  80% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+@keyframes q-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes q-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+@keyframes q-xp-float {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-56px) scale(1.15); opacity: 0; }
+}
+@keyframes q-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(34 160 107 / 0.5); }
+  70% { box-shadow: 0 0 0 14px rgb(34 160 107 / 0); }
+}
+
+.q-pop { animation: q-pop 320ms ease-out; }
+.q-bounce-in { animation: q-bounce-in 600ms cubic-bezier(0.22, 1.2, 0.36, 1) both; }
+.q-sheet-up { animation: q-sheet-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.q-shake { animation: q-shake 400ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.q-xp-float { animation: q-xp-float 900ms ease-out forwards; }
+.q-node-pulse { animation: q-node-pulse 1.8s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .q-pop,
+  .q-bounce-in,
+  .q-sheet-up,
+  .q-shake,
+  .q-xp-float,
+  .q-node-pulse {
+    animation: none !important;
+  }
+  .btn-3d,
+  .press-3d {
+    transition: none;
+  }
 }
 
 /* Component classes — kept self-contained (no @apply of custom classes) for Tailwind v4 */
