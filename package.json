@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test \"lib/__tests__/*.test.ts\"",
+    "test": "tsx --test \"lib/__tests__/*.test.ts\" \"lib/math/__tests__/*.test.ts\"",
     "icons": "node scripts/icons.mjs"
   },
   "dependencies": {

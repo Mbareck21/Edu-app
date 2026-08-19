@@ -26,7 +26,7 @@ export const XP = {
 export const ACTIVITY_CAP = 200;
 
 /** Score that marks a unit-path step done. Shared by the API and the runners. */
-export const STEP_PASS_PCT = 60;
+export const STEP_PASS_PCT = 70;
 
 /** Four beats of Today's quest. The /me editor allows MIN..MAX. */
 export const DEFAULT_DAILY_GOAL = 4;
