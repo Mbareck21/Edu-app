@@ -13,8 +13,8 @@ export function groq(): Groq {
 }
 
 // Models — pinned so behavior is predictable. All free on Groq's hobby tier.
-export const CHAT_MODEL = "llama-3.1-8b-instant";   // fast, friendly, plenty smart for a 9-year-old
-export const CLUE_MODEL = "llama-3.3-70b-versatile"; // a touch slower but writes nicer simple-English clues
+export const CHAT_MODEL = "openai/gpt-oss-20b";      // fast, friendly, plenty smart for a 9-year-old
+export const CLUE_MODEL = "openai/gpt-oss-120b";     // a touch slower but writes nicer simple-English clues
 export const STT_MODEL = "whisper-large-v3-turbo";   // fast multilingual speech recognition
 
 // ────────────────────────────────────────────────────────────────────────────
