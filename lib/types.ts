@@ -127,6 +127,8 @@ export type WordResult = {
   word: string;
   skill: "recognize" | "listen" | "spell" | "use";
   correct: boolean;
+  /** The list this word belongs to; defaults to the session's listId. */
+  listId?: string;
 };
 
 /** A skill sub-document as it comes back from Mongo, before normalising. */

@@ -29,10 +29,7 @@ export type RunnerPost = {
   ref: string;
   listId?: string;
   step?: StepId;
-  /**
-   * The review beat spans lists. One post per list keeps every list's word
-   * schedules moving — the server applies wordResults to one list only.
-   */
+  /** No longer needed: each word result carries its own listId. Kept for compat. */
   perList?: boolean;
 };
 
@@ -70,35 +67,31 @@ type Outcome = {
   correct: number;
 };
 
-/** One session per list so every list's word schedules actually move. */
+/** One post; each word result carries its own list so every schedule moves. */
 function payloads(post: RunnerPost, all: Attempt[], ms: number): SessionResult[] {
-  const groups = new Map<string, Attempt[]>();
-  if (post.perList) {
-    for (const a of all) {
-      const key = a.listId ?? post.listId ?? "";
-      groups.set(key, [...(groups.get(key) ?? []), a]);
-    }
-  }
-  if (groups.size === 0) groups.set(post.listId ?? "", all);
-
-  return [...groups].map(([listId, group]) => {
-    const answered = group.length;
-    const correct = group.filter((a) => a.correct).length;
-    return {
+  const answered = all.length;
+  const correct = all.filter((a) => a.correct).length;
+  return [
+    {
       kind: "vocab",
       ref: post.ref,
       answered,
       correct,
-      fastCount: group.filter((a) => a.fast).length,
-      ms: all.length === 0 ? ms : Math.round((ms * answered) / all.length),
+      fastCount: all.filter((a) => a.fast).length,
+      ms,
       perfect: answered > 0 && correct === answered,
-      ...(listId ? { listId } : {}),
+      ...(post.listId ? { listId: post.listId } : {}),
       ...(post.step ? { step: post.step } : {}),
-      wordResults: group
+      wordResults: all
         .filter((a): a is Attempt & { word: string } => !!a.word)
-        .map((a) => ({ word: a.word, skill: a.skill, correct: a.correct })),
-    } satisfies SessionResult;
-  });
+        .map((a) => ({
+          word: a.word,
+          skill: a.skill,
+          correct: a.correct,
+          ...(a.listId && a.listId !== post.listId ? { listId: a.listId } : {}),
+        })),
+    } satisfies SessionResult,
+  ];
 }
 
 export default function ItemRunner({

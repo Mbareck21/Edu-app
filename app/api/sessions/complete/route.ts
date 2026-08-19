@@ -36,6 +36,7 @@ const Body = z.object({
         word: z.string().min(1).max(40),
         skill: z.enum(SKILL_IDS),
         correct: z.boolean(),
+        listId: z.string().min(1).max(64).optional(),
       })
     )
     .max(200)
@@ -57,13 +58,20 @@ function pctOf(body: ParsedBody): number {
   return Math.round((body.correct / body.answered) * 100);
 }
 
-/** pathProgress + per-word skills, in one read-modify-write on the list. */
-async function updateList(body: ParsedBody, now: Date): Promise<void> {
-  if (!body.listId || !mongoose.isValidObjectId(body.listId)) return;
-  const doc = await WordList.findById(body.listId);
+type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
+
+/** pathProgress + per-word skills, in one read-modify-write on one list. */
+async function applyToList(
+  listId: string,
+  results: WordResultIn[],
+  body: ParsedBody,
+  now: Date
+): Promise<void> {
+  if (!mongoose.isValidObjectId(listId)) return;
+  const doc = await WordList.findById(listId);
   if (!doc) return;
 
-  if (body.step) {
+  if (body.step && listId === body.listId) {
     const pct = pctOf(body);
     const prev = doc.pathProgress?.get(body.step);
     const completed =
@@ -78,11 +86,11 @@ async function updateList(body: ParsedBody, now: Date): Promise<void> {
     doc.markModified("pathProgress");
   }
 
-  if (body.wordResults?.length) {
+  if (results.length) {
     const byWord = new Map<string, number>();
     doc.words.forEach((w, i) => byWord.set(String(w.word).toLowerCase(), i));
     let touched = false;
-    for (const r of body.wordResults) {
+    for (const r of results) {
       const index = byWord.get(r.word.toLowerCase());
       if (index === undefined) continue;
       const word = doc.words[index];
@@ -112,6 +120,20 @@ async function updateList(body: ParsedBody, now: Date): Promise<void> {
   }
 
   await doc.save();
+}
+
+/** Route each word result to its list; the session's own list also gets pathProgress. */
+async function updateList(body: ParsedBody, now: Date): Promise<void> {
+  const groups = new Map<string, WordResultIn[]>();
+  for (const r of body.wordResults ?? []) {
+    const key = r.listId ?? body.listId;
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  if (body.listId && !groups.has(body.listId)) groups.set(body.listId, []);
+  for (const [listId, results] of groups) {
+    await applyToList(listId, results, body, now);
+  }
 }
 
 async function updateMath(body: ParsedBody, now: Date): Promise<void> {
