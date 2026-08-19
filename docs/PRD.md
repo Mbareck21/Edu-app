@@ -4,6 +4,18 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Quest: full app rebuild — 2026-08-19
+
+- **Status:** Built and verified locally (not yet pushed; MongoDB Atlas cluster in .env.local no longer resolves — waiting on a new connection string).
+- **Summary:** Complete rebuild as "Quest": a Brilliant-style, phone-first PWA for Nour (Grade 4, reading at Grade 3). Five tabs (Learn / Math / Drill / Words / Me) + AI Buddy. Rigorous mastery model: each word passes four skills (recognize, listen, spell, use) on a 1/3/7/16/35/90-day spacing ladder before it counts as known; reading levels 1-10 scale length/sentence/question types on performance; math is Grade-4 (13 skills) aligned to the FPS 2026-27 units; rewards = XP, levels, streaks, 12 badges, no hearts/penalties. All progress persists server-side (Profile, per-word skills, MathProgress, reading level) with an offline queue.
+- **Key files:** `lib/{rewards,mastery,items,lesson-builder,curriculum,reading,sfx,offline-queue}.ts`, `lib/math/**`, `lib/models/{Profile,MathProgress}.ts`, `components/{ui,items,learn,math,drill,reading,words}/**`, `app/{page,learn,math,drill,words,me,offline}/**`, `app/api/{profile,sessions/complete,lists/seed,lists/[id]/examples}`, PWA (`app/manifest.ts`, `public/sw.js`, icons).
+- **Research/docs:** `docs/pedagogy.md` (ESL evidence + defaults), `docs/curriculum-fps-grade4.md` (school standards mapping). Design canvas: https://claude.ai/code/artifact/73151495-c814-4244-99f8-23c6937ab656
+- **Groq models repointed** (old llama models removed from the key): chat `openai/gpt-oss-20b`, clues/reading `openai/gpt-oss-120b`, `reasoning_effort: "low"`, budgets sized under the 8k TPM tier.
+- **Verified:** 135 unit tests green; `npm run build` green; full browser walkthrough at 390px against a local in-memory MongoDB — seed school list, AI clues/examples/reading generation, flashcards, lesson items with wrong-answer re-enqueue, full 10/10 math session with badge + level-up, drill hub, Me stats, chat recast, PWA endpoints.
+- **Caveats:** old `/lists/[id]` print worksheets kept as-is; Atlas must be re-created before deploy; timezone default now America/Chicago (`KID_TZ` overrides).
+
+---
+
 ## AI chat: gentle word-fixing recasts + Grade-3 reading level — 2026-05-30
 
 - **Status:** Shipped (pushed to `main` → Vercel auto-deploy).
