@@ -39,7 +39,8 @@ export async function POST(req: Request) {
       ],
       response_format: { type: "json_object" },
       temperature: 0.6,
-      max_tokens: 1200,
+      max_tokens: 4000,
+      reasoning_effort: "low",
     });
 
     const text = completion.choices[0]?.message?.content || "{}";

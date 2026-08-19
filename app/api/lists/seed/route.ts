@@ -33,7 +33,8 @@ async function fillClues(words: string[]): Promise<Record<string, string>> {
       ],
       response_format: { type: "json_object" },
       temperature: 0.6,
-      max_tokens: 1400,
+      max_tokens: 4000,
+      reasoning_effort: "low",
     });
     const payload = JSON.parse(completion.choices[0]?.message?.content || "{}") as {
       clues?: Record<string, string>;

@@ -65,7 +65,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       // Explanations are full sentences (unlike the 1–4-word Arabic values the
       // translate route produces), so a 50-word list needs real headroom or
       // the JSON truncates and JSON.parse throws.
-      max_tokens: 2400,
+      max_tokens: 4500,
+      reasoning_effort: "low",
     });
     const text = completion.choices[0]?.message?.content ?? "{}";
     const json = JSON.parse(text);

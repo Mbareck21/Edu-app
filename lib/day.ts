@@ -1,6 +1,6 @@
 // Local-day helpers. The kid's day boundary is his timezone, not the server's.
 
-const TZ = process.env.KID_TZ ?? "Asia/Riyadh";
+const TZ = process.env.KID_TZ ?? "America/Chicago";
 
 /** YYYY-MM-DD for `now` in the kid's timezone. */
 export function todayKey(now: Date = new Date(), timeZone: string = TZ): string {

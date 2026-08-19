@@ -246,7 +246,8 @@ Write the passage and the questions now. Strict JSON only.`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.75,
-        max_tokens: 4000,
+        max_tokens: 5000,
+      reasoning_effort: "low",
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
       const validated = ResponseShape.safeParse(JSON.parse(text));

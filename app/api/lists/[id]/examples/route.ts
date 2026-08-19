@@ -118,7 +118,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         ],
         response_format: { type: "json_object" },
         temperature: 0.4,
-        max_tokens: 3000,
+        max_tokens: 5000,
+      reasoning_effort: "low",
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
       for (const [key, value] of parseBatch(text)) {
