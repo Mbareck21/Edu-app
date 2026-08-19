@@ -58,16 +58,32 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (parsed.data.hiddenMessage !== undefined)
       doc.set("hiddenMessage", parsed.data.hiddenMessage);
 
-    // Build a lookup of existing word subdocs by lowercased word string so
-    // we can carry over { srs, arabic-if-omitted } onto the merged list.
-    const existing = new Map<string, { word: string; clue?: string; arabic?: string; explanation?: string; srs?: unknown }>();
+    // Build a lookup of existing word subdocs by lowercased word string so we
+    // can carry over { srs, skills, examples, family, arabic-if-omitted } onto
+    // the merged list.
+    const existing = new Map<
+      string,
+      {
+        word: string;
+        clue?: string;
+        arabic?: string;
+        explanation?: string;
+        examples?: unknown;
+        family?: unknown;
+        srs?: unknown;
+        skills?: unknown;
+      }
+    >();
     for (const w of doc.words || []) {
       existing.set(String(w.word).toLowerCase(), {
         word: w.word,
         clue: w.clue,
         arabic: w.arabic,
         explanation: w.explanation,
+        examples: w.examples,
+        family: w.family,
         srs: w.srs,
+        skills: w.skills,
       });
     }
     const merged = parsed.data.words.map((w) => {
@@ -82,8 +98,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         // (e.g. the list editor) must not wipe an existing meaning.
         explanation:
           w.explanation.trim().length > 0 ? w.explanation : (prev?.explanation ?? ""),
-        // Preserve SRS across saves; new words get fresh defaults.
+        // Preserve SRS + per-skill mastery across saves; new words get fresh
+        // defaults. AI-filled examples and word family survive editor saves.
+        examples: prev?.examples ?? [],
+        family: prev?.family ?? [],
         srs: prev?.srs ?? {},
+        skills: prev?.skills ?? {},
       };
     });
     doc.set("words", merged);

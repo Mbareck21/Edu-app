@@ -117,13 +117,58 @@ const SrsStateSchema = new Schema(
   { _id: false }
 );
 
+// Per-skill mastery state. A word is only "known" once every skill sticks.
+//   recognize = meaning → word (MCQ)
+//   listen    = audio → word
+//   spell     = produce the spelling
+//   use       = cloze / sentence usage
+export const SKILL_IDS = ["recognize", "listen", "spell", "use"] as const;
+export type SkillId = (typeof SKILL_IDS)[number];
+
+const SkillStateSchema = new Schema(
+  {
+    correct: { type: Number, default: 0 },
+    wrong: { type: Number, default: 0 },
+    streak: { type: Number, default: 0 },
+    lastAt: { type: Date, default: null },
+    dueAt: { type: Date, default: () => new Date() },
+  },
+  { _id: false }
+);
+
+const WordSkillsSchema = new Schema(
+  {
+    recognize: { type: SkillStateSchema, default: () => ({}) },
+    listen: { type: SkillStateSchema, default: () => ({}) },
+    spell: { type: SkillStateSchema, default: () => ({}) },
+    use: { type: SkillStateSchema, default: () => ({}) },
+  },
+  { _id: false }
+);
+
 const WordSchema = new Schema(
   {
     word: { type: String, required: true, trim: true, lowercase: true },
     clue: { type: String, trim: true, default: "" },
     arabic: { type: String, trim: true, default: "" },
     explanation: { type: String, trim: true, default: "" },
+    // Three short sentences showing the most common uses. Filled by the AI.
+    examples: { type: [String], default: [] },
+    // Word family: related forms (brave / bravely / bravery). Filled by the AI.
+    family: { type: [String], default: [] },
     srs: { type: SrsStateSchema, default: () => ({}) },
+    skills: { type: WordSkillsSchema, default: () => ({}) },
+  },
+  { _id: false }
+);
+
+// Unit path progress, keyed by step id ("flashcards" | "match" | ...).
+// One entry per step the kid has played at least once.
+const PathStepSchema = new Schema(
+  {
+    completedAt: { type: Date, default: null },
+    bestPct: { type: Number, default: 0 },
+    plays: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -137,6 +182,7 @@ const WordListSchema = new Schema(
     currentReading: { type: CurrentReadingSchema, default: null },
     readingHistory: { type: [ReadingHistoryEntrySchema], default: [] },
     readingStats: { type: ReadingStatsSchema, default: () => ({}) },
+    pathProgress: { type: Map, of: PathStepSchema, default: () => ({}) },
   },
   { timestamps: true }
 );
@@ -158,12 +204,25 @@ export type SrsState = {
   hardCount: number;
 };
 
+export type SkillState = {
+  correct: number;
+  wrong: number;
+  streak: number;
+  lastAt: string | null; // ISO
+  dueAt: string; // ISO
+};
+
+export type WordSkills = Record<SkillId, SkillState>;
+
 export type ClientWord = {
   word: string;
   clue: string;
   arabic: string;
   explanation: string;
+  examples: string[];
+  family: string[];
   srs: SrsState;
+  skills: WordSkills;
 };
 
 export type ReadingQuestion = {
@@ -206,6 +265,16 @@ export type ReadingStats = {
   recentSessions: ReadingSessionLog[];
 };
 
+export type PathStep = {
+  /** ISO date, or null when the step was played but not passed yet. */
+  completedAt: string | null;
+  bestPct: number;
+  plays: number;
+};
+
+/** Keyed by StepId; a step with no entry has never been played. */
+export type PathProgress = Record<string, PathStep>;
+
 export type ClientWordList = {
   _id: string;
   name: string;
@@ -214,6 +283,7 @@ export type ClientWordList = {
   readingLevel: number;
   currentReading: CurrentReading | null;
   readingStats: ReadingStats;
+  pathProgress: PathProgress;
   createdAt: string;
   updatedAt: string;
 };
@@ -262,11 +332,26 @@ function normalizeByType(raw: any): ReadingByType {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toClientWord(w: any): ClientWord {
   const srs = w?.srs ?? {};
+  const rawSkills = w?.skills ?? {};
+  const skills = {} as WordSkills;
+  for (const id of SKILL_IDS) {
+    const s = rawSkills?.[id] ?? {};
+    skills[id] = {
+      correct: Number(s.correct ?? 0),
+      wrong: Number(s.wrong ?? 0),
+      streak: Number(s.streak ?? 0),
+      lastAt: s.lastAt ? new Date(s.lastAt).toISOString() : null,
+      dueAt: s.dueAt ? new Date(s.dueAt).toISOString() : new Date(0).toISOString(),
+    };
+  }
   return {
     word: String(w?.word ?? ""),
     clue: String(w?.clue ?? ""),
     arabic: String(w?.arabic ?? ""),
     explanation: String(w?.explanation ?? ""),
+    examples: Array.isArray(w?.examples) ? w.examples.map(String) : [],
+    family: Array.isArray(w?.family) ? w.family.map(String) : [],
+    skills,
     srs: {
       interval: Number(srs.interval ?? 0),
       dueAt: srs.dueAt
@@ -282,6 +367,29 @@ function toClientWord(w: any): ClientWord {
   };
 }
 
+// pathProgress comes back as a plain object from .lean() and as a Map from a
+// hydrated doc — normalise both.
+function normalizePathProgress(raw: unknown): PathProgress {
+  const out: PathProgress = {};
+  if (!raw) return out;
+  const entries: [string, unknown][] =
+    raw instanceof Map
+      ? Array.from(raw.entries())
+      : typeof raw === "object"
+        ? Object.entries(raw as Record<string, unknown>)
+        : [];
+  for (const [key, value] of entries) {
+    if (!value || typeof value !== "object") continue;
+    const v = value as { completedAt?: unknown; bestPct?: unknown; plays?: unknown };
+    out[key] = {
+      completedAt: v.completedAt ? new Date(v.completedAt as string).toISOString() : null,
+      bestPct: Number(v.bestPct) || 0,
+      plays: Number(v.plays) || 0,
+    };
+  }
+  return out;
+}
+
 export function toClient(doc: {
   _id: unknown;
   name: string;
@@ -293,6 +401,7 @@ export function toClient(doc: {
   currentReading?: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readingStats?: any;
+  pathProgress?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }): ClientWordList {
@@ -362,6 +471,7 @@ export function toClient(doc: {
     readingLevel: Math.max(1, Math.min(5, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,
+    pathProgress: normalizePathProgress(doc.pathProgress),
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
