@@ -24,6 +24,9 @@ import {
   type ItemSkill,
   type LessonItem,
 } from "@/lib/items";
+
+// Re-exported so callers can get the whole session vocabulary from one module.
+export { reEnqueue } from "@/lib/items";
 import type { StepId } from "@/lib/types";
 
 export const LESSON_SIZE = 12;
@@ -333,19 +336,6 @@ export function buildProductionSession({
     guard++;
   }
   return interleave(items);
-}
-
-/**
- * A miss comes back 2-4 places later — far enough that it is recall, close
- * enough that the kid still remembers being told.
- */
-export function reEnqueue<T>(queue: T[], item: T, rng: Rng): T[] {
-  if (queue.length === 0) return [item];
-  const offset = 2 + Math.floor(rng() * 3); // 2, 3 or 4
-  const at = Math.min(queue.length, offset);
-  const next = queue.slice();
-  next.splice(at, 0, item);
-  return next;
 }
 
 /** How many items in the lesson belong to `word`. Used by the tests. */
