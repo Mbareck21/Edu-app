@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+
+import Button from "@/components/ui/Button";
+import Icon from "@/components/ui/Icon";
 import {
   isRecordingSupported,
   recordAudio,
@@ -351,62 +354,86 @@ export default function ChatPage() {
 
   const stateLabel: Record<ConvState["kind"], string> = {
     off: "",
-    listening: "🎤 Listening…",
-    transcribing: "⏳ Hearing you…",
-    thinking: "🤔 Thinking…",
-    streaming: "💬 Replying…",
-    speaking: "⏹ Tap to interrupt",
+    listening: "Listening…",
+    transcribing: "Hearing you…",
+    thinking: "Thinking…",
+    streaming: "Replying…",
+    speaking: "Tap to stop it talking",
   };
-  const stateBg: Record<ConvState["kind"], string> = {
-    off: "",
-    listening: "bg-rose-600 text-white animate-pulse",
-    transcribing: "bg-slate-300 text-slate-900",
-    thinking: "bg-slate-300 text-slate-900",
-    streaming: "bg-slate-300 text-slate-900",
-    speaking: "bg-emerald-600 text-white",
+  const stateStyle: Record<ConvState["kind"], CSSProperties> = {
+    off: {},
+    listening: { background: "var(--color-coral)", color: "#fff" },
+    transcribing: { background: "var(--color-sand)", color: "var(--color-ink)" },
+    thinking: { background: "var(--color-sand)", color: "var(--color-ink)" },
+    streaming: { background: "var(--color-sand)", color: "var(--color-ink)" },
+    speaking: { background: "var(--color-green)", color: "#fff" },
   };
 
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-2xl flex-col px-4 py-3">
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <Link href="/" className="text-sm text-slate-600 hover:underline">← Home</Link>
-        <h1 className="text-lg font-semibold">AI Buddy</h1>
-        <div className="flex items-center gap-3">
+    <main className="safe-top flex h-[100dvh] flex-col px-4 pb-3">
+      <header className="flex items-center justify-between gap-2 py-3">
+        <Link
+          href="/"
+          aria-label="Back"
+          className="flex h-11 w-11 items-center justify-center rounded-full"
+          style={{ color: "var(--color-muted)" }}
+        >
+          <Icon name="arrowLeft" size={24} />
+        </Link>
+        <div className="text-center">
+          <h1 className="font-display text-xl font-bold leading-tight">AI Buddy</h1>
+          <p className="text-xs" style={{ color: "var(--color-muted)" }}>
+            Talk to it in English
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={toggleAutoPlay}
-            className="text-base"
-            title={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
-            aria-label={autoPlay ? "Mute auto-play" : "Unmute auto-play"}
+            className="flex h-11 w-11 items-center justify-center rounded-full"
+            style={{ color: autoPlay ? "var(--color-green)" : "var(--color-faint)" }}
+            title={autoPlay ? "Turn the voice off" : "Turn the voice on"}
+            aria-label={autoPlay ? "Turn the voice off" : "Turn the voice on"}
           >
-            {autoPlay ? "🔊" : "🔇"}
+            <Icon name="volume" size={24} />
           </button>
           <button
             type="button"
-            className="text-sm text-slate-600 hover:underline disabled:opacity-50"
+            className="flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40"
+            style={{ color: "var(--color-muted)" }}
             onClick={clearAll}
             disabled={streaming || convActive || messages.length === 0}
+            aria-label="Clear the chat"
+            title="Clear the chat"
           >
-            Clear
+            <Icon name="trash" size={22} />
           </button>
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-3 overflow-y-auto rounded-card border p-3"
+        style={{ borderColor: "var(--color-line)", background: "#fff" }}
+      >
         {messages.length === 0 && (
-          <p className="text-sm text-slate-500">
-            Say hi! Tap <strong>Talk</strong> for a hands-free conversation, or use the mic for one message at a time.
+          <p className="text-base" style={{ color: "var(--color-muted)" }}>
+            Say hi. Tap <strong>Talk</strong> to chat hands-free, or tap the mic for
+            one message.
           </p>
         )}
         {messages.map((m, i) => {
           const isLast = i === messages.length - 1;
           const showReplay = m.role === "assistant" && m.content && !(streaming && isLast) && !convActive;
+          const mine = m.role === "user";
           return (
-            <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
+            <div key={i} className={mine ? "text-right" : "text-left"}>
               <div
-                className={
-                  "inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-base " +
-                  (m.role === "user" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900")
+                className="inline-block max-w-[85%] whitespace-pre-wrap rounded-card px-3.5 py-2.5 text-base leading-relaxed"
+                style={
+                  mine
+                    ? { background: "var(--color-green)", color: "#fff" }
+                    : { background: "var(--color-sand)", color: "var(--color-ink)" }
                 }
               >
                 {m.content || (streaming && isLast ? "…" : "")}
@@ -416,11 +443,13 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => playMessage(i, m.content)}
-                    className="text-xs text-slate-500 hover:text-slate-900"
+                    className="inline-flex items-center gap-1 text-xs font-bold"
+                    style={{ color: "var(--color-muted)" }}
                     aria-label="Play this message"
                     title="Play this message"
                   >
-                    {speakingIdx === i ? "🔊 playing…" : "🔊 play"}
+                    <Icon name="volume" size={16} />
+                    {speakingIdx === i ? "playing" : "play"}
                   </button>
                 </div>
               )}
@@ -430,81 +459,85 @@ export default function ChatPage() {
       </div>
 
       {recording && !convActive && (
-        <p className="mt-2 text-sm text-rose-600">
-          🎤 Listening… <span className="text-slate-700">tap the square when you finish</span>
+        <p className="mt-2 text-sm" style={{ color: "var(--color-coral-dark)" }}>
+          Listening… tap the mic again when you finish.
         </p>
       )}
       {transcribing && !convActive && (
-        <p className="mt-2 text-sm text-slate-600">⏳ Understanding what you said…</p>
+        <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
+          Hearing what you said…
+        </p>
       )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="mt-2 text-sm" style={{ color: "var(--color-coral-dark)" }}>
+          {error}
+        </p>
+      )}
 
       {/* Bottom bar — single-utterance composer OR conversation-mode controls */}
       {!convActive ? (
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 flex items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
         >
           {micAvailable && (
-            <button
-              type="button"
+            <Button
+              size="md"
+              color={recording ? "coral" : "blue"}
+              variant={recording ? "primary" : "secondary"}
               onClick={recording ? stopRecording : startRecording}
               disabled={streaming || transcribing}
-              className={
-                "inline-flex items-center justify-center rounded-md px-3 text-lg transition-colors disabled:opacity-50 " +
-                (recording
-                  ? "bg-rose-600 text-white animate-pulse"
-                  : "bg-white text-slate-900 border border-slate-300 hover:bg-slate-100")
-              }
+              className="!px-4"
               aria-label={recording ? "Stop and send" : "Start listening"}
               title={recording ? "Stop and send" : "Start listening"}
             >
-              {recording ? "■" : "🎤"}
-            </button>
+              <Icon name="mic" size={22} />
+            </Button>
           )}
           {micAvailable && (
-            <button
-              type="button"
+            <Button
+              size="md"
+              color="purple"
+              variant="secondary"
               onClick={startConversation}
               disabled={streaming || micBusy}
-              className="btn-secondary whitespace-nowrap"
               title="Hands-free conversation"
             >
-              💬 Talk
-            </button>
+              <Icon name="chat" size={20} />
+              Talk
+            </Button>
           )}
           <input
-            className="input flex-1"
-            placeholder={micBusy ? "Listening…" : "Type, tap mic, or tap Talk…"}
+            className="min-h-[48px] flex-1 rounded-full border-2 px-4 text-base"
+            style={{ borderColor: "var(--color-line)", background: "#fff" }}
+            placeholder={micBusy ? "Listening…" : "Type a message"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={streaming || micBusy}
           />
-          <button type="submit" className="btn-primary" disabled={streaming || micBusy || !input.trim()}>
-            {streaming ? "…" : "Send"}
-          </button>
+          <Button
+            type="submit"
+            size="md"
+            color="green"
+            disabled={streaming || micBusy || !input.trim()}
+          >
+            Send
+          </Button>
         </form>
       ) : (
         <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={stopConversation}
-            className="btn-secondary"
-            aria-label="Stop conversation"
-            title="Stop conversation"
-          >
-            × Stop
-          </button>
+          <Button size="md" variant="secondary" color="coral" onClick={stopConversation}>
+            <Icon name="x" size={20} />
+            Stop
+          </Button>
           <button
             type="button"
             onClick={convState.kind === "speaking" ? interruptSpeech : undefined}
-            className={
-              "flex-1 inline-flex items-center justify-center rounded-md px-4 py-3 text-base font-medium transition-colors " +
-              stateBg[convState.kind]
-            }
+            className="flex flex-1 items-center justify-center rounded-full px-4 py-3 font-display text-base font-bold"
+            style={stateStyle[convState.kind]}
             disabled={convState.kind !== "speaking"}
           >
             {stateLabel[convState.kind]}
