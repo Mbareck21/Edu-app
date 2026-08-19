@@ -237,7 +237,14 @@ export default function ItemRunner({
         xp: firstTry ? XP.correct + (fast ? XP.fast : 0) : 0,
       });
     } else {
-      setFeedback({ state: "wrong", answer: current.answer, line: current.feedback });
+      // Short answers read best as the headline; a whole sentence does not.
+      const short = current.answer.length <= 22;
+      setFeedback({
+        state: "wrong",
+        title: short ? `It is "${current.answer}"` : "Not this time",
+        answer: current.answer,
+        line: current.feedback,
+      });
     }
   }
 
