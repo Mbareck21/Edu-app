@@ -117,7 +117,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const update: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) update.name = parsed.data.name;
   if (parsed.data.hiddenMessage !== undefined) update.hiddenMessage = parsed.data.hiddenMessage;
-  const doc = await WordList.findByIdAndUpdate(id, update, { new: true }).lean();
+  const doc = await WordList.findByIdAndUpdate(id, update, { returnDocument: "after" }).lean();
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(toClient(doc));
 }

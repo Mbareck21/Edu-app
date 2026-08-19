@@ -11,7 +11,7 @@ export async function getProfile(): Promise<ProfileState> {
   const doc = await Profile.findOneAndUpdate(
     { key: PROFILE_KEY },
     { $setOnInsert: { key: PROFILE_KEY } },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   ).lean();
   return toProfileState(doc);
 }
@@ -38,7 +38,7 @@ export async function saveProfile(state: ProfileState): Promise<ProfileState> {
       },
       $setOnInsert: { key: PROFILE_KEY },
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   ).lean();
   return toProfileState(doc);
 }
