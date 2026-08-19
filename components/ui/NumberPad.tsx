@@ -3,6 +3,7 @@
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import { sfx } from "@/lib/sfx";
+import type { AccentColor } from "@/components/ui/colors";
 
 export type NumberPadProps = {
   /** One digit ("0".."9") or "-" was pressed. */
@@ -15,6 +16,8 @@ export type NumberPadProps = {
   checkLabel?: string;
   /** Adds a minus key for subtraction answers. */
   allowMinus?: boolean;
+  /** Accent for the CHECK key. */
+  color?: AccentColor;
   className?: string;
 };
 
@@ -28,6 +31,7 @@ export default function NumberPad({
   disabled = false,
   checkLabel = "Check",
   allowMinus = false,
+  color = "blue",
   className = "",
 }: NumberPadProps) {
   const key = (label: string, onPress: () => void, aria?: string) => (
@@ -61,7 +65,7 @@ export default function NumberPad({
         {key("back", () => onBackspace(), "backspace")}
       </div>
       <Button
-        color="blue"
+        color={color}
         size="lg"
         fullWidth
         disabled={disabled || checkDisabled}

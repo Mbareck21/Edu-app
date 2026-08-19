@@ -252,6 +252,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
           onInput={(d) => setInput((v) => (v.length >= MAX_DIGITS ? v : v === "0" ? d : v + d))}
           onBackspace={() => setInput((v) => v.slice(0, -1))}
           onCheck={check}
+          color="purple"
           checkDisabled={input.length === 0}
           disabled={!question || flash !== null || feedback !== null}
         />
