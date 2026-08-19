@@ -3,6 +3,22 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
+import { getProfile } from "@/lib/profile";
+import {
+  scienceUnitForWeek,
+  themeForWeek,
+  type ReadingTheme,
+  type ScienceUnit,
+} from "@/lib/curriculum";
+import {
+  clampLevel,
+  countWords,
+  longestSentenceWords,
+  questionPlan,
+  readingParams,
+  type PassageKind,
+  type QuestionSpec,
+} from "@/lib/reading";
 import {
   groq,
   CLUE_MODEL,
@@ -12,48 +28,58 @@ import {
 } from "@/lib/groq";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-const Body = z.object({ listId: z.string().min(1) });
+// `listId` is the only required field — the concurrent Read-step runner posts
+// exactly that. Everything else is an optional override.
+const Body = z.object({
+  listId: z.string().min(1),
+  level: z.number().int().min(1).max(10).optional(),
+  kind: z.enum(["story", "info"]).optional(),
+});
+
+const QuestionShape = z.object({
+  q: z.string().min(3).max(220),
+  type: z.enum(READING_QUESTION_TYPES),
+  format: z.enum(["text", "mcq"]).default("text"),
+  acceptable: z.array(z.string().min(1).max(300)).min(1).max(8),
+  options: z.array(z.string().min(1).max(300)).max(5).default([]),
+  answerIndex: z.number().int().min(-1).max(4).default(-1),
+  hints: z.array(z.string().min(1).max(220)).min(1).max(3),
+  source: z.string().max(400).default(""),
+});
 
 const ResponseShape = z.object({
-  title: z.string().min(2).max(60),
-  paragraph: z.string().min(20).max(2000),
+  title: z.string().min(2).max(70),
+  paragraphs: z.array(z.string().min(20).max(1200)).min(1).max(6),
   usedWords: z.array(z.string()).default([]),
-  vocabGlosses: z
+  glossary: z
     .array(
       z.object({
         word: z.string().min(1).max(40),
-        arabic: z.string().min(1).max(80),
+        meaning: z.string().max(160).default(""),
+        arabic: z.string().max(80).default(""),
       })
     )
+    .max(8)
     .default([]),
-  questions: z
-    .array(
-      z.object({
-        q: z.string().min(3).max(200),
-        type: z.enum(READING_QUESTION_TYPES),
-        acceptable: z.array(z.string().min(1).max(120)).min(1).max(8),
-        hints: z.array(z.string().min(1).max(200)).length(2),
-      })
-    )
-    .length(4),
+  questions: z.array(QuestionShape).min(2).max(10),
 });
 
-const MIN_WORDS_BY_LEVEL: Record<number, number> = {
-  1: 60,
-  2: 80,
-  3: 100,
-  4: 120,
-  5: 140,
-};
-
-const MAX_VOCAB_PER_STORY = 10;
+const MAX_STUDY_WORDS = 12;
 const MAX_HISTORY_ENTRIES = 5;
 
-function sampleWords(allWords: readonly string[], n: number): string[] {
-  if (allWords.length <= n) return [...allWords];
-  const copy = [...allWords];
+type HistoryEntry = {
+  title: string;
+  opening: string;
+  kind?: string;
+  topic?: string;
+  generatedAt: Date;
+};
+
+function sample<T>(items: readonly T[], n: number): T[] {
+  if (items.length <= n) return [...items];
+  const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [copy[i], copy[j]] = [copy[j], copy[i]];
@@ -61,7 +87,49 @@ function sampleWords(allWords: readonly string[], n: number): string[] {
   return copy.slice(0, n);
 }
 
-type HistoryEntry = { title: string; opening: string; generatedAt: Date };
+/**
+ * Shuffle the options and report where the right one landed. Models park the
+ * correct answer at index 0 far too often; this kills the position tell.
+ */
+function shuffleOptions(options: string[], answerIndex: number): {
+  options: string[];
+  answerIndex: number;
+} {
+  const answer = options[answerIndex];
+  const shuffled = sample(options, options.length);
+  return { options: shuffled, answerIndex: Math.max(0, shuffled.indexOf(answer)) };
+}
+
+/** Story and informational passages alternate so both standards get worked. */
+function nextKind(history: HistoryEntry[]): PassageKind {
+  const last = history[history.length - 1];
+  return last?.kind === "story" ? "info" : "story";
+}
+
+function describePlan(plan: QuestionSpec[]): string {
+  return plan
+    .map((spec, i) => {
+      const fmt =
+        spec.format === "mcq"
+          ? `mcq with exactly ${spec.options} options`
+          : "text (he types the answer)";
+      return `${i + 1}. type "${spec.type}", format ${fmt} — ${spec.brief}`;
+    })
+    .join("\n");
+}
+
+type Gloss = { word: string; meaning: string; arabic: string };
+
+/** One card per word — models sometimes gloss the same word twice. */
+function dedupeGlosses(raw: { word: string; meaning: string; arabic: string }[]): Gloss[] {
+  const seen = new Map<string, Gloss>();
+  for (const g of raw) {
+    const word = g.word.trim().toLowerCase();
+    if (!word || seen.has(word)) continue;
+    seen.set(word, { word, meaning: g.meaning.trim(), arabic: g.arabic.trim() });
+  }
+  return [...seen.values()];
+}
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -91,88 +159,128 @@ export async function POST(req: Request) {
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
-  const allWords = (doc.words || []).map((w) => w.word).filter((w) => /^[a-z]{2,}$/.test(w));
-  if (allWords.length < 3) {
-    return NextResponse.json(
-      { error: "need at least 3 words on the list to generate a reading" },
-      { status: 400 }
-    );
-  }
-  const level = Math.max(1, Math.min(5, Number(doc.readingLevel) || 1));
+  const allWords = (doc.words || [])
+    .map((w) => String(w.word))
+    .filter((w) => /^[a-z][a-z\s-]*$/.test(w));
 
-  // Pick up to 10 random vocab words for this generation. Fresh sample every
-  // call → different stories naturally emphasize different vocab over time.
-  const words = sampleWords(allWords, MAX_VOCAB_PER_STORY);
+  // The reading ladder lives on the profile, not the list. An explicit level
+  // in the body wins (the drill / practice screens may want to pin one).
+  const profile = await getProfile();
+  const level = clampLevel(parsed.data.level ?? profile.reading.level ?? 1);
+  const params = readingParams(level);
 
-  // Recent stories — fed back to the AI so it avoids repeating itself.
-  const historyRaw = (doc.get("readingHistory") as HistoryEntry[] | undefined) ?? [];
-  const history = historyRaw
-    .slice(-MAX_HISTORY_ENTRIES)
-    .map((h) => ({ title: String(h.title ?? ""), opening: String(h.opening ?? "") }));
+  const history = ((doc.get("readingHistory") as HistoryEntry[] | undefined) ?? []).slice(
+    -MAX_HISTORY_ENTRIES
+  );
+  const kind: PassageKind = parsed.data.kind ?? nextKind(history);
+
+  // What the class is doing this week. Informational passages ride the science
+  // unit when there is one; stories ride the Benchmark reading theme.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const theme: ReadingTheme = themeForWeek(todayISO);
+  const scienceUnit: ScienceUnit | null = scienceUnitForWeek(todayISO);
+  const useScience = kind === "info" && scienceUnit !== null;
+
+  const topic = useScience && scienceUnit ? scienceUnit.title : theme.title;
+  const topicWords = sample(
+    useScience && scienceUnit ? scienceUnit.words : theme.words,
+    5
+  );
+  const topicIdea =
+    useScience && scienceUnit
+      ? sample(scienceUnit.passageIdeas, 1)[0]
+      : sample(theme.prompts.slice(1), 1)[0];
+  const essentialQuestion = theme.prompts[0];
+
+  const studyWords = sample(allWords, MAX_STUDY_WORDS);
+  const plan = questionPlan(level, kind, useScience);
+
   const historyBlock =
     history.length > 0
-      ? `\n\nRECENTLY TOLD STORIES on this list (make the new one GENUINELY different — different characters, setting, plot, animal):\n` +
-        history.map((h, i) => `${i + 1}. "${h.title}" — opens: ${h.opening}`).join("\n")
+      ? `\n\nRECENT PASSAGES on this list (make this one genuinely different):\n` +
+        history
+          .map((h, i) => `${i + 1}. "${h.title}" (${h.kind ?? "story"}) — opens: ${h.opening}`)
+          .join("\n")
       : "";
 
-  // Generate once, retry once if word-usage coverage OR word-count is too low.
-  const minWords = MIN_WORDS_BY_LEVEL[level] ?? 60;
-  const minVocabUse = Math.ceil(words.length * 0.5);
-  let attempt = 0;
+  const kindBlock =
+    kind === "info"
+      ? `KIND: info (informational, non-fiction)
+TOPIC: ${topic}${useScience && scienceUnit ? ` — this is the science unit his class is on now (${scienceUnit.standards.map((s) => s.code).join(", ") || "no code"})` : ""}
+ANGLE: ${topicIdea ?? topic}
+The writer must make one clear point and back it with reasons and examples.`
+      : `KIND: story (narrative)
+TOPIC: ${topic} — the reading unit his class is on now
+BIG QUESTION the class is asking: ${essentialQuestion}
+ANGLE: ${topicIdea ?? essentialQuestion}
+The story must carry a lesson he could name in one sentence.`;
+
+  const userPrompt = `LEVEL: ${level} of 10
+TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never more than ${params.maxWords})
+MAX SENTENCE WORDS: ${params.maxSentenceWords}
+PARAGRAPHS: ${params.paragraphs}
+UNKNOWN-WORD BUDGET: ${params.unknownBudget} (every one goes in "glossary")
+
+${kindBlock}
+
+TOPIC WORDS (use 3-5 of them): ${topicWords.join(", ")}
+STUDY WORDS he has been learning (prefer these, use as many as fit naturally): ${studyWords.join(", ") || "none yet"}
+
+QUESTION PLAN — produce exactly these ${plan.length} questions, in this order:
+${describePlan(plan)}${historyBlock}
+
+Write the passage and the questions now. Strict JSON only.`;
+
+  // Generate, and retry once when the passage misses the level targets.
   let reading: z.infer<typeof ResponseShape> | null = null;
   let lastErr: string | null = null;
-  let lastShortcoming: "vocab" | "length" | "both" | null = null;
-  while (attempt < 2 && !reading) {
-    attempt++;
-    let sterner = "";
-    if (attempt === 2 && lastShortcoming) {
-      const parts: string[] = [`\n\n⚠ Your previous attempt fell short — fix this:`];
-      if (lastShortcoming === "vocab" || lastShortcoming === "both") {
-        parts.push(
-          `- Use AT LEAST ${Math.ceil(words.length * 0.6)} of these vocabulary words in the paragraph, woven into meaningful story sentences: ${words.join(", ")}.`
-        );
-      }
-      if (lastShortcoming === "length" || lastShortcoming === "both") {
-        parts.push(
-          `- The paragraph was too SHORT. It must be at least ${minWords} words. A short paragraph reads as a vocab list, not a story. Add more story — name your characters, describe the setting, show what they do, use pronouns to refer back. Imitate the "House" example.`
-        );
-      }
-      sterner = parts.join("\n");
-    }
+  let correction = "";
+
+  for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
     try {
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
         messages: [
-          { role: "system", content: READING_SYSTEM_PROMPT + sterner },
-          {
-            role: "user",
-            content:
-              `LEVEL: ${level}\nWORDS he has been studying (pick most into the story): ${words.join(", ")}` +
-              historyBlock +
-              `\n\nGenerate the title + paragraph + 4 questions per the rules.`,
-          },
+          { role: "system", content: READING_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt + correction },
         ],
         response_format: { type: "json_object" },
         temperature: 0.75,
-        max_tokens: 2000,
+        max_tokens: 4000,
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
-      const json = JSON.parse(text);
-      const validated = ResponseShape.safeParse(json);
+      const validated = ResponseShape.safeParse(JSON.parse(text));
       if (!validated.success) {
-        lastErr = "AI returned malformed reading";
+        lastErr = "AI returned a malformed reading";
+        correction = `\n\nYour last answer did not match the JSON shape. Return every field exactly as the shape shows, and exactly ${plan.length} questions.`;
         continue;
       }
-      // Coverage + length checks. If either is below the floor on attempt 1,
-      // record what was wrong and retry once with a sterner prompt.
-      const para = validated.data.paragraph;
-      const paraLower = para.toLowerCase();
-      const usedCount = words.filter((w) => paraLower.includes(w)).length;
-      const wordCount = para.trim().split(/\s+/).filter(Boolean).length;
-      const vocabShort = usedCount < minVocabUse;
-      const lengthShort = wordCount < minWords;
-      if (attempt === 1 && (vocabShort || lengthShort)) {
-        lastShortcoming = vocabShort && lengthShort ? "both" : vocabShort ? "vocab" : "length";
+
+      const passage = validated.data.paragraphs.join("\n\n");
+      const words = countWords(passage);
+      const longest = longestSentenceWords(passage);
+      const short = words < params.minWords;
+      const rambling = longest > params.maxSentenceWords + 3;
+      const wrongCount = validated.data.questions.length !== plan.length;
+
+      if (attempt === 1 && (short || rambling || wrongCount)) {
+        const fixes: string[] = ["\n\nYour previous attempt fell short. Fix this:"];
+        if (short) {
+          fixes.push(
+            `- The passage was ${words} words. It must be at least ${params.minWords}. Add another beat to the passage — do not pad with repeated sentences.`
+          );
+        }
+        if (rambling) {
+          fixes.push(
+            `- One sentence ran to ${longest} words. No sentence may pass ${params.maxSentenceWords} words. Split the long ones.`
+          );
+        }
+        if (wrongCount) {
+          fixes.push(
+            `- You returned ${validated.data.questions.length} questions. The plan asks for exactly ${plan.length}, in the given order and types.`
+          );
+        }
+        correction = fixes.join("\n");
         continue;
       }
       reading = validated.data;
@@ -188,24 +296,62 @@ export async function POST(req: Request) {
     );
   }
 
+  const passage = reading.paragraphs.map((p) => p.trim()).join("\n\n");
+
+  // Normalise the questions: MCQs must have a usable answerIndex, free-text
+  // must not carry stray options, and every question keeps exactly 2 hints.
+  const questions = reading.questions.map((q, i) => {
+    const spec = plan[i];
+    const wantsMcq = (spec?.format ?? q.format) === "mcq";
+    const options = wantsMcq ? q.options.filter((o) => o.trim()) : [];
+    let answerIndex = wantsMcq ? q.answerIndex : -1;
+    if (wantsMcq && (answerIndex < 0 || answerIndex >= options.length)) {
+      // Fall back to matching the model's own "acceptable" text.
+      const guess = options.findIndex(
+        (o) => o.trim().toLowerCase() === (q.acceptable[0] ?? "").trim().toLowerCase()
+      );
+      answerIndex = guess >= 0 ? guess : 0;
+    }
+    const hints = q.hints.slice(0, 2);
+    while (hints.length < 2) hints.push("Read it again and look for the answer.");
+    const shuffled =
+      wantsMcq && options.length > 1
+        ? shuffleOptions(options, answerIndex)
+        : { options, answerIndex };
+    return {
+      q: q.q,
+      type: spec?.type ?? q.type,
+      acceptable: wantsMcq
+        ? [shuffled.options[shuffled.answerIndex] ?? q.acceptable[0]]
+        : q.acceptable,
+      hints,
+      options: shuffled.options,
+      answerIndex: wantsMcq ? shuffled.answerIndex : -1,
+      // Only keep a source sentence that really is in the passage.
+      source: q.source && passage.includes(q.source.trim()) ? q.source.trim() : "",
+    };
+  });
+
   const now = new Date();
   doc.set("currentReading", {
     title: reading.title,
-    paragraph: reading.paragraph,
-    questions: reading.questions,
-    vocabGlosses: reading.vocabGlosses,
+    paragraph: passage,
+    questions,
+    vocabGlosses: dedupeGlosses(reading.glossary),
     level,
+    passageKind: kind,
+    topic,
     generatedAt: now,
   });
+  // Keep the list's own level mirroring the level actually used, so the Words
+  // tab and the old reading page still show something true.
+  doc.set("readingLevel", level);
 
-  // Append to rolling history (cap at MAX_HISTORY_ENTRIES). Opening = first
-  // sentence of the paragraph, which is enough to identify a story to the AI.
   const opening =
-    reading.paragraph.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ??
-    reading.paragraph.slice(0, 160);
+    passage.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ?? passage.slice(0, 160);
   const newHistory: HistoryEntry[] = [
-    ...historyRaw,
-    { title: reading.title, opening, generatedAt: now },
+    ...((doc.get("readingHistory") as HistoryEntry[] | undefined) ?? []),
+    { title: reading.title, opening, kind, topic, generatedAt: now },
   ].slice(-MAX_HISTORY_ENTRIES);
   doc.set("readingHistory", newHistory);
 

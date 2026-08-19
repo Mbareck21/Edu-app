@@ -17,11 +17,10 @@ const Body = z.object({
       })
     )
     .min(1)
-    .max(6),
+    .max(12),
 });
 
 const MAX_RECENT_SESSIONS = 20;
-const MAX_LEVEL = 5;
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -86,11 +85,9 @@ export async function POST(req: Request) {
   ].slice(-MAX_RECENT_SESSIONS);
   doc.set("readingStats.recentSessions", nextRecent);
 
-  // Level bump only on perfect runs.
-  if (perfect) {
-    const cur = Number(doc.readingLevel) || 1;
-    doc.set("readingLevel", Math.min(MAX_LEVEL, cur + 1));
-  }
+  // The reading ladder now lives on Profile.reading (POST
+  // /api/sessions/complete moves it). The list's readingLevel just mirrors the
+  // level the generator last used, so nothing bumps it here.
 
   // Clear the current reading — next Generate creates a fresh one.
   doc.set("currentReading", null);
