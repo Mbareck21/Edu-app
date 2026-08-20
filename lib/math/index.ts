@@ -21,5 +21,5 @@ export {
   buildSession,
   gradeAnswer,
   mixedSession,
-  nextLevel,
+  nextLevelFromHistory,
 } from "./session";

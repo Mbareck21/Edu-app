@@ -5,7 +5,13 @@ import type { Level, MathQuestion, MathSkillId } from "../types";
 import { mulberry32, randInt, shuffle } from "../rng";
 import { MATH_SKILLS, MATH_SKILL_IDS, getSkill, isMathSkillId, skillsForUnit } from "../skills";
 import { MATH_UNITS, currentUnit, unitFor } from "../units";
-import { MAX_SESSION_COUNT, buildSession, gradeAnswer, mixedSession, nextLevel } from "../session";
+import {
+  MAX_SESSION_COUNT,
+  buildSession,
+  gradeAnswer,
+  mixedSession,
+  nextLevelFromHistory,
+} from "../session";
 
 const LEVELS: readonly Level[] = [1, 2, 3];
 const SAMPLES = 200;
@@ -267,17 +273,17 @@ test("gradeAnswer only accepts the whole number", () => {
   assert.equal(gradeAnswer(big, "43 207").correct, true);
 });
 
-test("nextLevel moves on three strong sessions and drops after a weak one", () => {
-  assert.equal(nextLevel(1, [90, 95, 100]), 2);
-  assert.equal(nextLevel(2, [90, 90, 90]), 3);
-  assert.equal(nextLevel(3, [100, 100, 100]), 3);
-  assert.equal(nextLevel(2, [95, 95]), 2);
-  assert.equal(nextLevel(2, [100, 100, 89]), 2);
-  assert.equal(nextLevel(2, [70, 80, 85]), 2);
-  assert.equal(nextLevel(3, [100, 100, 50]), 2);
-  assert.equal(nextLevel(1, [10]), 1);
-  assert.equal(nextLevel(2, []), 2);
-  assert.equal(nextLevel(2, [95, 50, 95]), 2);
+test("nextLevelFromHistory moves on three strong sessions and drops after a weak one", () => {
+  assert.equal(nextLevelFromHistory(1, [90, 95, 100]), 2);
+  assert.equal(nextLevelFromHistory(2, [90, 90, 90]), 3);
+  assert.equal(nextLevelFromHistory(3, [100, 100, 100]), 3);
+  assert.equal(nextLevelFromHistory(2, [95, 95]), 2);
+  assert.equal(nextLevelFromHistory(2, [100, 100, 89]), 2);
+  assert.equal(nextLevelFromHistory(2, [70, 80, 85]), 2);
+  assert.equal(nextLevelFromHistory(3, [100, 100, 50]), 2);
+  assert.equal(nextLevelFromHistory(1, [10]), 1);
+  assert.equal(nextLevelFromHistory(2, []), 2);
+  assert.equal(nextLevelFromHistory(2, [95, 50, 95]), 2);
 });
 
 test("rng helpers are seeded and in range", () => {

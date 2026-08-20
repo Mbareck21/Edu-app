@@ -74,10 +74,12 @@ export function gradeAnswer(q: MathQuestion, input: string): { correct: boolean;
 }
 
 /**
- * Level after a session. `recentPcts` is oldest first, newest last (0..100).
+ * Level after a session. `recentPcts` is oldest first, newest last (0..100) —
+ * the opposite order to nextLevel in lib/models/MathProgress, which is why the
+ * name says where the history comes from.
  * Last 3 sessions all 90+ -> up (max 3). Last session under 60 -> down (min 1).
  */
-export function nextLevel(current: Level, recentPcts: readonly number[]): Level {
+export function nextLevelFromHistory(current: Level, recentPcts: readonly number[]): Level {
   const last3 = recentPcts.slice(-3);
   if (last3.length === 3 && last3.every((p) => p >= 90)) {
     return current === 1 ? 2 : 3;

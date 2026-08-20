@@ -152,10 +152,6 @@ export const BADGES: readonly Badge[] = [
   },
 ];
 
-export function badgeById(id: string): Badge | undefined {
-  return BADGES.find((b) => b.id === id);
-}
-
 // ── Applying a session ────────────────────────────────────────────────────
 
 export type GainedBadge = { id: string; name: string; blurb: string; icon: IconName };
