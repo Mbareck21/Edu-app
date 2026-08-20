@@ -4,9 +4,8 @@ import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { buildWordSearch } from "@/lib/wordsearch";
 import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
-import WorksheetFrame from "@/components/WorksheetFrame";
 import WordSearchGrid from "@/components/WordSearchGrid";
-import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
+import GameFrame from "@/components/games/GameFrame";
 import InteractiveWordSearch from "@/components/InteractiveWordSearch";
 
 export const dynamic = "force-dynamic";
@@ -33,17 +32,24 @@ export default async function WordSearchPage({
 
   if (!result.ok) {
     return (
-      <WorksheetFrame title="Word Search" listName={list.name} backHref={`/lists/${list._id}`}>
-        <section>
-          <h1 className="mb-2 text-2xl font-bold">Word Search — {list.name}</h1>
-          <p className="text-red-600">{result.reason}</p>
-          {result.skipped.length > 0 && (
-            <p className="mt-2 text-sm text-amber-700">
-              Skipped (the word search grid only fits single letter-only words): {result.skipped.join(", ")}.
-            </p>
-          )}
-        </section>
-      </WorksheetFrame>
+      <GameFrame
+        title="Word Search"
+        listName={list.name}
+        backHref={`/words/${list._id}`}
+        color="purple"
+        icon="words"
+        printView={
+          <section>
+            <h1 className="mb-2 text-2xl font-bold">Word Search — {list.name}</h1>
+            <p className="text-red-600">{result.reason}</p>
+            {result.skipped.length > 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                Skipped (the word search grid only fits single letter-only words): {result.skipped.join(", ")}.
+              </p>
+            )}
+          </section>
+        }
+      />
     );
   }
 
@@ -52,36 +58,33 @@ export default async function WordSearchPage({
   const placedWords = result.placements.map((p) => p.word);
 
   return (
-    <PlayProvider>
-      <WorksheetFrame
-        title="Word Search"
-        listName={list.name}
-        backHref={`/lists/${list._id}`}
-        extraHeaderRight={<PlayToggleButton />}
-      >
-        <PlayPaneSwitcher
-          printView={
-            <PrintView
-              listName={list.name}
-              hiddenMessage={list.hiddenMessage}
-              wordsToFind={placedWords.map((w) => w.toUpperCase())}
-              result={result}
-              skipped={result.skipped}
-            />
-          }
-          playView={
-            <InteractiveWordSearch
-              listName={list.name}
-              rows={result.rows}
-              cols={result.cols}
-              grid={result.grid}
-              words={placedWords}
-              skipped={result.skipped}
-            />
-          }
+    <GameFrame
+      title="Word Search"
+      listName={list.name}
+      backHref={`/words/${list._id}`}
+      color="purple"
+      icon="words"
+      printView={
+        <PrintView
+          listName={list.name}
+          hiddenMessage={list.hiddenMessage}
+          wordsToFind={placedWords.map((w) => w.toUpperCase())}
+          result={result}
+          skipped={result.skipped}
         />
-      </WorksheetFrame>
-    </PlayProvider>
+      }
+      playView={
+        <InteractiveWordSearch
+          rows={result.rows}
+          cols={result.cols}
+          grid={result.grid}
+          words={placedWords}
+          skipped={result.skipped}
+          hiddenMessage={list.hiddenMessage}
+          hiddenEmbedded={result.hiddenMessage}
+        />
+      }
+    />
   );
 }
 
