@@ -4,8 +4,7 @@ import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { scrambleAll } from "@/lib/scramble";
 import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
-import WorksheetFrame from "@/components/WorksheetFrame";
-import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
+import GameFrame from "@/components/games/GameFrame";
 import InteractiveScramble from "@/components/InteractiveScramble";
 
 export const dynamic = "force-dynamic";
@@ -27,20 +26,29 @@ export default async function ScramblePage({
   const sampled = sampleWords(list.words, WORD_GAME_SESSION_SIZE);
   const rows = scrambleAll(sampled.map((w) => w.word));
 
+  // The play view shows each word's clue on its card. scrambleAll drops and
+  // reorders nothing but the unusable entries, so match clues back by the
+  // answer it produced rather than by index.
+  const clueFor = new Map<string, string>();
+  for (const w of list.words) {
+    const key = w.word.toUpperCase().replace(/[^A-Z]/g, "");
+    if (key && !clueFor.has(key)) clueFor.set(key, (w.clue || "").trim());
+  }
+  const playRows = rows.map((r) => ({
+    ...r,
+    clue: clueFor.get(r.answer.replace(/[^A-Z]/g, "")) ?? "",
+  }));
+
   return (
-    <PlayProvider>
-      <WorksheetFrame
-        title="Word Scramble"
-        listName={list.name}
-        backHref={`/lists/${list._id}`}
-        extraHeaderRight={<PlayToggleButton />}
-      >
-        <PlayPaneSwitcher
-          printView={<PrintView listName={list.name} rows={rows} />}
-          playView={<InteractiveScramble listName={list.name} rows={rows} />}
-        />
-      </WorksheetFrame>
-    </PlayProvider>
+    <GameFrame
+      title="Word Scramble"
+      listName={list.name}
+      backHref={`/words/${list._id}`}
+      color="green"
+      icon="sparkles"
+      printView={<PrintView listName={list.name} rows={rows} />}
+      playView={<InteractiveScramble rows={playRows} />}
+    />
   );
 }
 
