@@ -12,6 +12,7 @@ import {
   type ScienceUnit,
 } from "@/lib/curriculum";
 import {
+  MAX_GLOSSARY_ENTRIES,
   clampLevel,
   countWords,
   longestSentenceWords,
@@ -62,7 +63,7 @@ const ResponseShape = z.object({
         arabic: z.string().max(80).default(""),
       })
     )
-    .max(8)
+    .max(MAX_GLOSSARY_ENTRIES)
     .default([]),
   questions: z.array(QuestionShape).min(2).max(10),
 });

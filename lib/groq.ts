@@ -211,10 +211,10 @@ questions, in that order, with those types and formats.
    is one beat of the passage, 2-5 sentences long.
 3. Hit the TARGET WORDS given. Under the minimum is a failure.
 4. NO sentence may be longer than MAX SENTENCE WORDS. Count them.
-5. VOCABULARY BUDGET: at most 6 words he is unlikely to know. Every one of
-   those 6 goes in "glossary". Everything else must be common Grade 2-3
-   English. This is the 98%-known-words rule — do not smuggle in hard words
-   and leave them unglossed.
+5. VOCABULARY BUDGET: no more words he is unlikely to know than the
+   UNKNOWN-WORD BUDGET given in the request. Every one of them goes in
+   "glossary". Everything else must be common Grade 2-3 English. This is the
+   98%-known-words rule — do not smuggle in hard words and leave them unglossed.
 6. Use as many of the STUDY WORDS as fit naturally. Prefer them over inventing
    new hard words. Then use 3-5 of the TOPIC WORDS.
 7. Never inline Arabic, parentheses, glosses, or definitions inside the

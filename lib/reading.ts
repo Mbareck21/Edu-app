@@ -6,6 +6,17 @@ import type { ReadingQuestionType } from "@/lib/models/WordList";
 /** The profile's reading ladder runs 1..10 (see lib/rewards.ts). */
 export const MAX_READING_LEVEL = 10;
 
+/**
+ * Hu & Nation 98% coverage: the most words a passage may carry that he will
+ * not know. The single source — the prompt is handed this number, and the
+ * generator validates the glossary against it.
+ */
+export const MAX_UNKNOWN_BUDGET = 6;
+
+/** Glossary cap the generator accepts: the budget plus slack for a model that
+    glosses a word or two more than it was asked to. */
+export const MAX_GLOSSARY_ENTRIES = MAX_UNKNOWN_BUDGET + 2;
+
 /** Story = narrative, info = informational (science / social studies). */
 export type PassageKind = "story" | "info";
 
@@ -39,7 +50,7 @@ export function readingParams(rawLevel: number): ReadingParams {
     minWords: Math.round(targetWords * 0.85),
     maxWords: Math.round(targetWords * 1.25),
     maxSentenceWords: 8 + level,
-    unknownBudget: 6,
+    unknownBudget: MAX_UNKNOWN_BUDGET,
     paragraphs: level <= 2 ? 2 : level <= 5 ? 3 : 4,
   };
 }
