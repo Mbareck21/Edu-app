@@ -175,7 +175,7 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
         <a className="btn-secondary" href={`/lists/${list._id}/crossword`}>Open Crossword</a>
         <a className="btn-secondary" href={`/lists/${list._id}/scramble`}>Open Scramble</a>
         <a className="btn-secondary" href={`/lists/${list._id}/wordsearch`}>Open Word Search</a>
-        <a className="btn-secondary" href={`/lists/${list._id}/reading`}>Open Reading</a>
+        <a className="btn-secondary" href={`/learn/${list._id}/read`}>Open Reading</a>
         <a className="btn-secondary" href={`/lists/${list._id}/flashcards`}>Open Flashcards</a>
       </div>
     </div>
