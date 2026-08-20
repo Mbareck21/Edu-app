@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import MathSession from "@/components/math/MathSession";
+import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level } from "@/lib/math";
 import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
@@ -8,11 +9,6 @@ import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ skill: string }> };
-
-/** One seed per request. The page is dynamic, so every visit gets new questions. */
-function requestSeed(): number {
-  return Date.now();
-}
 
 export async function generateMetadata({ params }: Params) {
   const { skill } = await params;

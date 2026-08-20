@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import ItemRunner from "@/components/items/ItemRunner";
+import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import {
   buildLesson,
@@ -11,11 +12,6 @@ import { mulberry32 } from "@/lib/math/rng";
 import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
-
-/** One seed per request. Every visit builds a fresh session. */
-function requestSeed(): number {
-  return Date.now();
-}
 
 const BEATS = ["review", "new-words", "production"] as const;
 type Beat = (typeof BEATS)[number];

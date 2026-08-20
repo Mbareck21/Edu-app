@@ -4,38 +4,14 @@ import { notFound } from "next/navigation";
 import ItemRunner from "@/components/items/ItemRunner";
 import FlashcardRunner from "@/components/learn/FlashcardRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
+import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
 import { WordList, toClient } from "@/lib/models/WordList";
-import { STEPS, isStepId, type StepId } from "@/lib/types";
+import { isStepId, stepById } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-/** One seed per request. The page is dynamic, so every visit is a new lesson. */
-function requestSeed(): number {
-  return Date.now();
-}
-
-const ACCENT = {
-  flashcards: "blue",
-  match: "green",
-  listen: "green",
-  spell: "green",
-  use: "green",
-  read: "purple",
-  challenge: "gold",
-} as const;
-
-const DONE_TITLE: Record<StepId, string> = {
-  flashcards: "Words learned!",
-  match: "Match done!",
-  listen: "Good ears!",
-  spell: "Spelled it!",
-  use: "You used them!",
-  read: "Reading done!",
-  challenge: "Challenge done!",
-};
 
 export default async function StepPage({
   params,
@@ -71,6 +47,7 @@ export default async function StepPage({
     return <ReadingRunner list={list} />;
   }
 
+  const info = stepById(step);
   const items = buildLesson({
     words: list.words,
     step,
@@ -83,13 +60,13 @@ export default async function StepPage({
       items={items}
       post={{ ref: `${list._id}:${step}`, listId: list._id, step }}
       exitHref={pathHref}
-      accent={ACCENT[step]}
-      title={DONE_TITLE[step]}
+      accent={info.accent}
+      title={info.doneTitle}
       subtitle={list.name}
       primary={{ label: "Back to path", href: pathHref }}
       secondary={{ label: "Again", href: `${pathHref}/${step}?r=${seed}` }}
-      showTimer={step === "challenge"}
-      chest={step === "challenge"}
+      showTimer={info.timed}
+      chest={info.chest}
       fillExamples={needsExamples ? [list._id] : undefined}
       emptyNote={`Add words to ${list.name} first.`}
     />
@@ -102,6 +79,5 @@ export async function generateMetadata({
   params: Promise<{ step: string }>;
 }) {
   const { step } = await params;
-  const name = isStepId(step) ? STEPS.find((s) => s.id === step)?.name : "Lesson";
-  return { title: name ?? "Lesson" };
+  return { title: isStepId(step) ? stepById(step).name : "Lesson" };
 }

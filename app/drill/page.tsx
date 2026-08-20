@@ -1,6 +1,12 @@
 import MathDrillCard from "@/components/drill/MathDrillCard";
 import WordDrillCard from "@/components/drill/WordDrillCard";
-import { MATH_MODES, MIXED_SKILL, bestDrillScore, type MathMode } from "@/components/drill/options";
+import {
+  MATH_MODES,
+  MIXED_SKILL,
+  bestDrillScore,
+  mixedAutoLevel,
+  type MathMode,
+} from "@/components/drill/options";
 import { sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
@@ -14,12 +20,6 @@ import { getProfile } from "@/lib/profile";
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Drill" };
-
-/** Auto level for a mixed drill: the middle of what he is on now. */
-function mixedLevel(levels: number[]): number {
-  if (levels.length === 0) return 1;
-  return Math.max(1, Math.min(3, Math.round(levels.reduce((a, b) => a + b, 0) / levels.length)));
-}
 
 export default async function DrillPage() {
   await connectDB();
@@ -42,7 +42,7 @@ export default async function DrillPage() {
     levels.set(p.skill, p.level);
   }
   const autoLevels: Record<string, number> = {
-    [MIXED_SKILL]: mixedLevel([...levels.values()]),
+    [MIXED_SKILL]: mixedAutoLevel([...levels.values()]),
   };
   for (const skill of MATH_SKILLS) autoLevels[skill.id] = levels.get(skill.id) ?? 1;
 

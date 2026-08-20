@@ -10,16 +10,12 @@ import {
   type VocabMode,
 } from "@/components/drill/options";
 import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/components/drill/picks";
+import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
-
-/** One seed per request. The page is dynamic, so every visit is a new drill. */
-function requestSeed(): number {
-  return Date.now();
-}
 
 export const metadata = { title: "Word drill" };
 

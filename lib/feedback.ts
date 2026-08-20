@@ -3,6 +3,7 @@
 // Reuses /api/tts via playTextThroughTTS so voice praise sounds like the
 // existing AI buddy, and respects the existing mute toggle.
 
+import { fireConfetti } from "@/components/ui/Confetti";
 import { playTextThroughTTS, readAutoPlayPref } from "@/lib/voice";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -46,30 +47,10 @@ function maybeSpeak(text: string, force = false): void {
   playTextThroughTTS(text);
 }
 
-function originOf(el: HTMLElement | null | undefined): { x: number; y: number } {
-  if (!el || typeof window === "undefined") return { x: 0.5, y: 0.6 };
-  const r = el.getBoundingClientRect();
-  return {
-    x: Math.min(1, Math.max(0, (r.left + r.width / 2) / window.innerWidth)),
-    y: Math.min(1, Math.max(0, (r.top + r.height / 2) / window.innerHeight)),
-  };
-}
-
+/** `source` is unused now that fireConfetti owns the burst; kept for callers. */
 export async function celebrate(opts: { source?: HTMLElement | null; big?: boolean; silent?: boolean } = {}): Promise<void> {
   if (typeof window === "undefined") return;
-  try {
-    const { default: confetti } = await import("canvas-confetti");
-    confetti({
-      particleCount: opts.big ? 250 : 80,
-      spread: opts.big ? 180 : 70,
-      origin: originOf(opts.source),
-      scalar: opts.big ? 1.4 : 1.1,
-      disableForReducedMotion: true,
-    });
-  } catch {
-    // canvas-confetti failed to load (rare) — silently skip the visual; voice
-    // is still the meaningful feedback.
-  }
+  await fireConfetti(opts.big ? "big" : "small");
   if (opts.silent) return;
   maybeSpeak(opts.big ? COMPLETION_PHRASE : pickRandom(PRAISES), opts.big);
 }

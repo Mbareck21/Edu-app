@@ -2,20 +2,17 @@ import MathDrillRunner from "@/components/drill/MathDrillRunner";
 import {
   MIXED_SKILL,
   mathHref,
+  mixedAutoLevel,
   parseLength,
   parseLevelChoice,
   parseMathMode,
 } from "@/components/drill/options";
+import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level, type MathSkillId } from "@/lib/math";
 import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
-
-/** One seed per request. The page is dynamic, so every visit is a new drill. */
-function requestSeed(): number {
-  return Date.now();
-}
 
 export const metadata = { title: "Math drill" };
 
@@ -35,9 +32,7 @@ async function autoLevel(skill: MathSkillId | "mixed"): Promise<Level> {
     const found = levels.find((l) => l.skill === skill);
     return (found?.level ?? 1) as Level;
   }
-  if (levels.length === 0) return 1;
-  const mean = levels.reduce((sum, l) => sum + l.level, 0) / levels.length;
-  return Math.max(1, Math.min(3, Math.round(mean))) as Level;
+  return mixedAutoLevel(levels.map((l) => l.level));
 }
 
 export default async function MathDrillPage({ searchParams }: { searchParams: Search }) {

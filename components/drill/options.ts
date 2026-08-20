@@ -140,6 +140,13 @@ export function parseLevelChoice(value: string | undefined): LevelChoice {
 
 export const MIXED_SKILL = "mixed";
 
+/** The level "Auto" picks for a mixed drill: the middle of the levels given. */
+export function mixedAutoLevel(levels: readonly number[]): Level {
+  if (levels.length === 0) return 1;
+  const mean = levels.reduce((sum, l) => sum + l, 0) / levels.length;
+  return Math.max(1, Math.min(3, Math.round(mean))) as Level;
+}
+
 /** Leave `seed` out for a base URL the runner can re-seed on "Again". */
 export function mathHref(opts: {
   skill: string;
