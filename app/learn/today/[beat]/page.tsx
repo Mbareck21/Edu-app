@@ -31,7 +31,9 @@ const TITLE: Record<Beat, string> = {
 };
 
 function needsExamples(list: ClientWordList): boolean {
-  return list.words.some((w) => w.examples.length === 0 || w.family.length === 0);
+  // Only a word with no examples at all is worth a refill — an empty family is
+  // normal for plenty of words.
+  return list.words.some((w) => w.examples.length === 0);
 }
 
 export default async function TodayBeatPage({

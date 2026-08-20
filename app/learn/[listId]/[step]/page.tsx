@@ -50,7 +50,9 @@ export default async function StepPage({
   if (!doc) notFound();
   const list = toClient(doc);
 
-  const needsExamples = list.words.some((w) => w.examples.length === 0 || w.family.length === 0);
+  // Only a word with no examples at all is worth a refill — an empty family is
+  // normal for plenty of words.
+  const needsExamples = list.words.some((w) => w.examples.length === 0);
   const pathHref = `/learn/${list._id}`;
 
   const seed = requestSeed();

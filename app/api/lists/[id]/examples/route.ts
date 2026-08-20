@@ -89,8 +89,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const doc = await WordList.findById(id);
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  // Missing = no examples at all. A parent who wrote one sentence keeps it,
+  // and an empty family alone is never a reason to call the model.
   const missing = (doc.words ?? [])
-    .filter((w) => (w.examples?.length ?? 0) < 3 || (w.family?.length ?? 0) === 0)
+    .filter((w) => (w.examples?.length ?? 0) === 0)
     .map((w) => String(w.word).trim().toLowerCase())
     .filter(Boolean);
 
@@ -105,8 +107,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const filled = new Map<string, Filled>();
-  try {
-    for (const batch of batches) {
+  // A batch that blows up stops the run but keeps what earlier batches filled;
+  // the rest waits for the next visit.
+  let failure: string | null = null;
+  for (const batch of batches) {
+    try {
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
         messages: [
@@ -119,30 +124,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         response_format: { type: "json_object" },
         temperature: 0.4,
         max_tokens: 5000,
-      reasoning_effort: "low",
+        reasoning_effort: "low",
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
       for (const [key, value] of parseBatch(text)) {
         if (batch.includes(key)) filled.set(key, value);
       }
+    } catch (err) {
+      failure = err instanceof Error ? err.message : "examples failed";
+      break;
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "examples failed";
-    return NextResponse.json({ error: msg }, { status: 502 });
+  }
+
+  if (failure && filled.size === 0) {
+    return NextResponse.json({ error: failure }, { status: 502 });
   }
 
   let touched = 0;
   doc.words.forEach((w, index) => {
     const got = filled.get(String(w.word).trim().toLowerCase());
     if (!got) return;
-    // Never overwrite what a parent already wrote.
-    if ((w.examples?.length ?? 0) < 3 && got.examples.length > 0) {
-      doc.set(`words.${index}.examples`, got.examples);
-      touched++;
-    }
+    // Never overwrite what a parent already wrote. The family rides along with
+    // a fresh examples fill; it is never written on its own.
+    if ((w.examples?.length ?? 0) > 0 || got.examples.length === 0) return;
+    doc.set(`words.${index}.examples`, got.examples);
+    touched++;
     if ((w.family?.length ?? 0) === 0 && got.family.length > 0) {
       doc.set(`words.${index}.family`, got.family);
-      touched++;
     }
   });
 
