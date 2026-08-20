@@ -4,7 +4,7 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { READING_THEMES, SCIENCE_UNITS } from "@/lib/curriculum";
-import { groq, CLUE_MODEL, CLUE_SYSTEM_PROMPT } from "@/lib/groq";
+import { groq, CLUE_MODEL, CLUE_SYSTEM_PROMPT, getClientIp, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -56,6 +56,14 @@ async function fillClues(words: string[]): Promise<Record<string, string>> {
 }
 
 export async function POST(req: Request) {
+  const rl = rateLimit(getClientIp(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
