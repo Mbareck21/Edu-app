@@ -4,9 +4,8 @@ import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { buildCrossword } from "@/lib/crossword";
 import { sampleWords, shuffle, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
-import WorksheetFrame from "@/components/WorksheetFrame";
 import CrosswordGrid from "@/components/CrosswordGrid";
-import { PlayProvider, PlayToggleButton, PlayPaneSwitcher } from "@/components/PlayToggle";
+import GameFrame from "@/components/games/GameFrame";
 import InteractiveCrossword from "@/components/InteractiveCrossword";
 
 export const dynamic = "force-dynamic";
@@ -31,40 +30,42 @@ export default async function CrosswordPage({
   // If the crossword generator fell back, no interactive mode either.
   if (!result.ok) {
     return (
-      <WorksheetFrame title="Crossword" listName={list.name} backHref={`/lists/${list._id}`}>
-        <FallbackList
-          list={{ name: list.name, words: sampled }}
-          reason={result.reason}
-          skipped={result.skipped}
-        />
-      </WorksheetFrame>
+      <GameFrame
+        title="Crossword"
+        listName={list.name}
+        backHref={`/words/${list._id}`}
+        color="blue"
+        icon="words"
+        printView={
+          <FallbackList
+            list={{ name: list.name, words: sampled }}
+            reason={result.reason}
+            skipped={result.skipped}
+          />
+        }
+      />
     );
   }
 
   return (
-    <PlayProvider>
-      <WorksheetFrame
-        title="Crossword"
-        listName={list.name}
-        backHref={`/lists/${list._id}`}
-        extraHeaderRight={<PlayToggleButton />}
-      >
-        <PlayPaneSwitcher
-          printView={<PrintView listName={list.name} result={result} />}
-          playView={
-            <InteractiveCrossword
-              listName={list.name}
-              rows={result.rows}
-              cols={result.cols}
-              grid={result.grid}
-              placed={result.placed}
-              across={result.across}
-              down={result.down}
-            />
-          }
+    <GameFrame
+      title="Crossword"
+      listName={list.name}
+      backHref={`/words/${list._id}`}
+      color="blue"
+      icon="words"
+      printView={<PrintView listName={list.name} result={result} />}
+      playView={
+        <InteractiveCrossword
+          rows={result.rows}
+          cols={result.cols}
+          grid={result.grid}
+          placed={result.placed}
+          across={result.across}
+          down={result.down}
         />
-      </WorksheetFrame>
-    </PlayProvider>
+      }
+    />
   );
 }
 
