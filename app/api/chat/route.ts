@@ -39,7 +39,8 @@ export async function POST(req: Request) {
       messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...parsed.data.messages],
       stream: true,
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 1000,
+      reasoning_effort: "low",
     });
 
     const encoder = new TextEncoder();
