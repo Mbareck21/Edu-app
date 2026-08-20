@@ -86,7 +86,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   await connectDB();
-  const doc = await WordList.findById(id);
+  // readingHistory is server-only and can be long; nothing here reads it.
+  const doc = await WordList.findById(id).select("-readingHistory");
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Missing = no examples at all. A parent who wrote one sentence keeps it,
@@ -97,8 +98,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .filter(Boolean);
 
   if (missing.length === 0) {
-    const fresh = await WordList.findById(id).lean();
-    return NextResponse.json(toClient(fresh!));
+    return NextResponse.json(toClient(doc.toObject()));
   }
 
   const batches: string[][] = [];
@@ -159,6 +159,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     await doc.save();
   }
 
-  const fresh = await WordList.findById(id).lean();
-  return NextResponse.json(toClient(fresh!));
+  return NextResponse.json(toClient(doc.toObject()));
 }

@@ -28,6 +28,7 @@ import {
   rateLimit,
   getClientIp,
 } from "@/lib/groq";
+import { sampleWords, shuffle } from "@/lib/session-sample";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -79,16 +80,6 @@ type HistoryEntry = {
   generatedAt: Date;
 };
 
-function sample<T>(items: readonly T[], n: number): T[] {
-  if (items.length <= n) return [...items];
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy.slice(0, n);
-}
-
 /**
  * Shuffle the options and report where the right one landed. Models park the
  * correct answer at index 0 far too often; this kills the position tell.
@@ -98,7 +89,7 @@ function shuffleOptions(options: string[], answerIndex: number): {
   answerIndex: number;
 } {
   const answer = options[answerIndex];
-  const shuffled = sample(options, options.length);
+  const shuffled = shuffle(options);
   return { options: shuffled, answerIndex: Math.max(0, shuffled.indexOf(answer)) };
 }
 
@@ -184,17 +175,17 @@ export async function POST(req: Request) {
   const useScience = kind === "info" && scienceUnit !== null;
 
   const topic = useScience && scienceUnit ? scienceUnit.title : theme.title;
-  const topicWords = sample(
+  const topicWords = sampleWords(
     useScience && scienceUnit ? scienceUnit.words : theme.words,
     5
   );
   const topicIdea =
     useScience && scienceUnit
-      ? sample(scienceUnit.passageIdeas, 1)[0]
-      : sample(theme.prompts.slice(1), 1)[0];
+      ? sampleWords(scienceUnit.passageIdeas, 1)[0]
+      : sampleWords(theme.prompts.slice(1), 1)[0];
   const essentialQuestion = theme.prompts[0];
 
-  const studyWords = sample(allWords, MAX_STUDY_WORDS);
+  const studyWords = sampleWords(allWords, MAX_STUDY_WORDS);
   const plan = questionPlan(level, kind, useScience);
 
   const historyBlock =
@@ -360,9 +351,5 @@ Write the passage and the questions now. Strict JSON only.`;
 
   await doc.save();
 
-  const fresh = await WordList.findById(parsed.data.listId).lean();
-  if (!fresh) {
-    return NextResponse.json({ error: "list disappeared" }, { status: 500 });
-  }
-  return NextResponse.json(toClient(fresh));
+  return NextResponse.json(toClient(doc.toObject()));
 }
