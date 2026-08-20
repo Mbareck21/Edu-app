@@ -87,7 +87,8 @@ export async function POST(req: Request) {
   const name = listName(source.title);
 
   // One tap, one list: tapping again opens the list that is already there.
-  const existing = await WordList.findOne({ name }).lean();
+  // readingHistory is server-only and never reaches the client shape.
+  const existing = await WordList.findOne({ name }).select("-readingHistory").lean();
   if (existing) {
     return NextResponse.json(toClient(existing), { status: 200 });
   }

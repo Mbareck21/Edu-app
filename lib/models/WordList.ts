@@ -427,7 +427,7 @@ function toClientWord(w: any): ClientWord {
 
 // pathProgress comes back as a plain object from .lean() and as a Map from a
 // hydrated doc — normalise both.
-function normalizePathProgress(raw: unknown): PathProgress {
+export function normalizePathProgress(raw: unknown): PathProgress {
   const out: PathProgress = {};
   if (!raw) return out;
   const entries: [string, unknown][] =
