@@ -4,6 +4,16 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Quest: review fixes, cleanup sweep, word-game redesign — 2026-08-19 (later)
+
+- **Status:** Shipped (pushed to `main` → Vercel; verified live).
+- **Review fixes (10 verified findings + 2 extras):** winnable multi-word spelling; no invented word-part feedback; SW v2 never caches login redirects (bounded shell cache); print un-capped from the 480px shell; WPM clamped; offline queue drops 400s; idempotent session posts via client sessionId + Profile.recentSessionIds; per-word listId on drill flashcard results; examples route never overwrites parent sentences and stops refiring on empty families (seed route rate-limited); legacy reading page retired; chat got reasoning headroom; school-week lookups use Chicago time.
+- **Cleanup sweep:** Step registry now carries scored/accent/doneTitle/timed/chest policy (API + pages read it); VocabDrillRunner is a thin ItemRunner wrapper; shared math QuestionPad; math units derive from FPS_QUARTERS; reading unknown-word budget single-sourced; shared skill normalizer (missing dueAt = due now); lean `getListSummaries()` powers Learn + Drill tabs; MCQ options now actually shuffle (sample() had a no-op path); dead exports dropped.
+- **Word games redesigned** (print output byte-identical): shared GameFrame chrome with Play/Worksheet toggle + print button; crossword = blue tiles + fixed clue card; scramble = tap-the-tiles; word search = purple highlighter capsules + hidden message revealed letter-by-letter in play mode.
+- **Verified:** 144 tests, build green, live smoke of every tab + all three games (200s), prod idempotency replay = 0 XP, test scores wiped so Nour starts fresh.
+
+---
+
 ## Quest: full app rebuild — 2026-08-19
 
 - **Status:** Built and verified locally (not yet pushed; MongoDB Atlas cluster in .env.local no longer resolves — waiting on a new connection string).
