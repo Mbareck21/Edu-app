@@ -71,7 +71,7 @@ export default async function TodayBeatPage({
       <ItemRunner
         {...shared}
         items={items}
-        post={{ ref: "quest:review", perList: true }}
+        post={{ ref: "quest:review" }}
         accent="green"
         title={TITLE.review}
         subtitle="Everything that was due today."

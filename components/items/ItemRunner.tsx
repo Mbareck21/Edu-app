@@ -7,9 +7,11 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
-import LessonComplete from "@/components/ui/LessonComplete";
+import LessonComplete, { type CompleteAction } from "@/components/ui/LessonComplete";
+import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
+import { clock } from "@/components/ui/time";
 import type { AccentColor } from "@/components/ui/colors";
 import { gradeItem, reEnqueue, type LessonItem } from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
@@ -29,8 +31,8 @@ export type RunnerPost = {
   ref: string;
   listId?: string;
   step?: StepId;
-  /** No longer needed: each word result carries its own listId. Kept for compat. */
-  perList?: boolean;
+  /** No `listId`: take the one most answers came from (drills across lists). */
+  deriveListId?: boolean;
 };
 
 export type ItemRunnerProps = {
@@ -41,14 +43,22 @@ export type ItemRunnerProps = {
   accent?: AccentColor;
   title: string;
   subtitle?: string;
-  primary: { label: string; href: string };
-  secondary?: { label: string; href: string };
+  primary: CompleteAction;
+  secondary?: CompleteAction;
   showTimer?: boolean;
   /** Challenge step: pass at 80% and the chest opens. */
   chest?: boolean;
   /** Lists whose words still need AI examples. Filled once, in the background. */
   fillExamples?: string[];
   emptyNote?: string;
+  /** Progress bar label. */
+  progressLabel?: string;
+  /** Live "done/total" and a streak flame in the header — drills show these. */
+  counter?: boolean;
+  /** Spelling test: list every word right or wrong at the end. */
+  report?: boolean;
+  /** Replaces "Go back" on the empty screen. */
+  emptyAction?: { label: string; onClick: () => void };
 };
 
 type Attempt = {
@@ -65,12 +75,34 @@ type Outcome = {
   ms: number;
   answered: number;
   correct: number;
+  /** Spelling test report: one line per word, first try only. */
+  words: { word: string; correct: boolean }[];
 };
+
+/** One line per word, first try only — what the spelling test reports. */
+function firstTryWords(attempts: Attempt[]): { word: string; correct: boolean }[] {
+  const seen = new Map<string, boolean>();
+  for (const a of attempts) {
+    if (!a.word || seen.has(a.word)) continue;
+    seen.set(a.word, a.correct);
+  }
+  return [...seen].map(([word, correct]) => ({ word, correct }));
+}
+
+/** The list most answers came from — the drill's stand-in for a chosen list. */
+function mainListId(attempts: Attempt[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const a of attempts) {
+    if (a.listId) counts.set(a.listId, (counts.get(a.listId) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+}
 
 /** One post; each word result carries its own list so every schedule moves. */
 function payloads(post: RunnerPost, all: Attempt[], ms: number): SessionResult[] {
   const answered = all.length;
   const correct = all.filter((a) => a.correct).length;
+  const listId = post.listId ?? (post.deriveListId ? mainListId(all) : undefined);
   return [
     {
       kind: "vocab",
@@ -80,7 +112,7 @@ function payloads(post: RunnerPost, all: Attempt[], ms: number): SessionResult[]
       fastCount: all.filter((a) => a.fast).length,
       ms,
       perfect: answered > 0 && correct === answered,
-      ...(post.listId ? { listId: post.listId } : {}),
+      ...(listId ? { listId } : {}),
       ...(post.step ? { step: post.step } : {}),
       wordResults: all
         .filter((a): a is Attempt & { word: string } => !!a.word)
@@ -88,7 +120,7 @@ function payloads(post: RunnerPost, all: Attempt[], ms: number): SessionResult[]
           word: a.word,
           skill: a.skill,
           correct: a.correct,
-          ...(a.listId && a.listId !== post.listId ? { listId: a.listId } : {}),
+          ...(a.listId ? { listId: a.listId } : {}),
         })),
     } satisfies SessionResult,
   ];
@@ -107,13 +139,18 @@ export default function ItemRunner({
   chest = false,
   fillExamples,
   emptyNote = "Nothing to practise here yet.",
+  progressLabel,
+  counter = false,
+  report = false,
+  emptyAction,
 }: ItemRunnerProps) {
   const [queue, setQueue] = useState<LessonItem[]>(items);
   const [chosen, setChosen] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [almost, setAlmost] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [seconds, setSeconds] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [streak, setStreak] = useState(0);
   /** Bumped every time the queue moves, so a returning item starts fresh. */
   const [round, setRound] = useState(0);
 
@@ -152,7 +189,7 @@ export default function ItemRunner({
   useEffect(() => {
     if (!showTimer || done) return;
     const id = setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt.current) / 1000));
+      setElapsed(Date.now() - startedAt.current);
     }, 1000);
     return () => clearInterval(id);
   }, [showTimer, done]);
@@ -196,9 +233,16 @@ export default function ItemRunner({
         badges.push(...res.gained.newBadges);
       }
       sum.newBadges = badges;
-      setOutcome({ gained: sum, saved, ms, answered, correct });
+      setOutcome({
+        gained: sum,
+        saved,
+        ms,
+        answered,
+        correct,
+        words: report ? firstTryWords(all) : [],
+      });
     })();
-  }, [done, chest, post]);
+  }, [done, chest, post, report]);
 
   function onAnswer(given: string) {
     if (!current || feedback || current.kind === "learn-card") return;
@@ -222,6 +266,7 @@ export default function ItemRunner({
         listId: current.listId,
       });
     }
+    setStreak((s) => (right ? s + 1 : 0));
 
     if (right) {
       setFeedback({
@@ -259,8 +304,13 @@ export default function ItemRunner({
         <RunnerHeader href={exitHref} value={0} color={accent} />
         <Card className="mt-8 space-y-3 text-center">
           <p className="font-display text-lg font-bold">{emptyNote}</p>
-          <Button color={accent} size="lg" fullWidth onClick={() => window.history.back()}>
-            Go back
+          <Button
+            color={accent}
+            size="lg"
+            fullWidth
+            onClick={emptyAction ? emptyAction.onClick : () => window.history.back()}
+          >
+            {emptyAction?.label ?? "Go back"}
           </Button>
         </Card>
       </div>
@@ -295,6 +345,27 @@ export default function ItemRunner({
             <p className="font-body text-sm">You finished this unit.</p>
           </Card>
         ) : null}
+        {outcome.words.length > 0 ? (
+          <Card className="mt-4">
+            <p className="font-display text-lg font-bold">Your spelling</p>
+            <ul className="mt-2 space-y-1.5">
+              {outcome.words.map((w) => (
+                <li key={w.word} className="flex items-center gap-2">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                    style={{
+                      background: w.correct ? "var(--color-green-soft)" : "var(--color-coral-soft)",
+                      color: w.correct ? "var(--color-green-dark)" : "var(--color-coral-dark)",
+                    }}
+                  >
+                    <Icon name={w.correct ? "check" : "x"} size={16} />
+                  </span>
+                  <span className="font-display text-base font-bold lowercase">{w.word}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
         <LessonComplete
           title={title}
           subtitle={subtitle}
@@ -318,6 +389,7 @@ export default function ItemRunner({
         href={exitHref}
         value={progress}
         color={accent}
+        label={progressLabel}
         right={
           showTimer ? (
             <span
@@ -325,7 +397,21 @@ export default function ItemRunner({
               style={{ color: "var(--color-muted)" }}
             >
               <Icon name="clock" size={16} />
-              {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+              {clock(elapsed)}
+            </span>
+          ) : counter ? (
+            <span className="flex items-center gap-2">
+              {streak >= 3 ? (
+                <Pill color="flame" variant="soft" icon="flame" size="sm">
+                  {streak}
+                </Pill>
+              ) : null}
+              <span
+                className="font-display text-sm font-bold"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {total - remaining}/{total}
+              </span>
             </span>
           ) : undefined
         }
