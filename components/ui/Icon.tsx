@@ -51,9 +51,6 @@ const PATHS = {
   arrowLeft: ["M19.6 12H5.2", "M11 6.4 5.2 12 11 17.6"],
   backspace: ["M9.4 5.4h10.2v13.2H9.4L3.6 12z", "M12.6 9.4 17.4 14.6", "M17.4 9.4l-4.8 5.2"],
   clock: ["M12 20.4a8.4 8.4 0 1 0 0-16.8 8.4 8.4 0 0 0 0 16.8z", "M12 7.6V12l3.2 2"],
-  heart: [
-    "M12 20.2C10.6 19 4.4 14.9 4.4 10.6a4.3 4.3 0 0 1 7.6-2.8 4.3 4.3 0 0 1 7.6 2.8c0 4.3-6.2 8.4-7.6 9.6z",
-  ],
   plus: ["M12 5v14", "M5 12h14"],
   trash: ["M4.4 6.8h15.2", "M9.6 6.8V4.2h4.8v2.6", "M6.6 6.8l1 13.4h8.8l1-13.4", "M10.2 10.8v6", "M13.8 10.8v6"],
   edit: ["M4 20.2l1-4.3L15.5 5.4a2.3 2.3 0 0 1 3.2 3.2L8.2 19.2z", "M13.9 7l3.2 3.2"],
@@ -82,15 +79,13 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export const ICON_NAMES = Object.keys(PATHS) as IconName[];
-
 export type IconProps = {
   name: IconName;
   /** Pixel box. Stroke stays proportional. */
   size?: number;
   className?: string;
   strokeWidth?: number;
-  /** Fill the shape with currentColor — good for star / flame / heart. */
+  /** Fill the shape with currentColor — good for star / flame. */
   filled?: boolean;
 };
 

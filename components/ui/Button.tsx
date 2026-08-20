@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, CSSProperties } from "react";
 
 import { tone, type AccentColor } from "@/components/ui/colors";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost";
+export type ButtonVariant = "primary" | "secondary";
 export type ButtonSize = "md" | "lg";
 
 export type ButtonStyleOptions = {
@@ -32,7 +32,7 @@ export function buttonClass({
   fullWidth = false,
   className = "",
 }: ButtonStyleOptions = {}): string {
-  const depth = variant === "ghost" ? "btn-3d-flat" : size === "lg" ? "btn-3d-lg" : "";
+  const depth = size === "lg" ? "btn-3d-lg" : "";
   return [
     BASE,
     SIZE[size],
@@ -55,15 +55,12 @@ export function buttonStyle({
   if (variant === "primary") {
     return { background: t.base, color: t.on, ["--btn-shade" as string]: t.dark };
   }
-  if (variant === "secondary") {
-    return {
-      background: "#fff",
-      color: t.onSoft,
-      borderColor: "var(--color-line)",
-      ["--btn-shade" as string]: "var(--color-line)",
-    };
-  }
-  return { background: "transparent", color: t.onSoft };
+  return {
+    background: "#fff",
+    color: t.onSoft,
+    borderColor: "var(--color-line)",
+    ["--btn-shade" as string]: "var(--color-line)",
+  };
 }
 
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "color"> &
