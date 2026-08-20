@@ -103,9 +103,15 @@ const ProfileSchema = new Schema(
     stats: { type: StatsSchema, default: () => ({}) },
     activity: { type: [ActivitySchema], default: [] },
     reading: { type: ReadingSchema, default: () => ({}) },
+    // Ids of sessions already applied, newest first, capped at RECENT_SESSION_IDS.
+    // Server-only: never part of ClientProfile.
+    recentSessionIds: { type: [String], default: [] },
   },
   { timestamps: true }
 );
+
+/** How many applied session ids we remember for de-duplication. */
+export const RECENT_SESSION_IDS = 100;
 
 export type ProfileDoc = InferSchemaType<typeof ProfileSchema> & { _id: unknown };
 
