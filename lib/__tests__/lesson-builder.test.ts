@@ -6,6 +6,7 @@ import {
   gradeItem,
   latinPartsOf,
   levenshtein,
+  makeSpell,
   makeWrite,
   usableExamples,
   type AnswerableItem,
@@ -329,12 +330,34 @@ test("choice items are exact match, write items use the typed grader", () => {
   assert.equal(gradeItem(choice, `${choice.answer}x`), "wrong");
 });
 
+test("a two-word answer is winnable from its tiles and from typing", () => {
+  const w = seen("rock layer", 3);
+  const spell = makeSpell(w, { words: [w] }, mulberry32(1));
+  // The tiles carry no space, so the built answer never has one.
+  assert.equal(spell.tiles.length, "rocklayer".length);
+  assert.equal(gradeItem(spell, "layerrock"), "wrong");
+  assert.equal(gradeItem(spell, "rocklayer"), "correct");
+  assert.equal(gradeItem(spell, "rock layer"), "correct");
+  assert.equal(spell.answer, "rock layer");
+
+  const write = makeWrite(w, { words: [w] });
+  assert.equal(gradeItem(write, "rocklayer"), "correct");
+  assert.equal(gradeItem(write, "rock layer"), "correct");
+  assert.equal(gradeItem(write, "rock  layer "), "correct");
+  assert.equal(gradeItem(write, "rocklayes"), "almost");
+  assert.equal(write.answer, "rock layer");
+});
+
 test("latin parts split only when the split is safe", () => {
   assert.deepEqual(latinPartsOf("helpless"), ["help", "-less"]);
   assert.deepEqual(latinPartsOf("impossible"), ["im-", "possible"]);
   assert.deepEqual(latinPartsOf("rebuild"), ["re-", "build"]);
   assert.deepEqual(latinPartsOf("cat"), []);
   assert.deepEqual(latinPartsOf("under"), []);
+  // Not curated examples — a length guess would invent parts that are not there.
+  assert.deepEqual(latinPartsOf("mother"), []);
+  assert.deepEqual(latinPartsOf("corner"), []);
+  assert.deepEqual(latinPartsOf("interest"), []);
 });
 
 test("typed dictation names the word parts in its feedback", () => {

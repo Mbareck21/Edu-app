@@ -215,6 +215,14 @@ export function normalizeAnswer(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Spelling answers ignore spaces entirely: the tiles for "rock layer" carry no
+ * space, so a built answer never has one. Typed answers accept either.
+ */
+export function spellingKey(text: string): string {
+  return normalizeAnswer(text).replace(/\s+/g, "");
+}
+
 /** Edit distance. Used to spot a one-letter spelling slip. */
 export function levenshtein(a: string, b: string): number {
   const s = a ?? "";
@@ -248,8 +256,8 @@ export const ALMOST_MIN_LENGTH = 4;
  * buys exactly one more try; after that it is wrong.
  */
 export function gradeTyped(answer: string, given: string, retried = false): Grade {
-  const a = normalizeAnswer(answer);
-  const g = normalizeAnswer(given);
+  const a = spellingKey(answer);
+  const g = spellingKey(given);
   if (a === g) return "correct";
   if (retried) return "wrong";
   if (a.length >= ALMOST_MIN_LENGTH && levenshtein(a, g) === 1) return "almost";
@@ -260,6 +268,10 @@ export function gradeTyped(answer: string, given: string, retried = false): Grad
 export function gradeItem(item: AnswerableItem, given: string, retried = false): Grade {
   if (item.kind === "write" || (item.kind === "listen" && item.variant === "type")) {
     return gradeTyped(item.answer, given, retried);
+  }
+  if (item.kind === "spell") {
+    // Tiles for a two-word answer carry no space, so grade without one.
+    return spellingKey(item.answer) === spellingKey(given) ? "correct" : "wrong";
   }
   return normalizeAnswer(item.answer) === normalizeAnswer(given) ? "correct" : "wrong";
 }
@@ -282,8 +294,7 @@ function partVariants(part: string): string[] {
 /**
  * Split a word into its Latin parts, if it clearly has any.
  * Conservative on purpose: a wrong split teaches the wrong thing, so a word
- * only splits when it is a published example of the part, or when what is
- * left over is long enough to be a real base.
+ * only splits when it is a published example of the part.
  */
 export function latinPartsOf(word: string): string[] {
   const w = word.trim().toLowerCase();
@@ -304,21 +315,8 @@ export function latinPartsOf(word: string): string[] {
     }
   }
 
-  // Otherwise fall back on length: a real base is at least four letters.
-  for (const entry of SUFFIXES) {
-    for (const v of partVariants(entry.part)) {
-      if (!w.endsWith(v)) continue;
-      const base = w.slice(0, w.length - v.length);
-      if (base.length >= 4) return [base, `-${v}`];
-    }
-  }
-  for (const entry of PREFIXES) {
-    for (const v of partVariants(entry.part)) {
-      if (!w.startsWith(v)) continue;
-      const rest = w.slice(v.length);
-      if (rest.length >= 5) return [`${v}-`, rest];
-    }
-  }
+  // Nothing curated says this word has parts, so it gets none. Guessing from
+  // length invents morphology: "mother" is not moth + -er.
   return [];
 }
 
