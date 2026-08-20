@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
+import { todayKey } from "@/lib/day";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfile } from "@/lib/profile";
 import {
@@ -176,7 +177,7 @@ export async function POST(req: Request) {
 
   // What the class is doing this week. Informational passages ride the science
   // unit when there is one; stories ride the Benchmark reading theme.
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayKey();
   const theme: ReadingTheme = themeForWeek(todayISO);
   const scienceUnit: ScienceUnit | null = scienceUnitForWeek(todayISO);
   const useScience = kind === "info" && scienceUnit !== null;

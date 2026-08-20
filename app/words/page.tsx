@@ -14,6 +14,7 @@ import {
   themeForWeek,
 } from "@/lib/curriculum";
 import { connectDB } from "@/lib/db";
+import { todayKey } from "@/lib/day";
 import { countKnowledge } from "@/lib/mastery";
 import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
 
@@ -76,7 +77,7 @@ function PrintLink({ href, label }: { href: string; label: string }) {
 
 function seedOptions(lists: ClientWordList[]): SeedOption[] {
   const byName = new Map(lists.map((l) => [l.name, l._id]));
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = todayKey();
   const currentScience = scienceUnitForWeek(todayISO);
   const currentTheme = themeForWeek(todayISO);
 

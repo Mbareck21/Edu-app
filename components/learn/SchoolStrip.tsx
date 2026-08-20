@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import Icon from "@/components/ui/Icon";
 import { ELA_STANDARDS, currentQuarter, scienceUnitForWeek } from "@/lib/curriculum";
+import { todayKey } from "@/lib/day";
 import { currentUnit } from "@/lib/math";
 
 /** First clause only — the strip has one line per subject. */
@@ -15,7 +16,7 @@ function shortPlain(plain: string): string {
  * Small on purpose — it frames the work, it is not the work.
  */
 export default function SchoolStrip({ href }: { href: string }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey();
   const quarter = currentQuarter(today);
   const ela = ELA_STANDARDS.filter(
     (s) => quarter !== "summer" && s.quarters.includes(quarter)
