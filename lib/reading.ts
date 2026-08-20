@@ -208,10 +208,14 @@ export function longestSentenceWords(text: string): number {
   return splitSentences(text).reduce((max, s) => Math.max(max, countWords(s)), 0);
 }
 
+/** Highest wpm the server will store. Matches the zod max on the session route. */
+export const MAX_WPM = 1000;
+
 /** Words per minute for a timed read. 0 when the timing is unusable. */
 export function wordsPerMinute(wordsCount: number, ms: number): number {
   if (wordsCount <= 0 || ms < 2000) return 0;
-  return Math.round(wordsCount / (ms / 60000));
+  const wpm = Math.round(wordsCount / (ms / 60000));
+  return Math.min(MAX_WPM, Math.max(0, wpm));
 }
 
 /**
