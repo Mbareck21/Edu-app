@@ -291,6 +291,11 @@ h3,
     background: white !important;
     color: black !important;
   }
+  /* The phone-width shell must not cap printed worksheets. */
+  .app-shell {
+    max-width: none !important;
+    box-shadow: none !important;
+  }
   .no-print {
     display: none !important;
   }

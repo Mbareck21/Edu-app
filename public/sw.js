@@ -4,7 +4,7 @@
    - cache-first for hashed build assets and Google font files
    Nothing here caches API responses — progress must come from the server. */
 
-const VERSION = "quest-v1";
+const VERSION = "quest-v2";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -14,7 +14,14 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(SHELL);
-      await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
+      // cache.add would happily store a login redirect when the user is not
+      // signed in yet; fetch each page and keep only real, non-redirected 200s.
+      await Promise.allSettled(
+        PRECACHE.map(async (url) => {
+          const response = await fetch(url, { credentials: "include" });
+          if (response.ok && !response.redirected) await cache.put(url, response);
+        })
+      );
       await self.skipWaiting();
     })()
   );
@@ -49,13 +56,18 @@ function networkFirst(request) {
   return (async () => {
     try {
       const response = await fetch(request);
-      if (response && response.ok) {
+      const path = new URL(request.url).pathname;
+      // Only refresh the known shell pages, and never store a redirected
+      // response (e.g. the login redirect) — it would poison the offline shell.
+      if (response && response.ok && !response.redirected && PRECACHE.includes(path)) {
         const cache = await caches.open(SHELL);
-        cache.put(request, response.clone());
+        cache.put(path, response.clone());
       }
       return response;
     } catch {
-      const cached = await caches.match(request);
+      const cached =
+        (await caches.match(new URL(request.url).pathname)) ||
+        (await caches.match(request));
       if (cached) return cached;
       const offline = await caches.match("/offline");
       if (offline) return offline;
