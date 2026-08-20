@@ -102,10 +102,6 @@ h3,
 .btn-3d-lg {
   --btn-depth: 6px;
 }
-.btn-3d-flat {
-  --btn-depth: 0px;
-}
-
 /* A card that answers to a tap the same way a button does. */
 .press-3d {
   --btn-depth: 4px;
