@@ -14,7 +14,7 @@ import Icon from "@/components/ui/Icon";
 import { connectDB } from "@/lib/db";
 import { MATH_SKILLS } from "@/lib/math";
 import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { getListSummaries } from "@/lib/lists";
 import { getProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
@@ -23,16 +23,15 @@ export const metadata = { title: "Drill" };
 
 export default async function DrillPage() {
   await connectDB();
-  const [listDocs, mathDocs, profile] = await Promise.all([
-    WordList.find().sort({ updatedAt: -1 }).lean(),
+  const [summaries, mathDocs, profile] = await Promise.all([
+    getListSummaries(),
     MathProgress.find().lean(),
     getProfile(),
   ]);
 
   const now = new Date();
-  const lists = listDocs
-    .map(toClient)
-    .filter((l) => l.words.length > 0)
+  const lists = summaries
+    .filter((l) => l.wordCount > 0)
     .map((l) => ({ listId: l._id, name: l.name, words: l.words }));
   const counts = sourceCounts(lists, now);
 

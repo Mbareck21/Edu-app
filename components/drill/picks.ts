@@ -23,18 +23,22 @@ export type DrillList = {
   words: ClientWord[];
 };
 
+/** The slice of a word the counters need — full ClientWords satisfy it too. */
+export type SkillsOnly = Pick<ClientWord, "skills">;
+export type CountableList = { listId: string; name: string; words: SkillsOnly[] };
+
 export type PickedWord = {
   word: ClientWord;
   pool: ItemPool;
 };
 
 /** Any skill still under streak 2. */
-export function isWeak(word: ClientWord): boolean {
+export function isWeak(word: SkillsOnly): boolean {
   return SKILL_IDS.some((id) => word.skills[id].streak < WEAK_STREAK);
 }
 
 /** Any skill due for review right now. */
-export function isDue(word: ClientWord, now: Date): boolean {
+export function isDue(word: SkillsOnly, now: Date): boolean {
   return SKILL_IDS.some((id) => skillDue(word.skills[id], now));
 }
 
@@ -46,7 +50,7 @@ export type SourceCounts = {
 };
 
 /** The numbers on the source chips. */
-export function sourceCounts(lists: DrillList[], now: Date): SourceCounts {
+export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
   let all = 0;
   let weak = 0;
   let due = 0;

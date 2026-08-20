@@ -9,8 +9,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import TopBar from "@/components/ui/TopBar";
 import { todayKey } from "@/lib/day";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { getListSummaries } from "@/lib/lists";
 import { getProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +18,7 @@ export const metadata = { title: "Learn" };
 
 export default async function LearnPage() {
   const profile = await getProfile();
-  await connectDB();
-  const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
-  const lists = docs.map(toClient);
+  const lists = await getListSummaries();
 
   // The unit in play: the list the parent touched last.
   const unit = lists.find((l) => l.words.length > 0) ?? lists[0] ?? null;

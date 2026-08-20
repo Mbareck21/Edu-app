@@ -4,16 +4,21 @@ import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import type { ClientWordList } from "@/lib/models/WordList";
+
+/** The slice a unit card renders — full lists and lean summaries both satisfy it. */
+export type UnitCardList = Pick<ClientWordList, "_id" | "name" | "pathProgress"> & {
+  words: readonly unknown[];
+};
 import { STEPS } from "@/lib/types";
 
 /** The first step that has not been finished — where CONTINUE goes. */
-export function nextStepId(list: ClientWordList): string {
+export function nextStepId(list: UnitCardList): string {
   const open = STEPS.find((s) => !list.pathProgress[s.id]?.completedAt);
   return (open ?? STEPS[0]).id;
 }
 
 /** One word list = one unit: name, seven dots, and a way back in. */
-export default function UnitCard({ list }: { list: ClientWordList }) {
+export default function UnitCard({ list }: { list: UnitCardList }) {
   const done = STEPS.filter((s) => list.pathProgress[s.id]?.completedAt).length;
   const next = nextStepId(list);
 
