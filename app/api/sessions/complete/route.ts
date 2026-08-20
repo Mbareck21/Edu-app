@@ -12,17 +12,13 @@ import {
   RECENT_SESSION_IDS,
   toClientProfile,
 } from "@/lib/models/Profile";
-import { SKILL_IDS, WordList } from "@/lib/models/WordList";
+import { SKILL_IDS, WordList, toSkillState } from "@/lib/models/WordList";
 import { getProfile, saveProfile } from "@/lib/profile";
 import { STEP_PASS_PCT, applyReading, applySession, levelFor } from "@/lib/rewards";
-import { STEP_IDS } from "@/lib/types";
-import type { SessionResult, SkillStateLike } from "@/lib/types";
+import { STEP_IDS, stepById } from "@/lib/types";
+import type { SessionResult, StepId } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-/** A step counts as done at STEP_PASS_PCT, or just for showing up on the
-    read-only steps. */
-const ALWAYS_COMPLETE: readonly string[] = ["flashcards", "read"];
 
 const Body = z.object({
   sessionId: z.string().min(8).max(64).optional(),
@@ -66,80 +62,86 @@ function pctOf(body: ParsedBody): number {
 
 type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
 
-/** pathProgress + per-word skills, in one read-modify-write on one list. */
-async function applyToList(
+/** Scored steps need STEP_PASS_PCT; unscored ones complete just for showing up. */
+function stepCompleted(step: StepId, pct: number): boolean {
+  return !stepById(step).scored || pct >= STEP_PASS_PCT;
+}
+
+/** The unit-path entry for the step the session just played. */
+async function applyPathProgress(
   listId: string,
-  results: WordResultIn[],
+  step: StepId,
   body: ParsedBody,
   now: Date
 ): Promise<void> {
   if (!mongoose.isValidObjectId(listId)) return;
-  const doc = await WordList.findById(listId);
+  const doc = await WordList.findById(listId).select("pathProgress");
   if (!doc) return;
 
-  if (body.step && listId === body.listId) {
-    const pct = pctOf(body);
-    const prev = doc.pathProgress?.get(body.step);
-    const completed =
-      pct >= STEP_PASS_PCT || ALWAYS_COMPLETE.includes(body.step)
-        ? now
-        : (prev?.completedAt ?? null);
-    doc.pathProgress?.set(body.step, {
-      completedAt: completed,
-      bestPct: Math.max(Number(prev?.bestPct) || 0, pct),
-      plays: (Number(prev?.plays) || 0) + 1,
+  const pct = pctOf(body);
+  const prev = doc.pathProgress?.get(step);
+  doc.pathProgress?.set(step, {
+    completedAt: stepCompleted(step, pct) ? now : (prev?.completedAt ?? null),
+    bestPct: Math.max(Number(prev?.bestPct) || 0, pct),
+    plays: (Number(prev?.plays) || 0) + 1,
+  });
+  doc.markModified("pathProgress");
+  await doc.save();
+}
+
+/** Per-word, per-skill answers for one list, in one read-modify-write. */
+async function applyWordResults(
+  listId: string,
+  results: WordResultIn[],
+  now: Date
+): Promise<void> {
+  if (results.length === 0) return;
+  if (!mongoose.isValidObjectId(listId)) return;
+  const doc = await WordList.findById(listId).select("words");
+  if (!doc) return;
+
+  const byWord = new Map<string, number>();
+  doc.words.forEach((w, i) => byWord.set(String(w.word).toLowerCase(), i));
+  let touched = false;
+  for (const r of results) {
+    const index = byWord.get(r.word.toLowerCase());
+    if (index === undefined) continue;
+    const skill = r.skill;
+    const next = scheduleSkill(
+      toSkillState(doc.words[index].skills?.[skill], now),
+      r.correct,
+      now
+    );
+    doc.set(`words.${index}.skills.${skill}`, {
+      correct: next.correct,
+      wrong: next.wrong,
+      streak: next.streak,
+      lastAt: next.lastAt ? new Date(next.lastAt) : null,
+      dueAt: new Date(next.dueAt),
     });
-    doc.markModified("pathProgress");
+    touched = true;
   }
-
-  if (results.length) {
-    const byWord = new Map<string, number>();
-    doc.words.forEach((w, i) => byWord.set(String(w.word).toLowerCase(), i));
-    let touched = false;
-    for (const r of results) {
-      const index = byWord.get(r.word.toLowerCase());
-      if (index === undefined) continue;
-      const word = doc.words[index];
-      const skill = r.skill;
-      const current: SkillStateLike = word.skills?.[skill] ?? {};
-      const next = scheduleSkill(
-        {
-          correct: Number(current.correct) || 0,
-          wrong: Number(current.wrong) || 0,
-          streak: Number(current.streak) || 0,
-          lastAt: current.lastAt ? new Date(current.lastAt).toISOString() : null,
-          dueAt: current.dueAt ? new Date(current.dueAt).toISOString() : now.toISOString(),
-        },
-        r.correct,
-        now
-      );
-      doc.set(`words.${index}.skills.${skill}`, {
-        correct: next.correct,
-        wrong: next.wrong,
-        streak: next.streak,
-        lastAt: next.lastAt ? new Date(next.lastAt) : null,
-        dueAt: new Date(next.dueAt),
-      });
-      touched = true;
-    }
-    if (touched) doc.markModified("words");
-  }
-
+  if (!touched) return;
+  doc.markModified("words");
   await doc.save();
 }
 
 /** Route each word result to its list; the session's own list also gets pathProgress. */
 async function updateList(body: ParsedBody, now: Date): Promise<void> {
+  if (body.listId && body.step) {
+    await applyPathProgress(body.listId, body.step, body, now);
+  }
+
   const groups = new Map<string, WordResultIn[]>();
   for (const r of body.wordResults ?? []) {
     const key = r.listId ?? body.listId;
     if (!key) continue;
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
-  if (body.listId && !groups.has(body.listId)) groups.set(body.listId, []);
-  for (const [listId, results] of groups) {
-    await applyToList(listId, results, body, now);
-  }
+  // One document per group, so the writes cannot collide.
+  await Promise.all(
+    [...groups].map(([listId, results]) => applyWordResults(listId, results, now))
+  );
 }
 
 async function updateMath(body: ParsedBody, now: Date): Promise<void> {

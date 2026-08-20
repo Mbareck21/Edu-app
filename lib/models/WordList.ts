@@ -1,5 +1,7 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
+import type { SkillStateLike } from "@/lib/types";
+
 // ── Reading comprehension types ───────────────────────────────────────────
 
 export const READING_QUESTION_TYPES = [
@@ -370,6 +372,26 @@ function normalizeByType(raw: any): ReadingByType {
   return fallback;
 }
 
+/**
+ * One raw skill sub-document → its client shape. The single normaliser: the
+ * session route feeds it into the scheduler, toClientWord renders it.
+ * A missing dueAt means "due now" — an untouched skill belongs in the next
+ * session, not parked in 1970.
+ */
+export function toSkillState(
+  raw: SkillStateLike | null | undefined,
+  now: Date = new Date()
+): SkillState {
+  const s = raw ?? {};
+  return {
+    correct: Number(s.correct) || 0,
+    wrong: Number(s.wrong) || 0,
+    streak: Number(s.streak) || 0,
+    lastAt: s.lastAt ? new Date(s.lastAt).toISOString() : null,
+    dueAt: s.dueAt ? new Date(s.dueAt).toISOString() : now.toISOString(),
+  };
+}
+
 // Map one raw word subdoc to its client shape, filling in defaults so old
 // documents that pre-date arabic/srs render as empty translation + new SRS.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -378,14 +400,7 @@ function toClientWord(w: any): ClientWord {
   const rawSkills = w?.skills ?? {};
   const skills = {} as WordSkills;
   for (const id of SKILL_IDS) {
-    const s = rawSkills?.[id] ?? {};
-    skills[id] = {
-      correct: Number(s.correct ?? 0),
-      wrong: Number(s.wrong ?? 0),
-      streak: Number(s.streak ?? 0),
-      lastAt: s.lastAt ? new Date(s.lastAt).toISOString() : null,
-      dueAt: s.dueAt ? new Date(s.dueAt).toISOString() : new Date(0).toISOString(),
-    };
+    skills[id] = toSkillState(rawSkills?.[id]);
   }
   return {
     word: String(w?.word ?? ""),
