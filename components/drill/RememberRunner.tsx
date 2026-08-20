@@ -20,7 +20,8 @@ import type { SessionResult, WordResult } from "@/lib/types";
 export const REMEMBER_SECONDS = 90;
 
 export type RememberRunnerProps = {
-  listId: string;
+  /** Absent when the drill runs over no list in particular. */
+  listId?: string;
   listName: string;
   words: string[];
   sessionRef: string;
@@ -89,7 +90,7 @@ export default function RememberRunner({
       fastCount: 0,
       ms,
       perfect: words.length > 0 && found.length === words.length,
-      listId,
+      ...(listId ? { listId } : {}),
       wordResults,
     };
     if (found.length > 0) void fireConfetti("small");

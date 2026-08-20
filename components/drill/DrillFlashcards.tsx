@@ -102,6 +102,8 @@ export default function DrillFlashcards({
     if (!results.current.some((r) => r.word === card.word.word)) {
       results.current.push({
         word: card.word.word,
+        // Cross-list decks: the SRS write has to land on the card's own list.
+        ...(card.listId ? { listId: card.listId } : {}),
         skill: "recognize",
         correct: rating === "easy",
       });

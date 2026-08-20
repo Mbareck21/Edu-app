@@ -60,7 +60,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
     const list = lists.find((l) => l.listId === listId) ?? lists[0];
     return (
       <RememberRunner
-        listId={list?.listId ?? ""}
+        listId={list?.listId}
         listName={list?.name ?? "your words"}
         words={list ? list.words.map((w) => w.word) : []}
         sessionRef={sessionRef}
