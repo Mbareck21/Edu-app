@@ -4,14 +4,13 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { mathDrillRef, timedSeconds, type MathMode } from "@/components/drill/options";
-import VisualRenderer from "@/components/math/VisualRenderer";
-import Card from "@/components/ui/Card";
+import QuestionPad, { FLASH_MS, requeue } from "@/components/math/QuestionPad";
 import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
 import LessonComplete from "@/components/ui/LessonComplete";
-import NumberPad from "@/components/ui/NumberPad";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
 import RunnerHeader from "@/components/ui/RunnerHeader";
+import { clock } from "@/components/ui/time";
 import { buildSession, gradeAnswer, mixedSession, type Level, type MathSkillId } from "@/lib/math";
 import type { MathQuestion } from "@/lib/math/types";
 import { postSession } from "@/lib/offline-queue";
@@ -23,11 +22,7 @@ import type { SessionResult } from "@/lib/types";
 const FAST_MS = 3000;
 /** Questions drawn per timed batch. A fast round just draws another. */
 const BATCH = 40;
-const FLASH_MS = 520;
 const WRONG_MS = 1100;
-/** How many other questions come before a missed one comes back. */
-const REQUEUE_AFTER = 2;
-const MAX_DIGITS = 7;
 
 export type MathDrillRunnerProps = {
   /** A skill id, or "mixed" for a bit of everything. */
@@ -53,10 +48,6 @@ function drawQuestions(
   return skill === "mixed"
     ? mixedSession({ level, seed, count })
     : buildSession({ skillId: skill, level, seed, count });
-}
-
-function clock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -216,11 +207,7 @@ export default function MathDrillRunner({
     setInput("");
     setFlash(null);
     askedAt.current = Date.now();
-    setQueue((q) => {
-      const [head, ...rest] = q;
-      const spot = Math.min(REQUEUE_AFTER, rest.length);
-      return [...rest.slice(0, spot), head, ...rest.slice(spot)];
-    });
+    setQueue(requeue);
   }, []);
 
   if (done) {
@@ -271,7 +258,7 @@ export default function MathDrillRunner({
         right={
           timed ? (
             <ProgressRing value={limit === null ? 0 : left / limit} size={46} stroke={5} color="purple">
-              <span className="font-display text-xs font-bold">{clock(left)}</span>
+              <span className="font-display text-xs font-bold">{clock(left * 1000)}</span>
             </ProgressRing>
           ) : (
             <Pill color="purple" variant="soft" size="sm">
@@ -281,74 +268,28 @@ export default function MathDrillRunner({
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-4 pt-2 pb-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="font-display text-sm font-bold" style={{ color: "var(--color-purple)" }}>
-            {skillName} · Level {level}
-          </p>
-          {timed ? (
-            <p className="font-display text-sm font-bold" style={{ color: "var(--color-green-dark)" }}>
-              {tally.correct} right
+      <QuestionPad
+        question={question}
+        header={
+          <div className="mb-2 flex items-center justify-between">
+            <p className="font-display text-sm font-bold" style={{ color: "var(--color-purple)" }}>
+              {skillName} · Level {level}
             </p>
-          ) : null}
-        </div>
-        <Card className="min-h-[180px]">
-          {question ? (
-            <>
-              <p className="text-center font-display text-2xl leading-snug font-bold">
-                {question.prompt}
+            {timed ? (
+              <p className="font-display text-sm font-bold" style={{ color: "var(--color-green-dark)" }}>
+                {tally.correct} right
               </p>
-              <VisualRenderer visual={question.visual} op={question.op} />
-            </>
-          ) : (
-            <p className="text-center" style={{ color: "var(--color-muted)" }}>
-              Get ready…
-            </p>
-          )}
-        </Card>
-      </div>
-
-      <div className="px-4 pb-4" style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
-        <div
-          key={shakeKey}
-          className={`mb-3 flex h-16 items-center justify-center rounded-card border-2 font-display text-3xl font-bold ${
-            flash === "wrong" ? "q-shake" : ""
-          }`}
-          style={{
-            background:
-              flash === "correct"
-                ? "var(--color-green-soft)"
-                : flash === "wrong"
-                  ? "var(--color-coral-soft)"
-                  : "#fff",
-            borderColor:
-              flash === "correct"
-                ? "var(--color-green)"
-                : flash === "wrong"
-                  ? "var(--color-coral)"
-                  : "var(--color-purple)",
-            color:
-              flash === "correct"
-                ? "var(--color-green-dark)"
-                : flash === "wrong"
-                  ? "var(--color-coral-dark)"
-                  : "var(--color-ink)",
-          }}
-          aria-live="polite"
-          aria-label="Your answer"
-        >
-          {reveal !== null ? reveal : input || <span style={{ color: "var(--color-faint)" }}>?</span>}
-        </div>
-
-        <NumberPad
-          onInput={(d) => setInput((v) => (v.length >= MAX_DIGITS ? v : v === "0" ? d : v + d))}
-          onBackspace={() => setInput((v) => v.slice(0, -1))}
-          onCheck={check}
-          color="purple"
-          checkDisabled={input.length === 0}
-          disabled={!question || flash !== null || feedback !== null}
-        />
-      </div>
+            ) : null}
+          </div>
+        }
+        input={input}
+        setInput={setInput}
+        flash={flash}
+        shakeKey={shakeKey}
+        reveal={reveal}
+        locked={feedback !== null}
+        onCheck={check}
+      />
 
       <FeedbackSheet feedback={feedback} onContinue={afterWrong} continueLabel="Got it" />
     </main>
