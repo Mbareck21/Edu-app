@@ -22,18 +22,51 @@ export type Step = {
   name: string;
   blurb: string;
   icon: IconName;
+  /** Scored steps need STEP_PASS_PCT to complete; unscored ones complete on play. */
+  scored: boolean;
+  /** Runner accent color and the completion-screen title. */
+  accent: "green" | "blue" | "purple" | "gold";
+  doneTitle: string;
+  /** Challenge extras: visible timer and the unit treasure chest. */
+  timed: boolean;
+  chest: boolean;
 };
 
 /** Ordered path. Step N unlocks when step N-1 has a `completedAt`. */
+const step = (
+  id: StepId,
+  name: string,
+  blurb: string,
+  icon: IconName,
+  extra?: Partial<Pick<Step, "scored" | "accent" | "doneTitle" | "timed" | "chest">>
+): Step => ({
+  id,
+  name,
+  blurb,
+  icon,
+  scored: true,
+  accent: "green",
+  doneTitle: `${name} done!`,
+  timed: false,
+  chest: false,
+  ...extra,
+});
+
 export const STEPS: readonly Step[] = [
-  { id: "flashcards", name: "Learn", blurb: "See the words.", icon: "book" },
-  { id: "match", name: "Match", blurb: "Pick the right word.", icon: "check" },
-  { id: "listen", name: "Listen", blurb: "Hear it, then pick.", icon: "volume" },
-  { id: "spell", name: "Spell", blurb: "Build the word.", icon: "words" },
-  { id: "use", name: "Use It", blurb: "Put it in a sentence.", icon: "sparkles" },
-  { id: "read", name: "Read", blurb: "Read and answer.", icon: "chat" },
-  { id: "challenge", name: "Challenge", blurb: "Go fast. Win the chest.", icon: "bolt" },
+  step("flashcards", "Learn", "See the words.", "book", { scored: false, accent: "blue", doneTitle: "Words learned!" }),
+  step("match", "Match", "Pick the right word.", "check", { doneTitle: "Match done!" }),
+  step("listen", "Listen", "Hear it, then pick.", "volume", { doneTitle: "Good ears!" }),
+  step("spell", "Spell", "Build the word.", "words", { doneTitle: "Spelled it!" }),
+  step("use", "Use It", "Put it in a sentence.", "sparkles", { doneTitle: "You used them!" }),
+  step("read", "Read", "Read and answer.", "chat", { scored: false, accent: "purple", doneTitle: "Reading done!" }),
+  step("challenge", "Challenge", "Go fast. Win the chest.", "bolt", { accent: "gold", doneTitle: "Challenge done!", timed: true, chest: true }),
 ] as const;
+
+export function stepById(id: StepId): Step {
+  const found = STEPS.find((s) => s.id === id);
+  if (!found) throw new Error(`unknown step: ${id}`);
+  return found;
+}
 
 export function isStepId(v: string): v is StepId {
   return (STEP_IDS as readonly string[]).includes(v);
@@ -44,6 +77,8 @@ export function isStepId(v: string): v is StepId {
 export type SessionKind = "vocab" | "math" | "reading";
 
 export type SessionResult = {
+  /** Client-minted id. Lets the server ignore a retry of a session it already applied. */
+  sessionId?: string;
   kind: SessionKind;
   /** listId:step, or the math skill id. Used for the activity log. */
   ref: string;
