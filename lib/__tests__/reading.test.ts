@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  MAX_WPM,
   clampLevel,
   countWords,
   isAcceptable,
@@ -81,4 +82,10 @@ test("wpm needs a usable timing", () => {
   assert.equal(wordsPerMinute(120, 60_000), 120);
   assert.equal(wordsPerMinute(120, 500), 0);
   assert.equal(wordsPerMinute(0, 60_000), 0);
+});
+
+test("wpm is clamped to what the server accepts", () => {
+  // 110 words skimmed in 3s is 2200 raw — the route's zod max is 1000.
+  assert.equal(wordsPerMinute(110, 3000), MAX_WPM);
+  assert.equal(wordsPerMinute(500, 2000), MAX_WPM);
 });

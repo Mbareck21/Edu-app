@@ -6,10 +6,15 @@ import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
 import { scheduleSkill } from "@/lib/mastery";
 import { MathProgress, RECENT_PCTS, nextLevel } from "@/lib/models/MathProgress";
-import { toClientProfile } from "@/lib/models/Profile";
+import {
+  PROFILE_KEY,
+  Profile,
+  RECENT_SESSION_IDS,
+  toClientProfile,
+} from "@/lib/models/Profile";
 import { SKILL_IDS, WordList } from "@/lib/models/WordList";
 import { getProfile, saveProfile } from "@/lib/profile";
-import { STEP_PASS_PCT, applyReading, applySession } from "@/lib/rewards";
+import { STEP_PASS_PCT, applyReading, applySession, levelFor } from "@/lib/rewards";
 import { STEP_IDS } from "@/lib/types";
 import type { SessionResult, SkillStateLike } from "@/lib/types";
 
@@ -20,6 +25,7 @@ export const runtime = "nodejs";
 const ALWAYS_COMPLETE: readonly string[] = ["flashcards", "read"];
 
 const Body = z.object({
+  sessionId: z.string().min(8).max(64).optional(),
   kind: z.enum(["vocab", "math", "reading"]),
   ref: z.string().min(1).max(120),
   answered: z.number().int().min(0).max(500),
@@ -152,6 +158,21 @@ async function updateMath(body: ParsedBody, now: Date): Promise<void> {
   await doc.save();
 }
 
+/** Has this session id already been applied to the profile? */
+async function alreadyApplied(sessionId: string): Promise<boolean> {
+  const doc = await Profile.findOne({ key: PROFILE_KEY }, { recentSessionIds: 1 }).lean();
+  const seen = doc?.recentSessionIds;
+  return Array.isArray(seen) && seen.some((id) => String(id) === sessionId);
+}
+
+/** Record the id, newest first, capped. */
+async function rememberSession(sessionId: string): Promise<void> {
+  await Profile.updateOne(
+    { key: PROFILE_KEY },
+    { $push: { recentSessionIds: { $each: [sessionId], $position: 0, $slice: RECENT_SESSION_IDS } } }
+  );
+}
+
 export async function POST(req: Request) {
   let raw: unknown;
   try {
@@ -170,6 +191,23 @@ export async function POST(req: Request) {
 
   await connectDB();
   const before = await getProfile();
+
+  // A retry of a session we already applied: report the current state, change
+  // nothing. Must run before updateList/updateMath, not just before the rewards.
+  if (body.sessionId && (await alreadyApplied(body.sessionId))) {
+    return NextResponse.json({
+      gained: {
+        xp: 0,
+        newBadges: [],
+        streakExtended: false,
+        leveledUp: false,
+        level: levelFor(before.xp).level,
+        goalMet: before.today.day === when.today && before.today.lessons >= before.dailyGoal,
+      },
+      profile: toClientProfile(before),
+    });
+  }
+
   const result: SessionResult = body;
   const applied = applySession(before, result, when);
   const withReading = body.reading
@@ -181,6 +219,7 @@ export async function POST(req: Request) {
   await updateList(body, now);
   await updateMath(body, now);
   const saved = await saveProfile(withReading);
+  if (body.sessionId) await rememberSession(body.sessionId);
 
   return NextResponse.json({
     gained: applied.gained,
