@@ -145,6 +145,11 @@ export const ELA_STANDARDS: ElaStandard[] = [
 export type ReadingTheme = {
   id: string;
   title: string;
+  /**
+   * What his school calls this unit. Arkansas adopted Benchmark Workshop, which
+   * renames the Benchmark Advance units but keeps their order and content.
+   */
+  schoolTitle: string;
   /** true = unit title, essential question and word bank verified in published district scope-and-sequence documents. */
   confirmed: boolean;
   words: string[];
@@ -159,6 +164,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "observing-nature",
     title: "Observing Nature",
+    schoolTitle: "In the Wild",
     confirmed: true,
     words: ["observe", "encounter", "appreciate", "interact", "nature", "sensory", "vast", "solitary", "vegetation", "shimmering", "winding", "scrawny"],
     prompts: [
@@ -170,6 +176,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "actions-and-reactions",
     title: "Characters' Actions and Reactions",
+    schoolTitle: "Characters in Focus",
     confirmed: true,
     words: ["actions", "reactions", "connect", "communicate", "interact", "relationships", "tedious", "earnestly", "mischievous", "dejectedly", "appalled", "overrated"],
     prompts: [
@@ -181,6 +188,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "government-in-action",
     title: "Government in Action",
+    schoolTitle: "Your Government at Work",
     confirmed: true,
     words: ["function", "powers", "solve", "levels", "services", "society", "crisis", "adversity", "liberties", "delegated", "tyrannical", "urgency"],
     prompts: [
@@ -192,6 +200,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "points-of-view",
     title: "Understanding Different Points of View",
+    schoolTitle: "Through the Storyteller's Eyes",
     confirmed: true,
     words: ["point of view", "perspective", "narrator", "influence", "distinctive", "realistic fiction", "accustomed", "weariness", "coaxing", "contraption", "involuntarily", "dangled"],
     prompts: [
@@ -203,6 +212,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "technology-for-tomorrow",
     title: "Technology for Tomorrow",
+    schoolTitle: "Robot Revolution",
     confirmed: true,
     words: ["technology", "automation", "efficiency", "develop", "impact", "society", "specialized", "precautions", "beneficial", "outweigh", "inevitably", "impaired"],
     prompts: [
@@ -214,6 +224,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "confronting-challenges",
     title: "Confronting Challenges",
+    schoolTitle: "Heroes and Villains",
     confirmed: true,
     words: ["confront", "challenge", "obstacles", "quest", "mission", "theme", "valor", "undertaking", "fatigue", "subsided", "attentive", "glimpse"],
     prompts: [
@@ -225,6 +236,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "transcontinental-railroad",
     title: "The Transcontinental Railroad",
+    schoolTitle: "Changing Lives, Changing Communities",
     confirmed: true,
     words: ["expansion", "advances", "communities", "settler", "impact", "devastating", "grueling", "incentive", "isolated", "recruiting", "roamed", "plentiful"],
     prompts: [
@@ -236,6 +248,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "earth-changes",
     title: "Earth Changes",
+    schoolTitle: "Nature's Fury",
     confirmed: true,
     words: ["natural disaster", "destruction", "pressure", "energy", "events", "violent", "collided", "magnitude", "hazardous", "ominously", "daunting", "substantially"],
     prompts: [
@@ -247,6 +260,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "resources-and-impact",
     title: "Resources and Their Impact",
+    schoolTitle: "Resources Impact Economies",
     confirmed: true,
     words: ["resources", "economy", "access", "dependent", "protect", "sustain", "agricultural", "abundance", "union", "wages", "booming", "crippled"],
     prompts: [
@@ -258,6 +272,7 @@ export const READING_THEMES: ReadingTheme[] = [
   {
     id: "power-of-electricity",
     title: "The Power of Electricity",
+    schoolTitle: "Exploring Electricity",
     confirmed: true,
     words: ["invention", "generate", "energy", "experiment", "grid", "network", "outage", "influential", "malfunctions", "continuous", "faulty", "prominent"],
     prompts: [
@@ -269,50 +284,76 @@ export const READING_THEMES: ReadingTheme[] = [
 ];
 
 /**
- * Each Benchmark Advance unit runs three weeks: two short reads, then an
- * extended read, then a second extended read where the class compares the
- * texts. Confirmed in the publisher's Grade 4 scope and sequence.
+ * The publisher's own year plan, and now the app's.
+ *
+ * Benchmark's "Full Year of Reading Instruction" chart for Arkansas lays the
+ * year out exactly: three weeks launching the Reader's Workshop, then ten
+ * units of three weeks each — instructional weeks 0-32. Cross-checked against
+ * the Grade 4 Benchmark Workshop scope and sequence, which columns the same
+ * Launch Unit plus Units 1-10 at W1/W2/W3 apiece.
+ *
+ * Break weeks are already dropped from SCHOOL_WEEKS, so this counts
+ * instructional weeks, which is what the chart counts.
  */
+export const LAUNCH_WEEKS = 3;
 export const THEME_WEEKS = 3;
 
-/**
- * Which week of the current unit the class is in, 1..3. Derived from the same
- * even spread `themeForWeek` uses, so the two never disagree.
- */
-export function weekInTheme(dateISO: string): number {
-  const total = SCHOOL_WEEKS.length;
+/** 0-based instructional week. Before the year starts this is 0. */
+function schoolWeekIndex(dateISO: string): number {
   const m = mondayOf(dayNum(dateISO));
   let passed = 0;
   for (const w of SCHOOL_WEEKS) {
     if (w <= m) passed++;
     else break;
   }
-  const index = passed === 0 ? 0 : passed - 1;
-  const perTheme = total / READING_THEMES.length;
-  const into = index - Math.floor(index / perTheme) * perTheme;
-  return Math.min(THEME_WEEKS, Math.floor((into / perTheme) * THEME_WEEKS) + 1);
+  return passed === 0 ? 0 : passed - 1;
+}
+
+type ThemeSlot = { index: number; week: number; launch: boolean; review: boolean };
+
+function themeSlot(dateISO: string): ThemeSlot {
+  const i = schoolWeekIndex(dateISO);
+  if (i < LAUNCH_WEEKS) return { index: 0, week: 1, launch: true, review: false };
+  const after = i - LAUNCH_WEEKS;
+  const raw = Math.floor(after / THEME_WEEKS);
+  if (raw < READING_THEMES.length) {
+    return { index: raw, week: (after % THEME_WEEKS) + 1, launch: false, review: false };
+  }
+  // The publisher's plan is 33 weeks; FPS runs about 40. Rather than park on
+  // Unit 10 until June, the leftover weeks cycle back through the units one a
+  // week — which is what Q4 is for anyway (FPS reassesses any standard not yet
+  // proficient in Q4; see docs/curriculum-fps-grade4.md §1).
+  const spent = LAUNCH_WEEKS + READING_THEMES.length * THEME_WEEKS;
+  const over = i - spent;
+  return {
+    index: over % READING_THEMES.length,
+    week: THEME_WEEKS,
+    launch: false,
+    review: true,
+  };
+}
+
+/** The first three weeks of the year are Reader's Workshop routines, no unit. */
+export function isLaunchWeek(dateISO: string): boolean {
+  return themeSlot(dateISO).launch;
+}
+
+/** True once the ten units are done and the year is cycling back for review. */
+export function isReviewWeek(dateISO: string): boolean {
+  return themeSlot(dateISO).review;
 }
 
 /**
- * The reading theme in play for the week containing `dateISO`.
- * The ten themes are spread evenly over the instructional weeks of the year
- * (Aug 11 2026 - May 20 2027), in order. Dates before the year start return the
- * first theme; dates after the year end return the last.
+ * The reading unit in play for the week containing `dateISO`. During the three
+ * launch weeks this is Unit 1, which the class is about to start.
  */
 export function themeForWeek(dateISO: string): ReadingTheme {
-  const total = SCHOOL_WEEKS.length;
-  const m = mondayOf(dayNum(dateISO));
-  let passed = 0;
-  for (const w of SCHOOL_WEEKS) {
-    if (w <= m) passed++;
-    else break;
-  }
-  const index = passed === 0 ? 0 : passed - 1;
-  const themeIdx = Math.min(
-    READING_THEMES.length - 1,
-    Math.floor((index * READING_THEMES.length) / total),
-  );
-  return READING_THEMES[themeIdx];
+  return READING_THEMES[themeSlot(dateISO).index];
+}
+
+/** Which of the unit's three weeks the class is in, 1..3. */
+export function weekInTheme(dateISO: string): number {
+  return themeSlot(dateISO).week;
 }
 
 /* ------------------------------------------------------------------ *

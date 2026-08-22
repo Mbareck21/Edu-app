@@ -10,6 +10,8 @@ import {
   THEME_WEEKS,
   currentQuarter,
   scienceUnitForWeek,
+  isLaunchWeek,
+  isReviewWeek,
   themeForWeek,
   weekInTheme,
 } from "@/lib/curriculum";
@@ -26,12 +28,17 @@ test("theme walk is monotonic across the school year", () => {
   for (let day = "2026-08-11"; day <= "2027-05-20"; day = addDays(day, 1)) {
     const idx = order.get(themeForWeek(day).id);
     assert.ok(idx !== undefined);
-    assert.ok(idx >= prev, `theme went backwards on ${day}: ${idx} after ${prev}`);
-    prev = idx;
+    // Units run in order until the publisher's 33 weeks are used up; after
+    // that the year cycles back through them for Q4 review, which is the one
+    // place the index is allowed to drop.
+    if (!isReviewWeek(day)) {
+      assert.ok(idx >= prev, `theme went backwards on ${day}: ${idx} after ${prev}`);
+      prev = idx;
+    }
     seen.add(themeForWeek(day).id);
   }
   assert.equal(themeForWeek("2026-08-11").id, READING_THEMES[0].id);
-  assert.equal(themeForWeek("2027-05-20").id, READING_THEMES[READING_THEMES.length - 1].id);
+  assert.equal(prev, READING_THEMES.length - 1, "the units run all the way through");
   assert.equal(seen.size, READING_THEMES.length, "every theme should get at least one week");
 });
 
@@ -104,15 +111,40 @@ test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2027-06-30"), null);
 });
 
-test("the unit week runs 1..3 and cycles with the themes", () => {
-  const days = [
-    "2026-08-11", "2026-08-24", "2026-09-07", "2026-10-05",
-    "2026-11-16", "2027-01-11", "2027-03-01", "2027-05-18",
-  ];
-  for (const d of days) {
-    const w = weekInTheme(d);
-    assert.ok(w >= 1 && w <= THEME_WEEKS, `${d} -> ${w}`);
+test("the reading year follows the publisher's plan", () => {
+  // Three launch weeks, then Unit 1.
+  assert.ok(isLaunchWeek("2026-08-11"));
+  assert.ok(isLaunchWeek("2026-08-25"));
+  assert.ok(!isLaunchWeek("2026-09-01"));
+  assert.equal(themeForWeek("2026-09-01").schoolTitle, "In the Wild");
+
+  // Each unit runs exactly three weeks, in order, with no gaps.
+  const seen: string[] = [];
+  let d = Date.UTC(2026, 7, 31);
+  for (let i = 0; i < 30; i++) {
+    const iso = new Date(d).toISOString().slice(0, 10);
+    const w = weekInTheme(iso);
+    assert.ok(w >= 1 && w <= THEME_WEEKS, `${iso} -> ${w}`);
+    assert.ok(!isReviewWeek(iso), `${iso} is still a unit week`);
+    const id = themeForWeek(iso).id;
+    if (seen[seen.length - 1] !== id) seen.push(id);
+    d += 7 * 86_400_000;
   }
-  // Week 1 of the year is week 1 of the first unit.
-  assert.equal(weekInTheme("2026-08-11"), 1);
+  // Winter break weeks repeat a week rather than advancing, so the ten units
+  // may not all be reached inside 30 calendar weeks — but the order holds.
+  assert.deepEqual(
+    seen,
+    READING_THEMES.slice(0, seen.length).map((t) => t.id),
+    "units run in publisher order"
+  );
+
+  // Every unit carries the name his school uses.
+  for (const t of READING_THEMES) assert.ok(t.schoolTitle.length > 0, t.id);
+});
+
+test("leftover weeks cycle back through the units for review", () => {
+  const late = "2027-04-12";
+  assert.ok(isReviewWeek(late));
+  assert.equal(themeForWeek(late).id, READING_THEMES[0].id);
+  assert.equal(themeForWeek("2027-04-19").id, READING_THEMES[1].id);
 });

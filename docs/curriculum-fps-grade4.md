@@ -133,22 +133,29 @@ This is the bridge. Everything in Grade 4 is the same skill one notch harder.
 
 ---
 
-## 5. Benchmark Advance Grade 4 unit themes
+## 5. Reading units — Arkansas Benchmark, Grade 4
 
-**Confirmed.** All ten unit titles, essential questions and unit word banks below are verified against two published district scope-and-sequence documents for Benchmark Advance Grade 4 (2022 edition). What is **not** confirmed is FPS's own ordering and pacing of these units — FPS does not publish its unit plans. The app spreads the ten units evenly across the instructional weeks in publisher order; treat the dates as an estimate, not a schedule.
+**Resolved 2026-08-22.** The unit order and pacing are no longer estimates. Benchmark publishes a *Full Year of Reading Instruction* chart on its **Arkansas** parent portal (`benchmarkuniverse.com/arkansas-parents`, recovered from the Internet Archive — the live portal now redirects). It lays the Grade 4 year out week by week, and the [Grade 4 Benchmark Workshop scope and sequence](https://www.benchmarkworkshop.com/fulton/pdfs/BW_G4_Scope_and_Sequence.pdf) independently confirms the same shape: a **Launch Unit plus Units 1–10, three weeks each (W1/W2/W3)**.
 
-| # | Unit | Essential question | App week starts (est.) |
+Arkansas adopted **Benchmark Workshop**, which renames the Benchmark Advance units but keeps their order and content. Both names are in `lib/curriculum.ts`: `schoolTitle` is what his teacher says, `title` is the Advance name the published scope-and-sequence documents use.
+
+| # | Weeks | What school calls it (`schoolTitle`) | Benchmark Advance name (`title`) |
 |---|---|---|---|
-| 1 | Observing Nature | How do we respond to nature? | Aug 11 (Q1) |
-| 2 | Characters' Actions and Reactions | How do we reveal ourselves to others? | Sep 7 (Q1) |
-| 3 | Government in Action | How can government influence the way we live? | Oct 5 (Q1) |
-| 4 | Understanding Different Points of View | What do we learn when we look at the world through the eyes of others? | Nov 2 (Q2) |
-| 5 | Technology for Tomorrow | How do we make decisions about developing new technology? | Nov 30 (Q2) |
-| 6 | Confronting Challenges | How do we overcome obstacles? | Jan 11 (Q3) |
-| 7 | The Transcontinental Railroad | How do communities evolve? | Feb 8 (Q3) |
-| 8 | Earth Changes | How do Earth's natural processes impact our lives? | Mar 8 (Q3) |
-| 9 | Resources and Their Impact | How does access to resources influence people's lives? | Apr 5 (Q4) |
-| 10 | The Power of Electricity | Where do scientific discoveries lead us? | May 3 (Q4) |
+| — | 0–2 | Launching the Reader's Workshop | — |
+| 1 | 3–5 | In the Wild | Observing Nature |
+| 2 | 6–8 | Characters in Focus | Characters' Actions and Reactions |
+| 3 | 9–11 | Your Government at Work | Government in Action |
+| 4 | 12–14 | Through the Storyteller's Eyes | Understanding Different Points of View |
+| 5 | 15–17 | Robot Revolution | Technology for Tomorrow |
+| 6 | 18–20 | Heroes and Villains | Confronting Challenges |
+| 7 | 21–23 | Changing Lives, Changing Communities | The Transcontinental Railroad |
+| 8 | 24–26 | Nature's Fury | Earth Changes |
+| 9 | 27–29 | Resources Impact Economies | Resources and Their Impact |
+| 10 | 30–32 | Exploring Electricity | The Power of Electricity |
+
+Weeks are instructional weeks — `SCHOOL_WEEKS` already drops break weeks, so a winter-break week holds the unit rather than advancing it. The publisher's plan is 33 weeks and FPS runs about 40, so `themeSlot()` cycles the leftover weeks back through the ten units one a week (`isReviewWeek`). That matches the FPS note in §1: any standard not proficient by Q3 is reassessed in Q4.
+
+Essential questions and word banks are still the Benchmark Advance ones, verified against two published district scope-and-sequence documents (Harford County PS, Carroll County PS).
 
 Theme words — the first six of each set are the unit's published "Build Knowledge Word Bank"; the rest are academic vocabulary taught in that unit's weeks:
 

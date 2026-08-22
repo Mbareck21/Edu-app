@@ -1,7 +1,15 @@
 import Link from "next/link";
 
 import Icon from "@/components/ui/Icon";
-import { ELA_STANDARDS, currentQuarter, scienceUnitForWeek } from "@/lib/curriculum";
+import {
+  ELA_STANDARDS,
+  currentQuarter,
+  isLaunchWeek,
+  isReviewWeek,
+  scienceUnitForWeek,
+  themeForWeek,
+  weekInTheme,
+} from "@/lib/curriculum";
 import { todayKey } from "@/lib/day";
 import { currentLesson, currentUnit } from "@/lib/math";
 
@@ -24,6 +32,9 @@ export default function SchoolStrip({ href }: { href: string }) {
   const math = currentUnit(today);
   const lesson = currentLesson(today);
   const science = scienceUnitForWeek(today);
+  const theme = themeForWeek(today);
+  const launch = isLaunchWeek(today);
+  const review = isReviewWeek(today);
 
   return (
     <section
@@ -42,10 +53,21 @@ export default function SchoolStrip({ href }: { href: string }) {
             <Icon name="book" size={16} />
           </span>
           <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
+            Reading:{" "}
+            {launch
+              ? "Launching the Reader's Workshop"
+              : `${theme.schoolTitle}${review ? " (review)" : ` · week ${weekInTheme(today)} of 3`}`}
+            {science ? ` · Science: ${science.title}` : ""}
+          </span>
+        </Link>
+        <Link href={href} className="flex items-start gap-2">
+          <span className="mt-0.5 shrink-0" style={{ color: "var(--color-green)" }}>
+            <Icon name="star" size={16} />
+          </span>
+          <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
             {ela.length > 0
               ? ela.map((s) => shortPlain(s.plain)).join(" · ")
               : "Summer break. Keep reading."}
-            {science ? ` · Science: ${science.title}` : ""}
           </span>
         </Link>
         <Link href="/math" className="flex items-start gap-2">
