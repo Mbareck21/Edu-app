@@ -39,12 +39,37 @@ const NUMBER_WORDS: Record<string, string> = {
   eighteen: "18",
   nineteen: "19",
   twenty: "20",
+  thirty: "30",
+  forty: "40",
+  fifty: "50",
+  sixty: "60",
+  seventy: "70",
+  eighty: "80",
+  ninety: "90",
 };
+
+const TENS = new Set(["20", "30", "40", "50", "60", "70", "80", "90"]);
+
+/** "twenty one" is two spoken words but one written number. Join them. */
+function joinTens(words: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const a = words[i];
+    const b = words[i + 1];
+    if (TENS.has(a) && b !== undefined && /^[1-9]$/.test(b)) {
+      out.push(String(Number(a) + Number(b)));
+      i++;
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+}
 
 /** Lower-case, punctuation-free words. Digits and number words are unified so
     "5" from Whisper matches "five" in the passage. */
 export function echoTokens(text: string): string[] {
-  return text
+  const words = text
     .toLowerCase()
     .replace(/[‘’]/g, "'")
     .replace(/[^a-z0-9'\s]/g, " ")
@@ -53,6 +78,7 @@ export function echoTokens(text: string): string[] {
     .map((w) => w.replace(/^'+|'+$/g, ""))
     .filter(Boolean)
     .map((w) => NUMBER_WORDS[w] ?? w);
+  return joinTens(words);
 }
 
 function levenshtein(a: string, b: string): number {
@@ -86,6 +112,8 @@ export type EchoToken = {
   /** The word as it is written in the sentence, punctuation and all. */
   word: string;
   said: boolean;
+  /** False for a token with nothing to say — a lone dash. Never marked wrong. */
+  scored: boolean;
 };
 
 export type EchoScore = {
@@ -126,7 +154,11 @@ export function compareEcho(sentence: string, heard: string): EchoScore {
     }
   }
 
-  const tokens: EchoToken[] = display.map((word) => ({ word, said: false }));
+  const tokens: EchoToken[] = display.map((word, i) => ({
+    word,
+    said: false,
+    scored: Boolean(target[i]),
+  }));
   let i = 0;
   let j = 0;
   let matched = 0;

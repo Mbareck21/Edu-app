@@ -247,13 +247,15 @@ export default function EchoReader({
                   key={i}
                   className="rounded px-1"
                   style={
-                    t.said
-                      ? { color: "var(--color-green-dark)" }
-                      : {
-                          color: "var(--color-coral-dark)",
-                          textDecoration: "underline",
-                          textDecorationStyle: "wavy",
-                        }
+                    !t.scored
+                      ? undefined
+                      : t.said
+                        ? { color: "var(--color-green-dark)" }
+                        : {
+                            color: "var(--color-coral-dark)",
+                            textDecoration: "underline",
+                            textDecorationStyle: "wavy",
+                          }
                   }
                 >
                   {t.word}{" "}

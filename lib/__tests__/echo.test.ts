@@ -66,3 +66,27 @@ test("silence is reported, never scored as a pass", () => {
   assert.ok(!s.pass);
   assert.equal(s.matched, 0);
 });
+
+test("spoken compound numbers match the written ones", () => {
+  assert.deepEqual(echoTokens("twenty one"), ["21"]);
+  assert.deepEqual(echoTokens("twenty-one"), ["21"]);
+  assert.deepEqual(echoTokens("fifty six rocks"), ["56", "rocks"]);
+  // A tens word on its own stays itself.
+  assert.deepEqual(echoTokens("thirty"), ["30"]);
+  // Not every number pair is a compound: "one" after a noun is left alone.
+  assert.deepEqual(echoTokens("chapter one"), ["chapter", "1"]);
+  const s = compareEcho("Sam has 21 rocks.", "sam has twenty one rocks");
+  assert.equal(s.matched, 4);
+  assert.equal(s.pct, 1);
+});
+
+test("punctuation-only tokens are never marked wrong", () => {
+  const s = compareEcho("He can't stop — really!", "he cant stop really");
+  const dash = s.tokens.find((t) => t.word === "—");
+  assert.ok(dash, "the dash is still shown");
+  assert.equal(dash?.scored, false);
+  assert.equal(s.total, 4);
+  assert.equal(s.matched, 4);
+  // Real words are all scored.
+  assert.ok(s.tokens.filter((t) => t.word !== "—").every((t) => t.scored));
+});
