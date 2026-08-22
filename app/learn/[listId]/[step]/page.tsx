@@ -8,6 +8,8 @@ import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
+import { getProfile } from "@/lib/profile";
+import { scaffoldFor } from "@/lib/reading";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { isStepId, stepById } from "@/lib/types";
 
@@ -44,7 +46,10 @@ export default async function StepPage({
   }
 
   if (step === "read") {
-    return <ReadingRunner list={list} />;
+    // How much help finding the answer he still gets. Read from the profile so
+    // it follows him across word lists, not per list.
+    const profile = await getProfile();
+    return <ReadingRunner list={list} scaffold={scaffoldFor(profile.reading.recent)} />;
   }
 
   const info = stepById(step);

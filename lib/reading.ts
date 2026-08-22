@@ -233,29 +233,51 @@ export function questionPlan(
   return out;
 }
 
-// ── Free-text answer acceptance (ported from InteractiveReading) ───────────
+// ── Scaffolding ───────────────────────────────────────────────────────────
+//
+// A comprehension question has two jobs in it: find where the answer lives,
+// then say it. For a reader working a grade below his own, the finding is what
+// defeats him, and failing at it teaches him nothing about comprehension. So
+// early on the app marks the sentence the answer comes from before he answers,
+// and takes that help away as he stops needing it.
+//
+// The fade is driven by his own record, not the calendar. At roughly a reading
+// a day the thresholds below come out near a month — but a child who is still
+// struggling keeps the help, and one who is flying loses it sooner.
 
-function stripArticle(s: string): string {
-  return s.replace(/^(a|an|the)\s+/, "");
+export type Scaffold =
+  /** The source sentence is marked before he answers, with the first hint. */
+  | "full"
+  /** It is marked as soon as he gets one wrong. */
+  | "light"
+  /** Marked only on the reveal. */
+  | "none";
+
+/** Readings before the marked sentence stops being shown up front. */
+export const SCAFFOLD_FULL_SESSIONS = 6;
+/** Readings before help disappears altogether. */
+export const SCAFFOLD_LIGHT_SESSIONS = 14;
+/** First-try accuracy he has to be holding to lose a level of help. */
+export const SCAFFOLD_STEADY_PCT = 70;
+/** How many recent readings count toward "holding". */
+const SCAFFOLD_WINDOW = 5;
+
+function steady(recent: readonly { pct: number }[]): boolean {
+  const window = recent.slice(0, SCAFFOLD_WINDOW);
+  if (window.length === 0) return false;
+  const mean = window.reduce((sum, r) => sum + r.pct, 0) / window.length;
+  return mean >= SCAFFOLD_STEADY_PCT;
 }
 
 /**
- * Loose match: articles ignored, either side may contain the other. Generous
- * on purpose — typing is not the skill being tested here.
+ * How much help this reading gets. `recent` is the profile's reading log,
+ * newest first.
  */
-export function isAcceptable(answer: string, acceptable: readonly string[]): boolean {
-  const raw = answer.trim().toLowerCase();
-  if (!raw) return false;
-  const a = stripArticle(raw);
-  return acceptable.some((acc) => {
-    const bRaw = acc.trim().toLowerCase();
-    if (!bRaw) return false;
-    const b = stripArticle(bRaw);
-    if (a === b) return true;
-    if (a.length >= 2 && b.includes(a)) return true;
-    if (b.length >= 2 && a.includes(b)) return true;
-    return false;
-  });
+export function scaffoldFor(recent: readonly { pct: number }[]): Scaffold {
+  const sessions = recent.length;
+  if (sessions < SCAFFOLD_FULL_SESSIONS) return "full";
+  if (!steady(recent)) return sessions < SCAFFOLD_LIGHT_SESSIONS ? "full" : "light";
+  return sessions < SCAFFOLD_LIGHT_SESSIONS ? "light" : "none";
 }
 
 // ── Text helpers ──────────────────────────────────────────────────────────

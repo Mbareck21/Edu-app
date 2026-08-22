@@ -6,15 +6,18 @@ import {
   GRADE4_LEXILE,
   LEXILE_LADDER,
   MAX_WPM,
+  SCAFFOLD_FULL_SESSIONS,
+  SCAFFOLD_LIGHT_SESSIONS,
+  SCAFFOLD_STEADY_PCT,
   atGradeLevel,
   clampLevel,
   countWords,
-  isAcceptable,
   levelAtGrade,
   lexileForLevel,
   longestSentenceWords,
   questionPlan,
   readingParams,
+  scaffoldFor,
   splitParagraphs,
   wordsPerMinute,
 } from "@/lib/reading";
@@ -65,15 +68,6 @@ test("every mcq slot names its option count", () => {
     if (spec.format === "mcq") assert.ok((spec.options ?? 0) >= 3);
     else assert.equal(spec.options, undefined);
   }
-});
-
-test("free-text answers are matched loosely", () => {
-  const acceptable = ["the garden", "in the garden"];
-  assert.ok(isAcceptable("garden", acceptable));
-  assert.ok(isAcceptable("  The Garden ", acceptable));
-  assert.ok(isAcceptable("they played in the garden", acceptable));
-  assert.ok(!isAcceptable("", acceptable));
-  assert.ok(!isAcceptable("kitchen", acceptable));
 });
 
 test("text helpers count what the level checks care about", () => {
@@ -146,4 +140,28 @@ test("the school quarter opens standards the reading level has not reached", () 
 
   // Omitting the quarter keeps the old level-only behaviour.
   assert.deepEqual(questionPlan(1, "story", false), q1);
+});
+
+test("the answer scaffold fades with his record, not the calendar", () => {
+  const runs = (n: number, pct: number) => Array.from({ length: n }, () => ({ pct }));
+
+  // A beginner gets the sentence marked before he answers.
+  assert.equal(scaffoldFor([]), "full");
+  assert.equal(scaffoldFor(runs(5, 100)), "full");
+
+  // Past the first few readings, holding accuracy earns a step down.
+  assert.equal(scaffoldFor(runs(SCAFFOLD_FULL_SESSIONS, 90)), "light");
+  assert.equal(scaffoldFor(runs(SCAFFOLD_LIGHT_SESSIONS, 90)), "none");
+
+  // Struggling keeps the help however many readings he has done.
+  assert.equal(scaffoldFor(runs(SCAFFOLD_FULL_SESSIONS, 40)), "full");
+  assert.equal(scaffoldFor(runs(SCAFFOLD_LIGHT_SESSIONS, 40)), "light");
+  assert.equal(scaffoldFor(runs(40, 40)), "light");
+
+  // Only the recent window counts: an old bad patch does not hold him back.
+  const recovered = [...runs(5, 95), ...runs(20, 20)];
+  assert.equal(scaffoldFor(recovered), "none");
+
+  // Right on the threshold counts as steady.
+  assert.equal(scaffoldFor(runs(SCAFFOLD_LIGHT_SESSIONS, SCAFFOLD_STEADY_PCT)), "none");
 });

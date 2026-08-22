@@ -11,14 +11,15 @@ import Pill from "@/components/ui/Pill";
 import ProgressBar from "@/components/ui/ProgressBar";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
+import { judgeAnswer } from "@/lib/answer-check";
 import { postSession } from "@/lib/offline-queue";
 import {
   GRADE4_LEXILE,
   atGradeLevel,
   countWords,
-  isAcceptable,
   lexileForLevel,
   splitParagraphs,
+  type Scaffold,
   wordsPerMinute,
   wpmNormForDate,
 } from "@/lib/reading";
@@ -33,6 +34,8 @@ import type {
 
 export type ReadingRunnerProps = {
   list: ClientWordList;
+  /** How much help finding the answer he still gets. See scaffoldFor(). */
+  scaffold?: Scaffold;
   /** Called from the finish screen's main button. Falls back to a link home. */
   onDone?: () => void;
 };
@@ -53,7 +56,11 @@ function freshQ(n: number): QState[] {
   }));
 }
 
-export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
+export default function ReadingRunner({
+  list,
+  scaffold = "none",
+  onDone,
+}: ReadingRunnerProps) {
   const [reading, setReading] = useState<CurrentReading | null>(list.currentReading);
   const [phase, setPhase] = useState<Phase>("mode");
   const [mode, setMode] = useState<Mode>("listen");
@@ -216,12 +223,22 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
   function answerText() {
     const q = questions[qIdx];
     if (!q || !typed.trim()) return;
-    if (isAcceptable(typed, q.acceptable)) {
-      patchQ(qIdx, { done: true });
-      setFeedback({ state: "correct", title: "That's it.", line: q.acceptable[0] });
-    } else {
+    const judged = judgeAnswer(typed, q.acceptable);
+    if (judged.verdict === "wrong") {
       markWrong(qIdx);
+      return;
     }
+    // "close" means he had the idea but the spelling or wording was rough. He
+    // gets the credit, and the tidy phrasing to read back.
+    patchQ(qIdx, { done: true });
+    setFeedback({
+      state: "correct",
+      title: judged.verdict === "correct" ? "That's it." : "Yes — that's the idea.",
+      line:
+        judged.verdict === "correct"
+          ? q.acceptable[0]
+          : `We would write it: ${judged.matched || q.acceptable[0]}`,
+    });
   }
 
   function answerPick(index: number) {
@@ -616,6 +633,14 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
   const isMcq = q.options.length > 0 && q.answerIndex >= 0;
   const revealAnswer = isMcq ? q.options[q.answerIndex] : q.acceptable[0];
 
+  // Early on he is shown where to look before he answers; later only after a
+  // miss; later still not until the reveal.
+  const helped =
+    scaffold === "full" || (scaffold === "light" && state.wrong > 0);
+  const markSource = Boolean(q.source) && (state.revealed || helped);
+  // The first hint rides along with the marked sentence at full scaffolding.
+  const hintsShown = Math.max(state.hints, helped && scaffold === "full" ? 1 : 0);
+
   return (
     <div className="px-4 pb-40 pt-4">
       <ProgressBar
@@ -628,7 +653,7 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
       <Passage
         text={reading.paragraph}
         glosses={reading.vocabGlosses}
-        highlight={state.revealed ? q.source : undefined}
+        highlight={markSource ? q.source : undefined}
         onGlossTap={(g) => {
           setGloss(g);
           setShowArabic(false);
@@ -644,6 +669,18 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
           Question {qIdx + 1} of {questions.length}
         </p>
         <p className="mt-1 text-[19px] leading-snug">{q.q}</p>
+
+        {markSource && !state.revealed ? (
+          <div className="mt-3 flex items-start gap-2">
+            <span className="mt-0.5 shrink-0" style={{ color: "var(--color-gold-ink)" }}>
+              <Icon name="star" size={18} />
+            </span>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              The answer is in the <strong>marked sentence</strong> above. Read it
+              again, then write it your own way.
+            </p>
+          </div>
+        ) : null}
 
         {state.revealed ? (
           <div className="mt-4 space-y-3">
@@ -710,7 +747,7 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
           </form>
         )}
 
-        {!state.revealed && state.hints > 0 ? (
+        {!state.revealed && hintsShown > 0 ? (
           <div
             className="mt-4 rounded-tile px-3 py-3"
             style={{ background: "var(--color-blue-soft)" }}
@@ -721,7 +758,7 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
             >
               Hint
             </p>
-            {q.hints.slice(0, state.hints).map((h, i) => (
+            {q.hints.slice(0, hintsShown).map((h, i) => (
               <p key={i} className="mt-1 text-base">
                 {h}
               </p>
