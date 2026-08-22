@@ -82,36 +82,55 @@ export async function recordAudio(): Promise<Recording> {
 
 export type Playback = {
   cancel: () => void;
+  /** Freeze at the current position. Safe to call twice, or when not playing. */
+  pause: () => void;
+  /** Carry on from where pause() left off. No-op once cancelled or finished. */
+  resume: () => void;
   promise: Promise<void>;
 };
 
 export function playTextThroughTTS(text: string): Playback {
   if (typeof window === "undefined" || !text.trim()) {
-    return { cancel: () => {}, promise: Promise.resolve() };
+    return {
+      cancel: () => {},
+      pause: () => {},
+      resume: () => {},
+      promise: Promise.resolve(),
+    };
   }
   const audio = new Audio();
   audio.preload = "auto";
   audio.src = `/api/tts?text=${encodeURIComponent(text)}`;
   let cancelled = false;
-  const promise = new Promise<void>((resolve) => {
-    const done = () => {
-      audio.onended = null;
-      audio.onerror = null;
-      resolve();
-    };
-    audio.onended = done;
-    audio.onerror = done;
+  let settled = false;
+
+  // Deferred resolver so pause()/resume() can live outside the executor.
+  let resolver!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolver = res;
+  });
+  const done = () => {
+    if (settled) return;
+    settled = true;
+    audio.onended = null;
+    audio.onerror = null;
+    resolver();
+  };
+  audio.onended = done;
+  audio.onerror = done;
+
+  const start = () => {
     // If cancel ran before the deferred play() promise settled, swallow it —
     // the browser would otherwise begin playback after we'd already torn down.
     audio.play().then(
       () => {
-        if (cancelled) {
-          audio.pause();
-        }
+        if (cancelled) audio.pause();
       },
       done
     );
-  });
+  };
+  start();
+
   return {
     cancel: () => {
       if (cancelled) return;
@@ -125,6 +144,18 @@ export function playTextThroughTTS(text: string): Playback {
         audio.removeAttribute("src");
         audio.load();
       } catch { /* ignore */ }
+    },
+    // pause() keeps currentTime, so resume() picks the sentence back up
+    // instead of starting the passage again.
+    pause: () => {
+      if (cancelled || settled) return;
+      try {
+        audio.pause();
+      } catch { /* ignore */ }
+    },
+    resume: () => {
+      if (cancelled || settled) return;
+      start();
     },
     promise,
   };

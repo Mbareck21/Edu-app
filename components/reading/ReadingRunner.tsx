@@ -9,6 +9,7 @@ import Icon from "@/components/ui/Icon";
 import LessonComplete from "@/components/ui/LessonComplete";
 import Pill from "@/components/ui/Pill";
 import ProgressBar from "@/components/ui/ProgressBar";
+import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { postSession } from "@/lib/offline-queue";
 import {
@@ -34,7 +35,7 @@ export type ReadingRunnerProps = {
 };
 
 type Phase = "mode" | "read" | "questions" | "done";
-type Mode = "listen" | "alone";
+type Mode = "listen" | "alone" | "echo";
 
 const HINTS_BEFORE_REVEAL = 2;
 
@@ -72,8 +73,12 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
 
   // Listen mode
   const [playingIdx, setPlayingIdx] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
   const playbackRef = useRef<Playback | null>(null);
   const tokenRef = useRef(0);
+
+  // Echo mode ("read after me") — kept for the finish screen's subtitle.
+  const [echo, setEcho] = useState<EchoSummary | null>(null);
 
   // Fluency timer
   const [timerStart, setTimerStart] = useState<number | null>(null);
@@ -98,6 +103,21 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
     playbackRef.current?.cancel();
     playbackRef.current = null;
     setPlayingIdx(null);
+    setPaused(false);
+  }, []);
+
+  // Pause holds the audio element's position, so play carries on from the
+  // same spot instead of restarting the passage.
+  const pauseAudio = useCallback(() => {
+    if (!playbackRef.current) return;
+    playbackRef.current.pause();
+    setPaused(true);
+  }, []);
+
+  const resumeAudio = useCallback(() => {
+    if (!playbackRef.current) return;
+    playbackRef.current.resume();
+    setPaused(false);
   }, []);
 
   useEffect(() => () => stopAudio(), [stopAudio]);
@@ -139,6 +159,7 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
   const playFrom = useCallback(
     (start: number) => {
       stopAudio();
+      setPaused(false);
       const token = ++tokenRef.current;
       const run = (i: number) => {
         if (i >= paragraphs.length || tokenRef.current !== token) {
@@ -295,7 +316,9 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
         subtitle={
           wpm
             ? `${wpm} words a minute. Grade 4 aims for ${wpmNormForDate()}.`
-            : `Level ${level} · ${wordsCount} words`
+            : echo
+              ? `You read back ${echo.passed} of ${echo.sentences} sentences.`
+              : `Level ${level} · ${wordsCount} words`
         }
         xp={gainedXp}
         ms={elapsedMs}
@@ -433,6 +456,20 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
           variant="secondary"
           color="green"
           onClick={() => {
+            setMode("echo");
+            setEcho(null);
+            startedAtRef.current = Date.now();
+            setPhase("read");
+          }}
+        >
+          Read after me
+        </Button>
+        <Button
+          fullWidth
+          size="lg"
+          variant="secondary"
+          color="green"
+          onClick={() => {
             setMode("alone");
             startedAtRef.current = Date.now();
             setPhase("read");
@@ -440,11 +477,41 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
         >
           Read alone
         </Button>
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          <strong>Read after me</strong> plays one sentence at a time and listens
+          while you say it back.
+        </p>
       </div>
     );
   }
 
   // (b) Reading
+  if (phase === "read" && mode === "echo") {
+    return (
+      <div className="pt-5">
+        <div className="mb-1 flex items-center justify-between gap-2 px-4">
+          <h1 className="font-display text-2xl font-bold">{reading.title}</h1>
+          <Pill color="green" size="sm">
+            L{level}
+          </Pill>
+        </div>
+        <EchoReader
+          text={reading.paragraph}
+          glosses={reading.vocabGlosses}
+          onGlossTap={(g) => {
+            setGloss(g);
+            setShowArabic(false);
+          }}
+          onFinish={(summary) => {
+            setEcho(summary);
+            setPhase("questions");
+          }}
+        />
+        {glossPanel}
+      </div>
+    );
+  }
+
   if (phase === "read") {
     return (
       <div className="px-4 pb-10 pt-5">
@@ -462,16 +529,25 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
               color="green"
               onClick={() => {
                 if (playingIdx === null) playFrom(0);
-                else stopAudio();
+                else if (paused) resumeAudio();
+                else pauseAudio();
               }}
             >
-              <Icon name={playingIdx === null ? "play" : "x"} size={22} />
-              {playingIdx === null ? "Play" : "Pause"}
+              <Icon name={playingIdx !== null && !paused ? "pause" : "play"} size={22} />
+              {playingIdx === null ? "Play" : paused ? "Play" : "Pause"}
             </Button>
+            {playingIdx !== null ? (
+              <Button size="md" variant="secondary" color="green" onClick={stopAudio}>
+                <Icon name="x" size={20} />
+                Stop
+              </Button>
+            ) : null}
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
               {playingIdx === null
                 ? "Tap play. The part being read lights up."
-                : `Part ${playingIdx + 1} of ${paragraphs.length}`}
+                : paused
+                  ? `Paused in part ${playingIdx + 1}. Play carries on from here.`
+                  : `Part ${playingIdx + 1} of ${paragraphs.length}`}
             </p>
           </div>
         ) : null}
