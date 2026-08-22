@@ -7,7 +7,14 @@ import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
-import { MATH_SKILLS, MATH_UNITS, currentUnit, skillsForUnit, type MathSkill } from "@/lib/math";
+import {
+  MATH_SKILLS,
+  MATH_UNITS,
+  currentLesson,
+  currentUnit,
+  skillsForUnit,
+  type MathSkill,
+} from "@/lib/math";
 import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
@@ -84,8 +91,14 @@ export default async function MathPage() {
   }
   const statFor = (id: string): Stat => stats.get(id) ?? { level: 1, best: null };
 
-  const unit = currentUnit(todayKey());
-  const unitSkills = skillsForUnit(unit.id);
+  const today = todayKey();
+  const unit = currentUnit(today);
+  const lesson = currentLesson(today);
+  // The lesson his class is on this week comes first, then the rest of the unit.
+  const unitSkills = [...skillsForUnit(unit.id)].sort((a, b) => {
+    const rank = (s: MathSkill) => (lesson.skills.includes(s.id) ? 0 : 1);
+    return rank(a) - rank(b);
+  });
 
   return (
     <AppShell>
@@ -111,7 +124,10 @@ export default async function MathPage() {
         <p className="mt-0.5 text-sm" style={{ color: "var(--color-purple-dark)" }}>
           {shortDate(unit.start)} to {shortDate(unit.end)} · {unit.quarter}
         </p>
-        <p className="mt-2 text-sm">Play these first. They match your class.</p>
+        <p className="mt-2 font-display text-base font-bold">
+          Lesson {lesson.lesson}: {lesson.title}
+        </p>
+        <p className="mt-1 text-sm">Play these first. They match your class.</p>
       </Card>
 
       {unitSkills.map((skill) => (

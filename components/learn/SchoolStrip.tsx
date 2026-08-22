@@ -3,7 +3,7 @@ import Link from "next/link";
 import Icon from "@/components/ui/Icon";
 import { ELA_STANDARDS, currentQuarter, scienceUnitForWeek } from "@/lib/curriculum";
 import { todayKey } from "@/lib/day";
-import { currentUnit } from "@/lib/math";
+import { currentLesson, currentUnit } from "@/lib/math";
 
 /** First clause only — the strip has one line per subject. */
 function shortPlain(plain: string): string {
@@ -22,6 +22,7 @@ export default function SchoolStrip({ href }: { href: string }) {
     (s) => quarter !== "summer" && s.quarters.includes(quarter)
   ).slice(0, 2);
   const math = currentUnit(today);
+  const lesson = currentLesson(today);
   const science = scienceUnitForWeek(today);
 
   return (
@@ -52,7 +53,7 @@ export default function SchoolStrip({ href }: { href: string }) {
             <Icon name="math" size={16} />
           </span>
           <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
-            Math: {math.name}
+            Math: {math.name} · Lesson {lesson.lesson}: {lesson.title}
           </span>
         </Link>
       </div>

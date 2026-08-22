@@ -14,6 +14,15 @@ export type {
 export { mulberry32, pick, randInt, shuffle } from "./rng";
 export { MATH_SKILLS, MATH_SKILL_IDS, getSkill, isMathSkillId, skillsForUnit } from "./skills";
 export { MATH_UNITS, currentUnit, unitFor } from "./units";
+export type { IreadyLesson } from "./iready";
+export {
+  IREADY_LESSONS,
+  IREADY_UNITS,
+  currentLesson,
+  lessonByNumber,
+  lessonLabel,
+  lessonsForFpsUnit,
+} from "./iready";
 export type { MixedSessionOptions, SessionOptions } from "./session";
 export {
   DEFAULT_SESSION_COUNT,
