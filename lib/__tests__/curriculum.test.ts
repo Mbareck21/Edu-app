@@ -7,9 +7,11 @@ import {
   LATIN_PARTS,
   READING_THEMES,
   SCIENCE_UNITS,
+  THEME_WEEKS,
   currentQuarter,
   scienceUnitForWeek,
   themeForWeek,
+  weekInTheme,
 } from "@/lib/curriculum";
 
 function addDays(dateISO: string, n: number): string {
@@ -100,4 +102,17 @@ test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2027-05-20")?.id, "engineering-design");
   assert.equal(scienceUnitForWeek("2026-07-01"), null);
   assert.equal(scienceUnitForWeek("2027-06-30"), null);
+});
+
+test("the unit week runs 1..3 and cycles with the themes", () => {
+  const days = [
+    "2026-08-11", "2026-08-24", "2026-09-07", "2026-10-05",
+    "2026-11-16", "2027-01-11", "2027-03-01", "2027-05-18",
+  ];
+  for (const d of days) {
+    const w = weekInTheme(d);
+    assert.ok(w >= 1 && w <= THEME_WEEKS, `${d} -> ${w}`);
+  }
+  // Week 1 of the year is week 1 of the first unit.
+  assert.equal(weekInTheme("2026-08-11"), 1);
 });

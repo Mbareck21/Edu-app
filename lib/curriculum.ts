@@ -269,6 +269,31 @@ export const READING_THEMES: ReadingTheme[] = [
 ];
 
 /**
+ * Each Benchmark Advance unit runs three weeks: two short reads, then an
+ * extended read, then a second extended read where the class compares the
+ * texts. Confirmed in the publisher's Grade 4 scope and sequence.
+ */
+export const THEME_WEEKS = 3;
+
+/**
+ * Which week of the current unit the class is in, 1..3. Derived from the same
+ * even spread `themeForWeek` uses, so the two never disagree.
+ */
+export function weekInTheme(dateISO: string): number {
+  const total = SCHOOL_WEEKS.length;
+  const m = mondayOf(dayNum(dateISO));
+  let passed = 0;
+  for (const w of SCHOOL_WEEKS) {
+    if (w <= m) passed++;
+    else break;
+  }
+  const index = passed === 0 ? 0 : passed - 1;
+  const perTheme = total / READING_THEMES.length;
+  const into = index - Math.floor(index / perTheme) * perTheme;
+  return Math.min(THEME_WEEKS, Math.floor((into / perTheme) * THEME_WEEKS) + 1);
+}
+
+/**
  * The reading theme in play for the week containing `dateISO`.
  * The ten themes are spread evenly over the instructional weeks of the year
  * (Aug 11 2026 - May 20 2027), in order. Dates before the year start return the

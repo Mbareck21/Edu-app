@@ -13,8 +13,11 @@ import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { postSession } from "@/lib/offline-queue";
 import {
+  GRADE4_LEXILE,
+  atGradeLevel,
   countWords,
   isAcceptable,
+  lexileForLevel,
   splitParagraphs,
   wordsPerMinute,
   wpmNormForDate,
@@ -97,6 +100,8 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
   );
   const wordsCount = reading ? countWords(reading.paragraph) : 0;
   const level = reading?.level ?? list.readingLevel ?? 1;
+  const lexile = lexileForLevel(level);
+  const atGrade = atGradeLevel(level);
 
   const stopAudio = useCallback(() => {
     tokenRef.current++;
@@ -318,7 +323,7 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
             ? `${wpm} words a minute. Grade 4 aims for ${wpmNormForDate()}.`
             : echo
               ? `You read back ${echo.passed} of ${echo.sentences} sentences.`
-              : `Level ${level} · ${wordsCount} words`
+              : `Level ${level} · ${lexile}L${atGrade ? " · Grade 4 reading" : ""}`
         }
         xp={gainedXp}
         ms={elapsedMs}
@@ -431,7 +436,12 @@ export default function ReadingRunner({ list, onDone }: ReadingRunnerProps) {
           className="text-sm font-bold uppercase tracking-wide"
           style={{ color: "var(--color-muted)" }}
         >
-          Level {level} · {wordsCount} words
+          Level {level} · {wordsCount} words · {lexile}L
+        </p>
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+          {atGrade
+            ? "This is Grade 4 reading."
+            : `Grade 4 reading starts at ${GRADE4_LEXILE.min}L.`}
         </p>
         <h1 className="font-display text-3xl font-bold">{reading.title}</h1>
         <p className="text-base" style={{ color: "var(--color-muted)" }}>

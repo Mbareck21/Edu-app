@@ -20,10 +20,54 @@ export const MAX_GLOSSARY_ENTRIES = MAX_UNKNOWN_BUDGET + 2;
 /** Story = narrative, info = informational (science / social studies). */
 export type PassageKind = "story" | "info";
 
+// ── Text difficulty, in Lexiles ───────────────────────────────────────────
+//
+// The ladder needs an outside anchor, or "level 7" means only what this app
+// decides it means. Two published numbers give it one:
+//
+//   * The Common Core grade band for Grades 4-5 is 740L-1010L, and the Grade 4
+//     end-of-year target sits at the bottom of it.
+//   * The Grade 4 texts in Benchmark Advance — the program his class reads —
+//     run 760L to 1030L, clustering near 850L-900L.
+//
+// So level 10 lands at 940L: inside his class's range and past the 740L floor.
+// Level 1 starts at 450L, mid-Grade-2, which is where a Grade 3 reader can
+// succeed without help. The ladder climbs evenly between the two.
+
+/** Common Core Grades 4-5 stretch band. GRADE4_LEXILE.min is the pass mark. */
+export const GRADE4_LEXILE = { min: 740, max: 1010 } as const;
+
+/** Observed range of the Grade 4 texts in his class's reading program. */
+export const CLASS_TEXT_LEXILE = { min: 760, max: 1030 } as const;
+
+export const LEXILE_LADDER = { start: 450, end: 940 } as const;
+
+/** Lexile target for a rung of the ladder. Level 1 = 450L, level 10 = 940L. */
+export function lexileForLevel(rawLevel: number): number {
+  const level = clampLevel(rawLevel);
+  const step = (LEXILE_LADDER.end - LEXILE_LADDER.start) / (MAX_READING_LEVEL - 1);
+  return Math.round((LEXILE_LADDER.start + step * (level - 1)) / 10) * 10;
+}
+
+/** True once the level's texts are inside the Grade 4 band. */
+export function atGradeLevel(rawLevel: number): boolean {
+  return lexileForLevel(rawLevel) >= GRADE4_LEXILE.min;
+}
+
+/** The rung he has to reach for his reading to count as Grade 4. */
+export function levelAtGrade(): number {
+  for (let l = 1; l <= MAX_READING_LEVEL; l++) {
+    if (atGradeLevel(l)) return l;
+  }
+  return MAX_READING_LEVEL;
+}
+
 // ── Level parameters (plan §"Research-driven adjustments" item 8) ──────────
 
 export type ReadingParams = {
   level: number;
+  /** Text difficulty in Lexiles. See LEXILE_LADDER. */
+  lexile: number;
   /** Words the passage should land on: 110 at L1 → 380 at L10. */
   targetWords: number;
   minWords: number;
@@ -46,6 +90,7 @@ export function readingParams(rawLevel: number): ReadingParams {
   const targetWords = 110 + 30 * (level - 1);
   return {
     level,
+    lexile: lexileForLevel(level),
     targetWords,
     minWords: Math.round(targetWords * 0.85),
     maxWords: Math.round(targetWords * 1.25),

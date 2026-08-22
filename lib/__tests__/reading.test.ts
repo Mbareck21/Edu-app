@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  CLASS_TEXT_LEXILE,
+  GRADE4_LEXILE,
+  LEXILE_LADDER,
   MAX_WPM,
+  atGradeLevel,
   clampLevel,
   countWords,
   isAcceptable,
+  levelAtGrade,
+  lexileForLevel,
   longestSentenceWords,
   questionPlan,
   readingParams,
@@ -88,4 +94,28 @@ test("wpm is clamped to what the server accepts", () => {
   // 110 words skimmed in 3s is 2200 raw — the route's zod max is 1000.
   assert.equal(wordsPerMinute(110, 3000), MAX_WPM);
   assert.equal(wordsPerMinute(500, 2000), MAX_WPM);
+});
+
+test("the lexile ladder is anchored to the Grade 4 band", () => {
+  assert.equal(lexileForLevel(1), LEXILE_LADDER.start);
+  assert.equal(lexileForLevel(10), LEXILE_LADDER.end);
+  assert.equal(lexileForLevel(0), LEXILE_LADDER.start);
+  assert.equal(lexileForLevel(99), LEXILE_LADDER.end);
+  // Climbs, never dips.
+  for (let l = 2; l <= 10; l++) {
+    assert.ok(lexileForLevel(l) > lexileForLevel(l - 1), `level ${l} climbs`);
+  }
+  // The top of the ladder sits inside the range his class actually reads.
+  assert.ok(LEXILE_LADDER.end >= GRADE4_LEXILE.min);
+  assert.ok(LEXILE_LADDER.end >= CLASS_TEXT_LEXILE.min);
+  assert.ok(LEXILE_LADDER.end <= CLASS_TEXT_LEXILE.max);
+  // readingParams carries the same number.
+  assert.equal(readingParams(6).lexile, lexileForLevel(6));
+});
+
+test("grade-level check and the rung it starts at agree", () => {
+  const rung = levelAtGrade();
+  assert.ok(!atGradeLevel(rung - 1), "the rung below is not yet grade level");
+  assert.ok(atGradeLevel(rung), "the rung is grade level");
+  assert.ok(lexileForLevel(rung) >= GRADE4_LEXILE.min);
 });

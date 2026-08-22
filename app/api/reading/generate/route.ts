@@ -8,6 +8,7 @@ import { getProfile } from "@/lib/profile";
 import {
   scienceUnitForWeek,
   themeForWeek,
+  weekInTheme,
   type ReadingTheme,
   type ScienceUnit,
 } from "@/lib/curriculum";
@@ -171,6 +172,7 @@ export async function POST(req: Request) {
   // unit when there is one; stories ride the Benchmark reading theme.
   const todayISO = todayKey();
   const theme: ReadingTheme = themeForWeek(todayISO);
+  const themeWeek = weekInTheme(todayISO);
   const scienceUnit: ScienceUnit | null = scienceUnitForWeek(todayISO);
   const useScience = kind === "info" && scienceUnit !== null;
 
@@ -203,13 +205,14 @@ TOPIC: ${topic}${useScience && scienceUnit ? ` — this is the science unit his 
 ANGLE: ${topicIdea ?? topic}
 The writer must make one clear point and back it with reasons and examples.`
       : `KIND: story (narrative)
-TOPIC: ${topic} — the reading unit his class is on now
+TOPIC: ${topic} — the reading unit his class is on now (week ${themeWeek} of 3)
 BIG QUESTION the class is asking: ${essentialQuestion}
 ANGLE: ${topicIdea ?? essentialQuestion}
 The story must carry a lesson he could name in one sentence.`;
 
   const userPrompt = `LEVEL: ${level} of 10
 TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never more than ${params.maxWords})
+TEXT DIFFICULTY: about ${params.lexile}L. Match it with sentence length and word choice, not with padding.
 MAX SENTENCE WORDS: ${params.maxSentenceWords}
 PARAGRAPHS: ${params.paragraphs}
 UNKNOWN-WORD BUDGET: ${params.unknownBudget} (every one goes in "glossary")
