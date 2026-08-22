@@ -1,6 +1,7 @@
 // Reading engine: pure helpers shared by the generator route and the runner.
 // No React, no Mongo — safe to import anywhere.
 
+import type { Quarter } from "@/lib/curriculum";
 import type { ReadingQuestionType } from "@/lib/models/WordList";
 
 /** The profile's reading ladder runs 1..10 (see lib/rewards.ts). */
@@ -114,16 +115,47 @@ export type QuestionSpec = {
 };
 
 /**
+ * The quarter each FPS essential standard starts being assessed in. Taken from
+ * the district Year-at-a-Glance (docs/curriculum-fps-grade4.md §1).
+ *
+ * These gate question types alongside the reading level, because school grades
+ * him on the standard whatever level his texts are at. Waiting for the ladder
+ * to reach level 5 would mean never practising the Q3 standards.
+ */
+const STANDARD_OPENS: Record<"retell" | "theme" | "evidence", Quarter["id"]> = {
+  theme: "Q2", // 4.RC.9.RL
+  retell: "Q3", // 4.RC.3.RF
+  evidence: "Q3", // 4.RC.14.RI
+};
+
+const QUARTER_ORDER: Quarter["id"][] = ["Q1", "Q2", "Q3", "Q4"];
+
+/** True once school has reached the quarter that standard is assessed in. */
+function quarterReached(
+  now: Quarter["id"] | "summer" | undefined,
+  opens: Quarter["id"]
+): boolean {
+  if (!now || now === "summer") return false;
+  return QUARTER_ORDER.indexOf(now) >= QUARTER_ORDER.indexOf(opens);
+}
+
+/**
  * The question set for one passage. Order here is the order he answers in:
  * the two "author" prompts come first because they are what he should be
  * asking himself while reading (McKeown, Beck & Blake — Questioning the Author).
+ *
+ * `quarter` is the school quarter today. Pass it so a standard his class has
+ * started on shows up even when his reading level has not caught up yet.
  */
 export function questionPlan(
   rawLevel: number,
   kind: PassageKind,
-  science: boolean
+  science: boolean,
+  quarter?: Quarter["id"] | "summer"
 ): QuestionSpec[] {
   const level = clampLevel(rawLevel);
+  const open = (id: keyof typeof STANDARD_OPENS, minLevel: number) =>
+    level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]);
   const out: QuestionSpec[] = [
     {
       type: "author",
@@ -156,7 +188,7 @@ export function questionPlan(
     });
   }
 
-  if (level >= 4) {
+  if (open("retell", 4)) {
     out.push({
       type: "retell",
       format: "mcq",
@@ -166,7 +198,7 @@ export function questionPlan(
     });
   }
 
-  if (kind === "story" && level >= 4) {
+  if (kind === "story" && open("theme", 4)) {
     out.push({
       type: "theme",
       format: "mcq",
@@ -176,7 +208,7 @@ export function questionPlan(
     });
   }
 
-  if (kind === "info" && level >= 5) {
+  if (kind === "info" && open("evidence", 5)) {
     out.push({
       type: "evidence",
       format: "mcq",

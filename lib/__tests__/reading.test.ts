@@ -119,3 +119,31 @@ test("grade-level check and the rung it starts at agree", () => {
   assert.ok(atGradeLevel(rung), "the rung is grade level");
   assert.ok(lexileForLevel(rung) >= GRADE4_LEXILE.min);
 });
+
+test("the school quarter opens standards the reading level has not reached", () => {
+  // Level 1 in Q1: only the three questions that run all year.
+  const q1 = questionPlan(1, "story", false, "Q1");
+  assert.deepEqual(
+    q1.map((q) => q.type),
+    ["author", "author", "detail"]
+  );
+
+  // Same level in Q2: theme is assessed at school now (4.RC.9.RL), so it appears.
+  const q2 = questionPlan(1, "story", false, "Q2");
+  assert.ok(q2.some((q) => q.type === "theme"));
+  assert.ok(!q2.some((q) => q.type === "retell"), "retell waits for Q3");
+
+  // Q3 opens summarise (4.RC.3.RF) and, on non-fiction, author's evidence.
+  const q3 = questionPlan(1, "story", false, "Q3");
+  assert.ok(q3.some((q) => q.type === "retell"));
+  const info = questionPlan(1, "info", false, "Q3");
+  assert.ok(info.some((q) => q.type === "evidence"));
+
+  // Summer gates nothing open on its own; the level still decides.
+  const summer = questionPlan(1, "story", false, "summer");
+  assert.ok(!summer.some((q) => q.type === "theme"));
+  assert.ok(questionPlan(9, "story", false, "summer").some((q) => q.type === "theme"));
+
+  // Omitting the quarter keeps the old level-only behaviour.
+  assert.deepEqual(questionPlan(1, "story", false), q1);
+});

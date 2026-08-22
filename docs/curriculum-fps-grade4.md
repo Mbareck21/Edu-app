@@ -192,6 +192,8 @@ For each essential standard: which app item types exercise it, and whether the i
 
 **Weekly theme wiring.** `themeForWeek(date)` returns the Benchmark unit for the week; the reading generator uses its essential question as one of the two author prompts and pulls 3–5 of its theme words as the passage's glossed unknown words. `currentQuarter(date)` gates which standards the "At school now" strip shows, so theme-pick does not appear before Q2 and evidence-pick does not appear before Q3.
 
+**Quarter gating (built 2026-08-22).** `questionPlan()` takes the current quarter and opens `theme` in Q2, `retell` and `evidence` in Q3, whatever the reading level is. Before this, those three question types were gated on reading level alone (>= 4, >= 5), which meant a child reading at level 1 would never meet the three standards FPS grades hardest — 4.RC.9.RL, 4.RC.3.RF and 4.RC.14.RI. The level thresholds still apply out of term.
+
 ### New item types, at a glance
 
 1. `word-part-meaning` — pick what a prefix / base / suffix means (4.FR.1.PD)

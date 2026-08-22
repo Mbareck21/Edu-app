@@ -6,6 +6,7 @@ import { todayKey } from "@/lib/day";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfile } from "@/lib/profile";
 import {
+  currentQuarter,
   scienceUnitForWeek,
   themeForWeek,
   weekInTheme,
@@ -188,7 +189,9 @@ export async function POST(req: Request) {
   const essentialQuestion = theme.prompts[0];
 
   const studyWords = sampleWords(allWords, MAX_STUDY_WORDS);
-  const plan = questionPlan(level, kind, useScience);
+  // The school quarter opens the standards his class has started on, even
+  // when the reading ladder has not reached them yet.
+  const plan = questionPlan(level, kind, useScience, currentQuarter(todayISO));
 
   const historyBlock =
     history.length > 0
