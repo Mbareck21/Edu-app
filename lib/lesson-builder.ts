@@ -13,6 +13,7 @@
 
 import { dueSkills, skillDue } from "@/lib/mastery";
 import { shuffle } from "@/lib/math/rng";
+import { orderByNeed } from "@/lib/practice-order";
 import type { Rng } from "@/lib/math/types";
 import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList";
 import {
@@ -86,19 +87,11 @@ function reviewOrder(
   now: Date,
   rng: Rng
 ): ClientWord[] {
-  const keyed = shuffle(rng, words).map((word) => {
-    const skills: ItemSkill[] = skill === "mixed" ? [...SKILL_IDS] : [skill];
-    const due = skills.some((s) => skillDue(word.skills[s], now));
-    const streak = Math.min(...skills.map((s) => word.skills[s].streak));
-    const dueAt = Math.min(...skills.map((s) => new Date(word.skills[s].dueAt).getTime()));
-    return { word, due, streak, dueAt };
-  });
-  keyed.sort((a, b) => {
-    if (a.due !== b.due) return a.due ? -1 : 1;
-    if (a.streak !== b.streak) return a.streak - b.streak;
-    return a.dueAt - b.dueAt;
-  });
-  return keyed.map((k) => k.word);
+  const skills: ItemSkill[] = skill === "mixed" ? [...SKILL_IDS] : [skill];
+  return orderByNeed(words, rng, (word) => ({
+    due: skills.some((s) => skillDue(word.skills[s], now)),
+    streak: Math.min(...skills.map((s) => word.skills[s].streak)),
+  }));
 }
 
 /** learn card + 3 items on the same word, back to back. */
@@ -257,7 +250,7 @@ export function buildReviewSession({
   rng,
   cap = REVIEW_CAP,
 }: BuildReviewArgs): LessonItem[] {
-  type Task = { word: ClientWord; skill: ItemSkill; pool: ItemPool; streak: number; dueAt: number };
+  type Task = { word: ClientWord; skill: ItemSkill; pool: ItemPool; streak: number };
   const due: Task[] = [];
   const soon: Task[] = [];
 
@@ -267,13 +260,7 @@ export function buildReviewSession({
       if (isNewWord(word)) continue;
       for (const skill of SKILL_IDS) {
         const state = word.skills[skill];
-        const task: Task = {
-          word,
-          skill,
-          pool,
-          streak: state.streak,
-          dueAt: new Date(state.dueAt).getTime(),
-        };
+        const task: Task = { word, skill, pool, streak: state.streak };
         if (skillDue(state, now)) due.push(task);
         else soon.push(task);
       }
@@ -281,10 +268,8 @@ export function buildReviewSession({
   }
 
   const chosen = due.length > 0 ? due : soon;
-  const sorted = shuffle(rng, chosen).sort((a, b) => {
-    if (a.streak !== b.streak) return a.streak - b.streak;
-    return a.dueAt - b.dueAt;
-  });
+  // `chosen` is already filtered to what is owed, so every task counts as due.
+  const sorted = orderByNeed(chosen, rng, (t) => ({ due: true, streak: t.streak }));
   const limit = due.length > 0 ? cap : Math.min(cap, 12);
   const items = sorted
     .slice(0, limit)

@@ -7,8 +7,8 @@
  */
 
 import { dueSkills, skillDue } from "@/lib/mastery";
-import { shuffle } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
+import { orderByNeed } from "@/lib/practice-order";
 import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList";
 import { itemForSkill, makeWrite, type ItemPool, type LessonItem } from "@/lib/items";
 
@@ -106,17 +106,10 @@ export function modeSkill(mode: VocabMode): SkillId | null {
 
 /** Due skills first, then the weakest, then whatever is due soonest. */
 export function orderWords(picked: PickedWord[], now: Date, rng: Rng): PickedWord[] {
-  const keyed = shuffle(rng, picked).map((p) => {
-    const streak = Math.min(...SKILL_IDS.map((id) => p.word.skills[id].streak));
-    const dueAt = Math.min(...SKILL_IDS.map((id) => new Date(p.word.skills[id].dueAt).getTime()));
-    return { p, due: isDue(p.word, now), streak, dueAt };
-  });
-  keyed.sort((a, b) => {
-    if (a.due !== b.due) return a.due ? -1 : 1;
-    if (a.streak !== b.streak) return a.streak - b.streak;
-    return a.dueAt - b.dueAt;
-  });
-  return keyed.map((k) => k.p);
+  return orderByNeed(picked, rng, (p) => ({
+    due: isDue(p.word, now),
+    streak: Math.min(...SKILL_IDS.map((id) => p.word.skills[id].streak)),
+  }));
 }
 
 /** Weakest skills first for a mixed drill: due ones, then the shortest streak. */
