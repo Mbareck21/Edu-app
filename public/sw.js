@@ -4,22 +4,44 @@
    - cache-first for hashed build assets and Google font files
    Nothing here caches API responses — progress must come from the server. */
 
-const VERSION = "quest-v2";
+const VERSION = "quest-v3";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
 const PRECACHE = ["/", "/math", "/drill", "/words", "/me", "/offline"];
 
+/** The /_next/static URLs a precached page needs, read out of its own HTML. */
+function buildAssets(html) {
+  const found = new Set();
+  const re = /["'(](\/_next\/static\/[^"')\s]+)["')]/g;
+  let m;
+  while ((m = re.exec(html)) !== null) found.add(m[1]);
+  return [...found];
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(SHELL);
+      const runtime = await caches.open(RUNTIME);
       // cache.add would happily store a login redirect when the user is not
       // signed in yet; fetch each page and keep only real, non-redirected 200s.
       await Promise.allSettled(
         PRECACHE.map(async (url) => {
           const response = await fetch(url, { credentials: "include" });
-          if (response.ok && !response.redirected) await cache.put(url, response);
+          if (!response.ok || response.redirected) return;
+          const html = await response.clone().text();
+          await cache.put(url, response);
+          // The HTML alone is not the page. Without its build chunks an
+          // offline tab renders a dead shell: it looks loaded, but nothing
+          // hydrates — no buttons, no audio — which is worse than /offline.
+          await Promise.allSettled(
+            buildAssets(html).map(async (asset) => {
+              if (await runtime.match(asset)) return;
+              const res = await fetch(asset);
+              if (res.ok) await runtime.put(asset, res);
+            })
+          );
         })
       );
       await self.skipWaiting();

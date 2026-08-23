@@ -17,11 +17,17 @@ export const dynamic = "force-dynamic";
 
 export default async function StepPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ listId: string; step: string }>;
+  searchParams: Promise<{ r?: string }>;
 }) {
   const { listId, step } = await params;
   if (!isStepId(step) || !mongoose.isValidObjectId(listId)) notFound();
+  // Remount key. "Again" links back to this same route with a new ?r, and
+  // React keeps a same-type component's state across that soft navigation —
+  // without a changing key the finished screen just re-renders itself.
+  const runKey = (await searchParams).r ?? "first";
 
   await connectDB();
   const doc = await WordList.findById(listId).lean();
@@ -38,6 +44,7 @@ export default async function StepPage({
   if (step === "flashcards") {
     return (
       <FlashcardRunner
+        key={runKey}
         list={list}
         nowIso={new Date(seed).toISOString()}
         needsExamples={needsExamples}
@@ -49,7 +56,13 @@ export default async function StepPage({
     // How much help finding the answer he still gets. Read from the profile so
     // it follows him across word lists, not per list.
     const profile = await getProfile();
-    return <ReadingRunner list={list} scaffold={scaffoldFor(profile.reading.recent)} />;
+    return (
+      <ReadingRunner
+        key={runKey}
+        list={list}
+        scaffold={scaffoldFor(profile.reading.recent)}
+      />
+    );
   }
 
   const info = stepById(step);
@@ -62,6 +75,7 @@ export default async function StepPage({
   });
   return (
     <ItemRunner
+      key={runKey}
       items={items}
       post={{ ref: `${list._id}:${step}`, listId: list._id, step }}
       exitHref={pathHref}

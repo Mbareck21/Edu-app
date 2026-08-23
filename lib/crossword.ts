@@ -23,6 +23,7 @@ interface Clg {
 const clg = require("crossword-layout-generator") as Clg;
 
 export type CrosswordPlacement = {
+  id: number;              // unique per placement; `position` is the shared clue number
   word: string;
   clue: string;
   startRow: number;        // 0-indexed
@@ -90,6 +91,7 @@ export function buildCrossword(words: { word: string; clue: string }[]): Crosswo
       continue;
     }
     placed.push({
+      id: placed.length,
       word: r.answer,
       clue: r.clue,
       startRow: r.starty - 1,

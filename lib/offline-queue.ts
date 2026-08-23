@@ -98,8 +98,25 @@ export async function postSession(result: SessionResult): Promise<PostSessionRes
   return { saved: false };
 }
 
-/** Drain whatever is parked. Transient failures stay queued; rejects are dropped. */
-export async function flushQueue(): Promise<number> {
+/**
+ * What to tell him about a session that did not reach the server.
+ *
+ * "invalid" is not "offline": the server refused the payload and will refuse
+ * it again, so it is neither retried nor queued. Telling him it was saved on
+ * the phone would be a lie, and the work would quietly vanish.
+ */
+export function saveNote(res: PostSessionResult): string | undefined {
+  if (res.saved) return undefined;
+  return res.invalid
+    ? "I could not save that one. Tell Dad — he may need to sign in again."
+    : "No internet. Saved on this phone for later.";
+}
+
+function queueKey(item: SessionResult): string {
+  return item.sessionId ?? JSON.stringify(item);
+}
+
+async function drain(): Promise<number> {
   const items = readQueue();
   if (items.length === 0) return 0;
   const left: SessionResult[] = [];
@@ -109,6 +126,28 @@ export async function flushQueue(): Promise<number> {
     if (outcome.saved) sent++;
     else if (outcome.kind === "transient") left.push(item);
   }
-  writeQueue(left);
+  // Re-read: a session finished in another tab while we were sending would be
+  // erased by writing our own snapshot back over it.
+  const mine = new Set(items.map(queueKey));
+  const arrived = readQueue().filter((i) => !mine.has(queueKey(i)));
+  writeQueue([...left, ...arrived]);
   return sent;
+}
+
+let flushing: Promise<number> | null = null;
+
+/**
+ * Drain whatever is parked. Transient failures stay queued; rejects are dropped.
+ *
+ * One flush at a time: this runs on mount AND on every `online` event, and a
+ * second PWA window runs its own. Two overlapping flushes would post the same
+ * queued session twice.
+ */
+export function flushQueue(): Promise<number> {
+  if (flushing) return flushing;
+  const run = drain().finally(() => {
+    if (flushing === run) flushing = null;
+  });
+  flushing = run;
+  return run;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Icon from "@/components/ui/Icon";
 import { tone, type AccentColor } from "@/components/ui/colors";
@@ -30,13 +30,30 @@ export default function AudioButton({
   className = "",
 }: AudioButtonProps) {
   const playback = useRef<Playback | null>(null);
+  const [failed, setFailed] = useState(false);
   const t = tone(color);
 
   const play = useCallback(() => {
     if (!text.trim()) return;
     playback.current?.cancel();
-    playback.current = playTextThroughTTS(text);
+    // The TTS service sits behind a network call, so one blip is worth a
+    // silent second try before we tell him the sound is broken.
+    const attempt = (retriesLeft: number) => {
+      const pb = playTextThroughTTS(text);
+      playback.current = pb;
+      void pb.promise.then((end) => {
+        if (end !== "failed" || playback.current !== pb) return;
+        if (retriesLeft > 0) attempt(retriesLeft - 1);
+        else setFailed(true);
+      });
+    };
+    attempt(1);
   }, [text]);
+
+  const tap = useCallback(() => {
+    setFailed(false);
+    play();
+  }, [play]);
 
   useEffect(() => {
     if (autoPlay) play();
@@ -49,17 +66,17 @@ export default function AudioButton({
   return (
     <button
       type="button"
-      onClick={play}
-      aria-label={label}
+      onClick={tap}
+      aria-label={failed ? "The sound did not play. Tap to try again." : label}
       className={`btn-3d btn-3d-lg press-3d inline-flex items-center justify-center rounded-full ${className}`}
       style={{
         width: size,
         height: size,
         minWidth: 56,
         minHeight: 56,
-        background: t.base,
-        color: t.on,
-        ["--btn-shade" as string]: t.dark,
+        background: failed ? "var(--color-coral)" : t.base,
+        color: failed ? "#fff" : t.on,
+        ["--btn-shade" as string]: failed ? "var(--color-coral-dark)" : t.dark,
       }}
     >
       <Icon name="volume" size={Math.round(size * 0.42)} strokeWidth={2.6} />

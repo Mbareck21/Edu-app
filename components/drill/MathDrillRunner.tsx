@@ -13,7 +13,8 @@ import RunnerHeader from "@/components/ui/RunnerHeader";
 import { clock } from "@/components/ui/time";
 import { buildSession, gradeAnswer, mixedSession, type Level, type MathSkillId } from "@/lib/math";
 import type { MathQuestion } from "@/lib/math/types";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
@@ -37,7 +38,14 @@ export type MathDrillRunnerProps = {
   againHref: string;
 };
 
-type Outcome = { gained: Gained | null; saved: boolean; ms: number; answered: number; correct: number };
+type Outcome = {
+  gained: Gained | null;
+  saved: boolean;
+  note?: string;
+  ms: number;
+  answered: number;
+  correct: number;
+};
 
 function drawQuestions(
   skill: MathSkillId | "mixed",
@@ -83,6 +91,8 @@ export default function MathDrillRunner({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const startedAt = useRef(0);
+  // The countdown stays wall-clock; only the posted time is time on task.
+  const watch = useRef<Stopwatch | null>(null);
   const askedAt = useRef(0);
   const posted = useRef(false);
   const fastRef = useRef(0);
@@ -99,6 +109,7 @@ export default function MathDrillRunner({
 
   useEffect(() => {
     startedAt.current = Date.now();
+    watch.current = startStopwatch();
     askedAt.current = Date.now();
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -120,7 +131,7 @@ export default function MathDrillRunner({
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    const ms = watch.current?.read() ?? 0;
     const answered = timed
       ? tally.answered
       : Object.keys(firstTry.current).length || questions.length;
@@ -142,6 +153,7 @@ export default function MathDrillRunner({
       setOutcome({
         gained: res.saved ? res.gained : null,
         saved: res.saved,
+        note: saveNote(res),
         ms,
         answered,
         correct,
@@ -165,6 +177,7 @@ export default function MathDrillRunner({
   const check = useCallback(() => {
     if (!question || !input || flash || feedback) return;
     const { correct } = gradeAnswer(question, input);
+    watch.current?.mark();
     const quick = Date.now() - askedAt.current < FAST_MS;
 
     if (timed) {
@@ -238,7 +251,7 @@ export default function MathDrillRunner({
           newBadge={outcome.gained?.newBadges[0] ?? null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
           secondary={{ label: "All drills", href: "/drill" }}
-          note={outcome.saved ? undefined : "No internet. Saved on this phone for later."}
+          note={outcome.note}
         />
       </div>
     );

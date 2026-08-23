@@ -7,14 +7,14 @@ import { WordList, toClient } from "@/lib/models/WordList";
 export const runtime = "nodejs";
 
 const WordPatch = z.object({
-  word: z.string().min(1).max(40).regex(/^[a-zA-Z][a-zA-Z\s-]*$/, "letters, spaces, hyphens only").trim(),
+  word: z.string().trim().min(1).max(40).regex(/^[a-zA-Z][a-zA-Z\s-]*$/, "letters, spaces, hyphens only"),
   clue: z.string().max(300).trim().default(""),
   arabic: z.string().max(80).trim().optional().default(""),
   explanation: z.string().max(300).trim().optional().default(""),
 });
 
 const PatchBody = z.object({
-  name: z.string().min(1).max(120).trim().optional(),
+  name: z.string().trim().min(1).max(120).optional(),
   hiddenMessage: z.string().max(200).trim().optional(),
   words: z.array(WordPatch).max(50).optional(),
 });

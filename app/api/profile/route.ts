@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 // The mute flag is a device setting — it lives in localStorage, not here.
 const PatchBody = z.object({
-  name: z.string().min(1).max(24).trim().optional(),
+  name: z.string().trim().min(1).max(24).optional(),
   dailyGoal: z.number().int().min(MIN_DAILY_GOAL).max(MAX_DAILY_GOAL).optional(),
 });
 

@@ -135,21 +135,33 @@ test("dueSkills lists what is ready, weakest first", () => {
 
 // ── reading ladder ────────────────────────────────────────────────────────
 
-function log(pct: number): ReadingLog {
-  return { at: NOW.toISOString(), level: 1, pct, wordsCount: 60 };
+function log(pct: number, level = 1): ReadingLog {
+  return { at: NOW.toISOString(), level, pct, wordsCount: 60 };
 }
 
-test("three readings at 85%+ step the level up, capped at 10", () => {
+test("three readings at READING_UP_PCT step the level up, capped at 10", () => {
   assert.equal(nextReadingLevel(1, [log(90), log(88), log(86)]), 2);
+  // 80 is the mark, and with 5 questions 4-of-5 is exactly 80.
+  assert.equal(nextReadingLevel(1, [log(80), log(80), log(80)]), 2);
   assert.equal(nextReadingLevel(10, [log(90), log(88), log(86)]), 10);
   assert.equal(nextReadingLevel(1, [log(90), log(88)]), 1);
-  assert.equal(nextReadingLevel(1, [log(90), log(88), log(80)]), 1);
+  assert.equal(nextReadingLevel(1, [log(90), log(88), log(75)]), 1);
 });
 
-test("two readings under 70% step the level down, floor 1", () => {
-  assert.equal(nextReadingLevel(4, [log(50), log(65)]), 3);
-  assert.equal(nextReadingLevel(4, [log(50), log(75)]), 4);
+test("two readings under READING_DOWN_PCT step the level down, floor 1", () => {
+  assert.equal(nextReadingLevel(4, [log(40, 4), log(45, 4)]), 3);
+  // 2 of 3 is 67. That is a thin reading, not a failing one.
+  assert.equal(nextReadingLevel(4, [log(40, 4), log(67, 4)]), 4);
   assert.equal(nextReadingLevel(1, [log(10), log(10)]), 1);
+});
+
+test("only readings taken at the current level move it", () => {
+  // He has just been promoted to 2 and read once at the new level. The three
+  // strong level-1 readings behind it must not promote him again.
+  const recent = [log(95, 2), log(95), log(95), log(95)];
+  assert.equal(nextReadingLevel(2, recent), 2);
+  // Two weak readings at the new level do move him back.
+  assert.equal(nextReadingLevel(2, [log(30, 2), log(30, 2), log(95)]), 1);
 });
 
 test("applyReading logs newest first and caps at 20", () => {
@@ -171,6 +183,6 @@ test("applyReading moves the level after three strong readings", () => {
   assert.equal(p.reading.level, 2);
   assert.equal(p.reading.recent[0].wpm, 92);
   p = applyReading(p, { level: 2, pct: 40, wordsCount: 60 }, now);
-  p = applyReading(p, { level: 2, pct: 55, wordsCount: 60 }, now);
+  p = applyReading(p, { level: 2, pct: 45, wordsCount: 60 }, now);
   assert.equal(p.reading.level, 1);
 });

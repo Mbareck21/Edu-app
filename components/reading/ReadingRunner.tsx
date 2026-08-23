@@ -12,7 +12,8 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import {
   GRADE4_LEXILE,
   atGradeLevel,
@@ -84,6 +85,8 @@ export default function ReadingRunner({
   // Listen mode
   const [playingIdx, setPlayingIdx] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
+  /** The part whose sound never arrived. Play picks up from here. */
+  const [stalledAt, setStalledAt] = useState<number | null>(null);
   const playbackRef = useRef<Playback | null>(null);
   const tokenRef = useRef(0);
 
@@ -96,6 +99,9 @@ export default function ReadingRunner({
 
   // 0 until the kid picks a reading mode; the finish screen reads it back.
   const startedAtRef = useRef(0);
+  // Time on task, not time on the clock. His longest logged reading was 2.5
+  // hours of an open tab — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
   const savedRef = useRef(false);
   const [gainedXp, setGainedXp] = useState(0);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
@@ -116,6 +122,7 @@ export default function ReadingRunner({
     playbackRef.current = null;
     setPlayingIdx(null);
     setPaused(false);
+    setStalledAt(null);
   }, []);
 
   // Pause holds the audio element's position, so play carries on from the
@@ -152,6 +159,7 @@ export default function ReadingRunner({
       }
       const fresh = (data as ClientWordList).currentReading;
       setReading(fresh);
+      setEcho(null);
       setQStates(freshQ(fresh?.questions.length ?? 0));
       setQIdx(0);
       setWpm(null);
@@ -181,8 +189,16 @@ export default function ReadingRunner({
         setPlayingIdx(i);
         const pb = playTextThroughTTS(paragraphs[i]);
         playbackRef.current = pb;
-        void pb.promise.then(() => {
-          if (tokenRef.current === token) run(i + 1);
+        void pb.promise.then((end) => {
+          if (tokenRef.current !== token) return;
+          // A part whose sound failed must stop the passage. Racing on would
+          // "read" the whole story in silence in under a second.
+          if (end === "failed") {
+            setStalledAt(i);
+            setPlayingIdx(null);
+            return;
+          }
+          run(i + 1);
         });
       };
       run(start);
@@ -255,13 +271,14 @@ export default function ReadingRunner({
   }
 
   const advance = useCallback(() => {
+    watch.current?.mark();
     setFeedback(null);
     setTyped("");
     setPicked(null);
     if (qIdx + 1 < questions.length) {
       setQIdx(qIdx + 1);
     } else {
-      setElapsedMs(Date.now() - (startedAtRef.current || Date.now()));
+      setElapsedMs(watch.current?.read() ?? 0);
       setPhase("done");
     }
   }, [qIdx, questions.length]);
@@ -309,7 +326,7 @@ export default function ReadingRunner({
           },
         });
         if (posted.saved) setGainedXp(posted.gained.xp);
-        else setQueuedNote("Saved on this phone. It will sync next time.");
+        else setQueuedNote(saveNote(posted));
       } finally {
         setBusy(null);
       }
@@ -359,6 +376,7 @@ export default function ReadingRunner({
               const fresh = await generate();
               if (fresh) {
                 startedAtRef.current = Date.now();
+                watch.current = startStopwatch();
                 setPhase("mode");
               }
             })();
@@ -388,7 +406,10 @@ export default function ReadingRunner({
           onClick={() => {
             void (async () => {
               const fresh = await generate();
-              if (fresh) startedAtRef.current = Date.now();
+              if (fresh) {
+                startedAtRef.current = Date.now();
+                watch.current = startStopwatch();
+              }
             })();
           }}
         >
@@ -470,7 +491,9 @@ export default function ReadingRunner({
           color="green"
           onClick={() => {
             setMode("listen");
+            setEcho(null);
             startedAtRef.current = Date.now();
+            watch.current = startStopwatch();
             setPhase("read");
             playFrom(0);
           }}
@@ -486,6 +509,7 @@ export default function ReadingRunner({
             setMode("echo");
             setEcho(null);
             startedAtRef.current = Date.now();
+            watch.current = startStopwatch();
             setPhase("read");
           }}
         >
@@ -498,7 +522,9 @@ export default function ReadingRunner({
           color="green"
           onClick={() => {
             setMode("alone");
+            setEcho(null);
             startedAtRef.current = Date.now();
+            watch.current = startStopwatch();
             setPhase("read");
           }}
         >
@@ -555,13 +581,14 @@ export default function ReadingRunner({
               size="lg"
               color="green"
               onClick={() => {
-                if (playingIdx === null) playFrom(0);
+                if (stalledAt !== null) playFrom(stalledAt);
+                else if (playingIdx === null) playFrom(0);
                 else if (paused) resumeAudio();
                 else pauseAudio();
               }}
             >
               <Icon name={playingIdx !== null && !paused ? "pause" : "play"} size={22} />
-              {playingIdx === null ? "Play" : paused ? "Play" : "Pause"}
+              {stalledAt !== null ? "Try again" : playingIdx === null ? "Play" : paused ? "Play" : "Pause"}
             </Button>
             {playingIdx !== null ? (
               <Button size="md" variant="secondary" color="green" onClick={stopAudio}>
@@ -569,12 +596,20 @@ export default function ReadingRunner({
                 Stop
               </Button>
             ) : null}
-            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              {playingIdx === null
-                ? "Tap play. The part being read lights up."
-                : paused
-                  ? `Paused in part ${playingIdx + 1}. Play carries on from here.`
-                  : `Part ${playingIdx + 1} of ${paragraphs.length}`}
+            <p
+              className="text-sm"
+              style={{
+                color:
+                  stalledAt !== null ? "var(--color-coral-dark)" : "var(--color-muted)",
+              }}
+            >
+              {stalledAt !== null
+                ? `The sound did not come through for part ${stalledAt + 1}. Check the internet, then tap Try again.`
+                : playingIdx === null
+                  ? "Tap play. The part being read lights up."
+                  : paused
+                    ? `Paused in part ${playingIdx + 1}. Play carries on from here.`
+                    : `Part ${playingIdx + 1} of ${paragraphs.length}`}
             </p>
           </div>
         ) : null}
@@ -582,7 +617,7 @@ export default function ReadingRunner({
         <Passage
           text={reading.paragraph}
           glosses={reading.vocabGlosses}
-          activeParagraph={mode === "listen" ? playingIdx : null}
+          activeParagraph={mode === "listen" ? (playingIdx ?? stalledAt) : null}
           onGlossTap={(g) => {
             setGloss(g);
             setShowArabic(false);

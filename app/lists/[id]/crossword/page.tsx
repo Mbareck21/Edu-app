@@ -177,7 +177,7 @@ function CluesColumn({
       <h2 className="mb-2 border-b border-black pb-1 text-center text-sm font-bold tracking-wider">{title}</h2>
       <ol className="space-y-1.5 text-sm">
         {entries.map((e) => (
-          <li key={e.position}>
+          <li key={e.word}>
             <strong>{e.position}.</strong> {e.clue || `(${e.word.length} letters)`}
           </li>
         ))}

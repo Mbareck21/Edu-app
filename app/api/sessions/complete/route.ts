@@ -154,25 +154,37 @@ async function updateMath(body: ParsedBody, now: Date): Promise<void> {
   doc.attempts = (doc.attempts ?? 0) + body.answered;
   doc.correct = (doc.correct ?? 0) + body.correct;
   if (body.ms > 0 && (!doc.bestMs || body.ms < doc.bestMs)) doc.bestMs = body.ms;
+  const prevLevel = doc.level ?? 1;
   doc.recentPcts = [pct, ...(doc.recentPcts ?? [])].slice(0, RECENT_PCTS);
-  doc.level = nextLevel(doc.level ?? 1, doc.recentPcts);
+  const level = nextLevel(prevLevel, doc.recentPcts);
+  // Scores earned at the old level must not also justify the next promotion.
+  // Without this, three good level-1 sessions promoted to 2, and then the very
+  // next good session saw the same window again and jumped him straight to 3.
+  if (level !== prevLevel) doc.recentPcts = [];
+  doc.level = level;
   doc.lastAt = now;
   await doc.save();
 }
 
-/** Has this session id already been applied to the profile? */
-async function alreadyApplied(sessionId: string): Promise<boolean> {
-  const doc = await Profile.findOne({ key: PROFILE_KEY }, { recentSessionIds: 1 }).lean();
-  const seen = doc?.recentSessionIds;
-  return Array.isArray(seen) && seen.some((id) => String(id) === sessionId);
-}
-
-/** Record the id, newest first, capped. */
-async function rememberSession(sessionId: string): Promise<void> {
-  await Profile.updateOne(
-    { key: PROFILE_KEY },
+/**
+ * Claim this session id, atomically, BEFORE anything is applied.
+ *
+ * Returns false when the id was already claimed — a retry after a transient
+ * failure, or a second window flushing the same queued session. Claiming first
+ * is the point: the writes below are not transactional, so a retry that ran
+ * after a half-finished apply used to advance every word's SRS schedule twice
+ * and push a duplicate score into MathProgress.recentPcts.
+ *
+ * The `$ne` guard makes the check and the write one operation, so two requests
+ * racing each other cannot both win. saveProfile() only $sets named fields, so
+ * it never clobbers this list.
+ */
+async function reserveSession(sessionId: string): Promise<boolean> {
+  const res = await Profile.updateOne(
+    { key: PROFILE_KEY, recentSessionIds: { $ne: sessionId } },
     { $push: { recentSessionIds: { $each: [sessionId], $position: 0, $slice: RECENT_SESSION_IDS } } }
   );
+  return res.modifiedCount > 0;
 }
 
 export async function POST(req: Request) {
@@ -196,7 +208,7 @@ export async function POST(req: Request) {
 
   // A retry of a session we already applied: report the current state, change
   // nothing. Must run before updateList/updateMath, not just before the rewards.
-  if (body.sessionId && (await alreadyApplied(body.sessionId))) {
+  if (body.sessionId && !(await reserveSession(body.sessionId))) {
     return NextResponse.json({
       gained: {
         xp: 0,
@@ -221,7 +233,6 @@ export async function POST(req: Request) {
   await updateList(body, now);
   await updateMath(body, now);
   const saved = await saveProfile(withReading);
-  if (body.sessionId) await rememberSession(body.sessionId);
 
   return NextResponse.json({
     gained: applied.gained,

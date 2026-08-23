@@ -38,6 +38,10 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   const mode: VocabMode = q.mode && isVocabMode(q.mode) ? q.mode : "mixed";
   const count = parseLength(q.n);
   const seed = Number(q.seed) || requestSeed();
+  // Remount key. "Again" pushes the same route with a new ?seed, and React
+  // keeps a same-type component's state across that soft navigation — so
+  // without a changing key the finished screen just re-renders itself.
+  const runKey = q.seed ?? "first";
 
   await connectDB();
   const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
@@ -56,6 +60,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
     const list = lists.find((l) => l.listId === listId) ?? lists[0];
     return (
       <RememberRunner
+        key={runKey}
         listId={list?.listId}
         listName={list?.name ?? "your words"}
         words={list ? list.words.map((w) => w.word) : []}
@@ -72,7 +77,12 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
       .slice(0, count)
       .map((p) => ({ listId: p.pool.listId ?? "", word: p.word }));
     return (
-      <DrillFlashcards cards={cards} sessionRef={sessionRef} againHref={againHref} />
+      <DrillFlashcards
+        key={runKey}
+        cards={cards}
+        sessionRef={sessionRef}
+        againHref={againHref}
+      />
     );
   }
 
@@ -80,6 +90,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
 
   return (
     <VocabDrillRunner
+      key={runKey}
       items={items}
       sessionRef={sessionRef}
       listId={listId}

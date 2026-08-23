@@ -9,7 +9,8 @@ import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { clock } from "@/components/ui/time";
 import { buildSession, getSkill, gradeAnswer, type Level, type MathSkillId } from "@/lib/math";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
@@ -24,7 +25,7 @@ export type MathSessionProps = {
 };
 
 type Run = { seed: number; queue: number[] };
-type Outcome = { gained: Gained | null; saved: boolean; ms: number; correct: number };
+type Outcome = { gained: Gained | null; saved: boolean; note?: string; ms: number; correct: number };
 
 function freshRun(seed: number): Run {
   return { seed, queue: Array.from({ length: COUNT }, (_, i) => i) };
@@ -42,12 +43,15 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const startRef = useRef(0);
+  // Time on task, not time on the clock — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
   const postedRef = useRef(false);
   const firstTryRef = useRef<Record<number, boolean>>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     startRef.current = Date.now();
+    watch.current = startStopwatch();
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
@@ -65,7 +69,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   // Elapsed clock. Stops as soon as the queue is empty.
   useEffect(() => {
     if (done) return;
-    const id = setInterval(() => setElapsed(Date.now() - startRef.current), 1000);
+    const id = setInterval(() => setElapsed(watch.current?.read() ?? 0), 1000);
     return () => clearInterval(id);
   }, [done]);
 
@@ -73,7 +77,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   useEffect(() => {
     if (!done || postedRef.current) return;
     postedRef.current = true;
-    const ms = Date.now() - startRef.current;
+    const ms = watch.current?.read() ?? 0;
     const correct = Object.values(firstTryRef.current).filter(Boolean).length;
     const result: SessionResult = {
       kind: "math",
@@ -87,11 +91,18 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
       mathSkill: skillId,
     };
     void postSession(result).then((res) => {
-      setOutcome({ gained: res.saved ? res.gained : null, saved: res.saved, ms, correct });
+      setOutcome({
+        gained: res.saved ? res.gained : null,
+        saved: res.saved,
+        note: saveNote(res),
+        ms,
+        correct,
+      });
     });
   }, [done, questions.length, skillId]);
 
   const advance = useCallback(() => {
+    watch.current?.mark();
     setInput("");
     setFlash(null);
     setRun((prev) => ({ ...prev, queue: prev.queue.slice(1) }));
@@ -119,6 +130,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   }, [advance, feedback, flash, input, queue, question]);
 
   const afterWrong = useCallback(() => {
+    watch.current?.mark();
     setFeedback(null);
     setInput("");
     setFlash(null);
@@ -129,6 +141,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
     postedRef.current = false;
     firstTryRef.current = {};
     startRef.current = Date.now();
+    watch.current = startStopwatch();
     setOutcome(null);
     setFeedback(null);
     setFlash(null);
@@ -161,7 +174,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
         newBadge={outcome.gained?.newBadges[0] ?? null}
         primary={{ label: "All skills", href: "/math" }}
         secondary={{ label: "Play again", onClick: playAgain }}
-        note={outcome.saved ? undefined : "No internet. It will be saved later."}
+        note={outcome.note}
       />
     );
   }

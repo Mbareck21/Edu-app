@@ -16,7 +16,8 @@ import type { AccentColor } from "@/components/ui/colors";
 import { gradeItem, reEnqueue, type LessonItem } from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained, type GainedBadge } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult, StepId, WordResult } from "@/lib/types";
@@ -72,6 +73,7 @@ type Attempt = {
 type Outcome = {
   gained: Gained | null;
   saved: boolean;
+  note?: string;
   ms: number;
   answered: number;
   correct: number;
@@ -157,6 +159,8 @@ export default function ItemRunner({
   const answeredIds = useRef<Set<string>>(new Set());
   const attempts = useRef<Attempt[]>([]);
   const startedAt = useRef(0);
+  // Time on task, not time on the clock — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
   const itemStartedAt = useRef(0);
   const rng = useRef<Rng | null>(null);
   const posted = useRef(false);
@@ -170,6 +174,7 @@ export default function ItemRunner({
   useEffect(() => {
     const now = Date.now();
     startedAt.current = now;
+    watch.current = startStopwatch();
     itemStartedAt.current = now;
     rng.current = mulberry32(now % 2147483647);
   }, []);
@@ -189,7 +194,7 @@ export default function ItemRunner({
   useEffect(() => {
     if (!showTimer || done) return;
     const id = setInterval(() => {
-      setElapsed(Date.now() - startedAt.current);
+      setElapsed(watch.current?.read() ?? 0);
     }, 1000);
     return () => clearInterval(id);
   }, [showTimer, done]);
@@ -198,7 +203,7 @@ export default function ItemRunner({
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    const ms = watch.current?.read() ?? 0;
     const all = attempts.current;
     const answered = all.length;
     const correct = all.filter((a) => a.correct).length;
@@ -219,10 +224,12 @@ export default function ItemRunner({
       };
       const badges: GainedBadge[] = [];
       let saved = true;
+      let note: string | undefined;
       for (const result of payloads(post, all, ms)) {
         const res = await postSession(result);
         if (!res.saved) {
           saved = false;
+          note = note ?? saveNote(res);
           continue;
         }
         sum.xp += res.gained.xp;
@@ -233,9 +240,13 @@ export default function ItemRunner({
         badges.push(...res.gained.newBadges);
       }
       sum.newBadges = badges;
+      // Offline the server never scored it. Show what the work is worth, the
+      // way the math runners already do, instead of a flat "+0".
+      if (!saved) sum.xp = correct * XP.correct + XP.lessonDone;
       setOutcome({
         gained: sum,
         saved,
+        note,
         ms,
         answered,
         correct,
@@ -295,6 +306,7 @@ export default function ItemRunner({
     setChosen(null);
     setAlmost(false);
     setRound((r) => r + 1);
+    watch.current?.mark();
     itemStartedAt.current = Date.now();
   }
 
@@ -377,7 +389,7 @@ export default function ItemRunner({
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={primary}
           secondary={secondary}
-          note={outcome.saved ? undefined : "No internet. Saved on this phone for later."}
+          note={outcome.note}
         />
       </div>
     );

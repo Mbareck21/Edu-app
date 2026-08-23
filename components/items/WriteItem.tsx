@@ -4,7 +4,7 @@ import AudioButton from "@/components/items/AudioButton";
 import ItemFrame from "@/components/items/ItemFrame";
 import TypeAnswer from "@/components/items/TypeAnswer";
 import Card from "@/components/ui/Card";
-import type { WriteItem as WriteItemType } from "@/lib/items";
+import { spellingKey, type WriteItem as WriteItemType } from "@/lib/items";
 import type { ItemControlProps } from "@/components/items/props";
 
 /** Letters he missed come back red; the rest stay black. */
@@ -35,7 +35,9 @@ export default function WriteItem({
   almost,
   onAnswer,
 }: { item: WriteItemType } & ItemControlProps) {
-  const missed = revealed && (chosen ?? "").trim().toLowerCase() !== item.answer.toLowerCase();
+  // Judge it the way the grader did. A raw compare called "rocklayer" a miss
+  // for "rock layer" and painted the word red under a green "Nice work!".
+  const missed = revealed && spellingKey(chosen ?? "") !== spellingKey(item.answer);
 
   return (
     <ItemFrame prompt={item.prompt} arabic={item.arabic} glossFaded={item.glossFaded}>

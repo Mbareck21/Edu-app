@@ -302,15 +302,25 @@ Write the passage and the questions now. Strict JSON only.`;
   // must not carry stray options, and every question keeps exactly 2 hints.
   const questions = reading.questions.map((q, i) => {
     const spec = plan[i];
-    const wantsMcq = (spec?.format ?? q.format) === "mcq";
-    const options = wantsMcq ? q.options.filter((o) => o.trim()) : [];
+    let wantsMcq = (spec?.format ?? q.format) === "mcq";
+    let options = wantsMcq ? q.options.filter((o) => o.trim()) : [];
     let answerIndex = wantsMcq ? q.answerIndex : -1;
     if (wantsMcq && (answerIndex < 0 || answerIndex >= options.length)) {
       // Fall back to matching the model's own "acceptable" text.
       const guess = options.findIndex(
         (o) => o.trim().toLowerCase() === (q.acceptable[0] ?? "").trim().toLowerCase()
       );
-      answerIndex = guess >= 0 ? guess : 0;
+      if (guess >= 0) {
+        answerIndex = guess;
+      } else {
+        // We do not know which option is right. Crowning option 0 would mark
+        // his correct pick wrong and then show him a distractor as "the
+        // answer". Ask it as an open question instead — judgeAnswer scores
+        // that against `acceptable`, which is the part we do trust.
+        wantsMcq = false;
+        options = [];
+        answerIndex = -1;
+      }
     }
     const hints = q.hints.slice(0, 2);
     while (hints.length < 2) hints.push("Read it again and look for the answer.");

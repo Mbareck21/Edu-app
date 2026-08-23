@@ -42,12 +42,16 @@ export default async function MathDrillPage({ searchParams }: { searchParams: Se
   const count = parseLength(q.n);
   const mode = parseMathMode(q.mode);
   const seed = Number(q.seed) || requestSeed();
+  // See the note in app/drill/vocab/page.tsx: "Again" only changes ?seed, and
+  // the runner would otherwise keep its finished state across that soft nav.
+  const runKey = q.seed ?? "first";
 
   await connectDB();
   const level = choice === "auto" ? await autoLevel(skill) : choice;
 
   return (
     <MathDrillRunner
+      key={runKey}
       skill={skill}
       skillName={skill === MIXED_SKILL ? "Mixed" : getSkill(skill).name}
       level={level}

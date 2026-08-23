@@ -216,11 +216,26 @@ export function normalizeAnswer(text: string): string {
 }
 
 /**
+ * Punctuation a nine-year-old adds out of habit, not because he thinks it is
+ * part of the word. Apostrophes are NOT here: "dont" is not "don't".
+ */
+const IGNORED_PUNCT = /[.,!?;:"“”…]/g;
+
+/**
  * Spelling answers ignore spaces entirely: the tiles for "rock layer" carry no
  * space, so a built answer never has one. Typed answers accept either.
+ *
+ * They also ignore sentence punctuation and hyphens. He is drilled at school to
+ * end a line with a full stop, and typing "sun." used to be marked wrong — a
+ * three-letter word gets no "almost", so it cost him the item outright. A
+ * hyphen is the same story: spaces already vanish here, so "well known" has to
+ * match "well-known" or the fix is only half done.
  */
 export function spellingKey(text: string): string {
-  return normalizeAnswer(text).replace(/\s+/g, "");
+  return normalizeAnswer(text)
+    .replace(IGNORED_PUNCT, "")
+    .replace(/[-–—]/g, "")
+    .replace(/\s+/g, "");
 }
 
 /** Edit distance. Used to spot a one-letter spelling slip. */

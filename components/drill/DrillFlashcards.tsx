@@ -13,7 +13,8 @@ import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
 import type { ClientWord } from "@/lib/models/WordList";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult, WordResult } from "@/lib/types";
@@ -30,7 +31,14 @@ export type DrillFlashcardsProps = {
   subtitle?: string;
 };
 
-type Outcome = { gained: Gained | null; saved: boolean; ms: number; answered: number; correct: number };
+type Outcome = {
+  gained: Gained | null;
+  saved: boolean;
+  note?: string;
+  ms: number;
+  answered: number;
+  correct: number;
+};
 
 /** Classic flip card, Easy or Hard, with the SRS write behind it. */
 export default function DrillFlashcards({
@@ -48,6 +56,8 @@ export default function DrillFlashcards({
   const results = useRef<WordResult[]>([]);
   const listCounts = useRef(new Map<string, number>());
   const startedAt = useRef(0);
+  // Time on task, not time on the clock — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
   const posted = useRef(false);
 
   const card = queue[0] ?? null;
@@ -55,12 +65,13 @@ export default function DrillFlashcards({
 
   useEffect(() => {
     startedAt.current = Date.now();
+    watch.current = startStopwatch();
   }, []);
 
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    const ms = watch.current?.read() ?? 0;
     const wordResults = results.current;
     const answered = wordResults.length;
     const correct = wordResults.filter((r) => r.correct).length;
@@ -80,6 +91,7 @@ export default function DrillFlashcards({
       setOutcome({
         gained: res.saved ? res.gained : null,
         saved: res.saved,
+        note: saveNote(res),
         ms,
         answered,
         correct,
@@ -89,6 +101,7 @@ export default function DrillFlashcards({
 
   async function rate(rating: "easy" | "hard") {
     if (!card || busy) return;
+    watch.current?.mark();
     setBusy(true);
     try {
       await fetch(`/api/lists/${card.listId}/flashcards/review`, {
@@ -162,7 +175,7 @@ export default function DrillFlashcards({
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
           secondary={{ label: "All drills", href: "/drill" }}
-          note={outcome.saved ? undefined : "No internet. Saved on this phone for later."}
+          note={outcome.note}
         />
       </div>
     );

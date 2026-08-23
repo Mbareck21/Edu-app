@@ -6,7 +6,7 @@ import { WordList, toClient } from "@/lib/models/WordList";
 export const runtime = "nodejs";
 
 const CreateBody = z.object({
-  name: z.string().min(1).max(120).trim(),
+  name: z.string().trim().min(1).max(120),
 });
 
 export async function GET() {

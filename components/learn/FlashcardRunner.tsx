@@ -10,7 +10,8 @@ import Card from "@/components/ui/Card";
 import LessonComplete from "@/components/ui/LessonComplete";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { ClientWord, ClientWordList, SrsState } from "@/lib/models/WordList";
@@ -23,7 +24,16 @@ import {
 } from "@/lib/study-session";
 import type { WordResult } from "@/lib/types";
 
-type Outcome = { gained: Gained | null; saved: boolean; ms: number; answered: number; correct: number };
+type Outcome = {
+  gained: Gained | null;
+  saved: boolean;
+  note?: string;
+  ms: number;
+  answered: number;
+  correct: number;
+  /** Stamped when the run finished, so "Again" gets a URL it has not used. */
+  finishedAt: number;
+};
 
 export type FlashcardRunnerProps = {
   list: ClientWordList;
@@ -54,6 +64,8 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
 
   const results = useRef<WordResult[]>([]);
   const startedAt = useRef(0);
+  // Time on task, not time on the clock — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
   const posted = useRef(false);
 
   const byWord = useMemo(() => new Map(words.map((w) => [w.word, w])), [words]);
@@ -63,6 +75,7 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
 
   useEffect(() => {
     startedAt.current = Date.now();
+    watch.current = startStopwatch();
   }, []);
 
   useEffect(() => {
@@ -77,7 +90,7 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    const ms = watch.current?.read() ?? 0;
     const wordResults = results.current;
     const answered = wordResults.length;
     const correct = wordResults.filter((r) => r.correct).length;
@@ -96,15 +109,18 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
       setOutcome({
         gained: res.saved ? res.gained : null,
         saved: res.saved,
+        note: saveNote(res),
         ms,
         answered,
         correct,
+        finishedAt: Date.now(),
       });
     });
   }, [done, list._id]);
 
   async function rate(rating: Rating) {
     if (!card || busy) return;
+    watch.current?.mark();
     setBusy(true);
     try {
       const res = await fetch(`/api/lists/${list._id}/flashcards/review`, {
@@ -170,8 +186,8 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
           leveledUp={outcome.gained?.leveledUp}
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Back to path", href: pathHref }}
-          secondary={{ label: "Again", href: `${pathHref}/flashcards?r=${outcome.ms}` }}
-          note={outcome.saved ? undefined : "No internet. Saved on this phone for later."}
+          secondary={{ label: "Again", href: `${pathHref}/flashcards?r=${outcome.finishedAt}` }}
+          note={outcome.note}
         />
       </div>
     );

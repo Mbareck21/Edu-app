@@ -51,9 +51,13 @@ export async function POST(req: Request) {
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) controller.enqueue(encoder.encode(delta));
           }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "stream error";
-          controller.enqueue(encoder.encode(`\n[error: ${msg}]`));
+        } catch {
+          // Whatever broke, this text is read aloud to a nine-year-old and is
+          // sent back as history on his next turn. It has to be a sentence, not
+          // an internal error message.
+          controller.enqueue(
+            encoder.encode("\n\nSorry - I lost my thought there. Ask me again?")
+          );
         } finally {
           controller.close();
         }

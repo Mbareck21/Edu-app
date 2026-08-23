@@ -47,7 +47,15 @@ export default async function ScramblePage({
       color="green"
       icon="sparkles"
       printView={<PrintView listName={list.name} rows={rows} />}
-      playView={<InteractiveScramble rows={playRows} />}
+      playView={
+        <InteractiveScramble
+          // The board lives in client state, built once from these rows. "Again"
+          // refreshes this server component for a new pick, so remount when the
+          // pick really changed — otherwise he replays the same scrambles forever.
+          key={playRows.map((r) => r.scrambled).join("|")}
+          rows={playRows}
+        />
+      }
     />
   );
 }

@@ -105,8 +105,9 @@ export default function ChatPage() {
     setSpeakingIdx(idx);
     const pb = playTextThroughTTS(text);
     playbackRef.current = pb;
-    pb.promise.then(() => {
+    void pb.promise.then((end) => {
       setSpeakingIdx((cur) => (cur === idx ? null : cur));
+      if (end === "failed") setError("I could not read that out loud. Tap play to try again.");
     });
   }
 
@@ -234,8 +235,18 @@ export default function ChatPage() {
   // Used by both single-utterance and conversation flows.
   async function transcribeBlob(blob: Blob): Promise<string | null> {
     const form = new FormData();
-    form.append("audio", blob, "recording.webm");
-    const res = await fetch("/api/transcribe", { method: "POST", body: form });
+    // Whisper reads the container off the file name, and Safari records mp4.
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    form.append("audio", blob, `recording.${ext}`);
+    let res: Response;
+    try {
+      res = await fetch("/api/transcribe", { method: "POST", body: form });
+    } catch {
+      // On a phone this is the normal failure: the wifi dropped mid-upload.
+      // Without this the spoken message just disappeared with no message.
+      setError("I lost the internet while listening. Try that again.");
+      return null;
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(
@@ -312,8 +323,11 @@ export default function ChatPage() {
           setSpeakingIdx(idx);
           const pb = playTextThroughTTS(acc);
           playbackRef.current = pb;
-          await pb.promise;
+          const end = await pb.promise;
           setSpeakingIdx((cur) => (cur === idx ? null : cur));
+          // He is here because he would rather listen than read. Silence with
+          // no explanation looks like the app died.
+          if (end === "failed") setError("I could not read that out loud.");
           if (stopRef.current) break;
         }
       }
@@ -341,6 +355,8 @@ export default function ChatPage() {
   }
 
   function clearAll() {
+    // It sits next to the volume toggle, and wiping the chat cannot be undone.
+    if (!window.confirm("Clear the whole chat?")) return;
     playbackRef.current?.cancel();
     setSpeakingIdx(null);
     updateMessages([]);
@@ -439,16 +455,18 @@ export default function ChatPage() {
                 {m.content || (streaming && isLast ? "…" : "")}
               </div>
               {showReplay && (
-                <div className="mt-1">
+                <div>
+                  {/* This is how he re-hears a reply, so it has to be a real
+                      target on a phone, not a 16px caption. */}
                   <button
                     type="button"
                     onClick={() => playMessage(i, m.content)}
-                    className="inline-flex items-center gap-1 text-xs font-bold"
-                    style={{ color: "var(--color-muted)" }}
+                    className="press-3d -ml-1 inline-flex items-center gap-1.5 rounded-full px-3 text-sm font-bold"
+                    style={{ color: "var(--color-muted)", minHeight: 44 }}
                     aria-label="Play this message"
                     title="Play this message"
                   >
-                    <Icon name="volume" size={16} />
+                    <Icon name="volume" size={20} />
                     {speakingIdx === i ? "playing" : "play"}
                   </button>
                 </div>

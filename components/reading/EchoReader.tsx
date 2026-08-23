@@ -43,6 +43,9 @@ type Stage = "listen" | "recording" | "checking" | "result";
 /** He reads after the voice; a long line is hard to hold in memory. */
 const LONG_SENTENCE_WORDS = 14;
 
+/** Shown when the voice never arrived — never leave him staring at silence. */
+const SOUND_FAILED = "I could not play that out loud. Check the internet, then tap the speaker.";
+
 export default function EchoReader({
   text,
   glosses,
@@ -78,19 +81,24 @@ export default function EchoReader({
     recordingRef.current = null;
   }, []);
 
-  const speak = useCallback(
-    (line: string) => {
-      playbackRef.current?.cancel();
-      playbackRef.current = playTextThroughTTS(line);
-    },
-    []
-  );
+  const speak = useCallback((line: string) => {
+    playbackRef.current?.cancel();
+    setError(null);
+    const pb = playTextThroughTTS(line);
+    playbackRef.current = pb;
+    void pb.promise.then((end) => {
+      if (end === "failed") setError(SOUND_FAILED);
+    });
+  }, []);
 
   // Read whichever sentence is up out loud the moment it appears.
   useEffect(() => {
     if (!sentence) return;
     const pb = playTextThroughTTS(sentence);
     playbackRef.current = pb;
+    void pb.promise.then((end) => {
+      if (end === "failed") setError(SOUND_FAILED);
+    });
     return () => pb.cancel();
   }, [sentence]);
 
@@ -171,7 +179,9 @@ export default function EchoReader({
     setStage("checking");
     try {
       const form = new FormData();
-      form.append("audio", blob, "echo.webm");
+      // Whisper picks the container off the file name, and Safari records mp4.
+      const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+      form.append("audio", blob, `echo.${ext}`);
       form.append("language", "en");
       const res = await fetch("/api/transcribe", { method: "POST", body: form });
       const data: unknown = await res.json().catch(() => ({}));

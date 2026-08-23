@@ -34,11 +34,16 @@ function needsExamples(list: ClientWordList): boolean {
 
 export default async function TodayBeatPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ beat: string }>;
+  searchParams: Promise<{ r?: string }>;
 }) {
   const { beat } = await params;
   if (!isBeat(beat)) notFound();
+  // See the note in app/learn/[listId]/[step]/page.tsx — "Again" only changes
+  // ?r, so the runner needs a key or it keeps its finished state.
+  const runKey = (await searchParams).r ?? "first";
 
   await connectDB();
   const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
@@ -65,6 +70,7 @@ export default async function TodayBeatPage({
     });
     return (
       <ItemRunner
+        key={runKey}
         {...shared}
         items={items}
         post={{ ref: "quest:review" }}
@@ -88,6 +94,7 @@ export default async function TodayBeatPage({
       : [];
     return (
       <ItemRunner
+        key={runKey}
         {...shared}
         items={items}
         post={{ ref: "quest:new", listId: unit?._id }}
@@ -103,6 +110,7 @@ export default async function TodayBeatPage({
     : [];
   return (
     <ItemRunner
+      key={runKey}
       {...shared}
       items={items}
       post={{ ref: "quest:production", listId: unit?._id }}

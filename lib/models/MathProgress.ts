@@ -59,10 +59,16 @@ export function toClientMathProgress(doc: unknown): ClientMathProgress {
 /**
  * Pure level rule, shared by the API and any UI preview.
  * Up when the last 3 sessions are all >= 90%. Down when this one is < 60%.
+ *
+ * The caller clears `recentPcts` on every level change, so this window only
+ * ever holds scores earned at the current level. An empty window means the
+ * level has just moved and nothing has been scored on it yet — that is not a
+ * reason to move again in either direction.
  */
 export function nextLevel(level: number, recentPcts: number[]): number {
   const cur = Math.min(MAX_MATH_LEVEL, Math.max(1, level));
-  const last = recentPcts[0] ?? 0;
+  const last = recentPcts[0];
+  if (last === undefined) return cur;
   if (last < 60) return Math.max(1, cur - 1);
   const three = recentPcts.slice(0, RECENT_PCTS);
   if (three.length === RECENT_PCTS && three.every((p) => p >= 90)) {

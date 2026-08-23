@@ -148,7 +148,12 @@ export const BADGES: readonly Badge[] = [
     name: "Unit Done",
     blurb: "You beat a whole unit.",
     icon: "chest",
-    check: (_p, r) => r.kind === "vocab" && r.step === "challenge",
+    // "Beat", not "played": scoring 0 on the challenge used to earn it.
+    check: (_p, r) =>
+      r.kind === "vocab" &&
+      r.step === "challenge" &&
+      r.answered > 0 &&
+      Math.round((r.correct / r.answered) * 100) >= STEP_PASS_PCT,
   },
 ];
 
@@ -197,22 +202,37 @@ export function emptyProfile(name = "Nour"): ProfileState {
 export const READING_CAP = 20;
 export const MAX_READING_LEVEL = 10;
 
-export const READING_UP_PCT = 85;
+/**
+ * At level 1 in Q1 a reading is 3 questions, sometimes 5 — so the only scores
+ * that exist are 0/33/67/100 or 0/20/.../100. An 85 mark meant "perfect three
+ * times running", and a 70 floor made 2-of-3 a FAILING reading. 80/50 keeps the
+ * same shape with scores that can actually occur.
+ */
+export const READING_UP_PCT = 80;
 export const READING_UP_RUN = 3;
-export const READING_DOWN_PCT = 70;
+export const READING_DOWN_PCT = 50;
 export const READING_DOWN_RUN = 2;
 
 /**
- * Move the reading ladder. Three readings in a row at 85%+ step up; two in a
- * row under 70% step down. Pure — `recent` is newest first.
+ * Move the reading ladder. READING_UP_RUN readings in a row at READING_UP_PCT
+ * step up; READING_DOWN_RUN in a row under READING_DOWN_PCT step down, and only
+ * readings taken at the current level count. Pure — `recent` is newest first.
  */
 export function nextReadingLevel(level: number, recent: ReadingLog[]): number {
   const cur = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(level) || 1));
-  const runUp = recent.slice(0, READING_UP_RUN);
+  // Only readings taken AT this level can justify leaving it. Reading the whole
+  // log meant one promotion cascaded into the next on the very next reading:
+  // three good ones at L1 would have walked him L1 -> L4 in five sessions.
+  const atLevel: ReadingLog[] = [];
+  for (const r of recent) {
+    if (r.level !== cur) break;
+    atLevel.push(r);
+  }
+  const runUp = atLevel.slice(0, READING_UP_RUN);
   if (runUp.length === READING_UP_RUN && runUp.every((r) => r.pct >= READING_UP_PCT)) {
     return Math.min(MAX_READING_LEVEL, cur + 1);
   }
-  const runDown = recent.slice(0, READING_DOWN_RUN);
+  const runDown = atLevel.slice(0, READING_DOWN_RUN);
   if (
     runDown.length === READING_DOWN_RUN &&
     runDown.every((r) => r.pct < READING_DOWN_PCT)

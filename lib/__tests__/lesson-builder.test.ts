@@ -315,6 +315,14 @@ test("typed spelling: exact is right, one letter off is almost, then wrong", () 
   assert.equal(gradeTyped("garden", "grass"), "wrong");
   // Short words get no second chance — one letter is most of the word.
   assert.equal(gradeTyped("cat", "cot"), "wrong");
+  // He is taught to end a line with a full stop; that is not a spelling error.
+  assert.equal(gradeTyped("sun", "sun."), "correct");
+  assert.equal(gradeTyped("garden", "Garden!"), "correct");
+  // Spaces already vanish, so a hyphen has to as well.
+  assert.equal(gradeTyped("well-known", "well known"), "correct");
+  assert.equal(gradeTyped("rock layer", "rocklayer"), "correct");
+  // An apostrophe still counts — "dont" is not the word.
+  assert.equal(gradeTyped("don't", "dont"), "almost");
 });
 
 test("choice items are exact match, write items use the typed grader", () => {

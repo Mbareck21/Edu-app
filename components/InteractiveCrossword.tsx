@@ -47,8 +47,8 @@ export default function InteractiveCrossword({
         const c = p.startCol + (p.orientation === "across" ? i : 0);
         const key = `${r},${c}`;
         map[key] ??= {};
-        if (p.orientation === "across") map[key].acrossId = p.position;
-        else map[key].downId = p.position;
+        if (p.orientation === "across") map[key].acrossId = p.id;
+        else map[key].downId = p.id;
       }
     }
     return map;
@@ -97,7 +97,7 @@ export default function InteractiveCrossword({
 
   const placedById = useMemo(() => {
     const m = new Map<number, CrosswordPlacement>();
-    for (const p of placed) m.set(p.position, p);
+    for (const p of placed) m.set(p.id, p);
     return m;
   }, [placed]);
 
@@ -161,13 +161,13 @@ export default function InteractiveCrossword({
       if (
         prefer === "across" &&
         acrossWord &&
-        prevInfo?.acrossId === acrossWord.position
+        prevInfo?.acrossId === acrossWord.id
       ) {
         orient = "across";
       } else if (
         prefer === "down" &&
         downWord &&
-        prevInfo?.downId === downWord.position
+        prevInfo?.downId === downWord.id
       ) {
         orient = "down";
       } else {
@@ -216,33 +216,38 @@ export default function InteractiveCrossword({
     const len = order.length;
     for (let i = 1; i <= len; i++) {
       const next = order[(((from + delta * i) % len) + len) % len];
-      if (wordStatus[next.position] !== "correct") {
+      if (wordStatus[next.id] !== "correct") {
         focusWord(next);
         return;
       }
     }
   }
 
-  function checkWord(p: CrosswordPlacement) {
+  // `passive` = the word filled up without being the one he's typing in.
+  // A passive word may be marked correct, but never wrong — see the effect below.
+  function checkWord(p: CrosswordPlacement, passive = false) {
     const cells = cellsOf(p);
     if (cells.some(({ key }) => !valuesRef.current[key])) return; // not full yet
     const guess = cells.map(({ key }) => valuesRef.current[key] || " ").join("").toUpperCase();
     if (guess === p.word.toUpperCase()) {
-      setWordStatus((prev) => ({ ...prev, [p.position]: "correct" }));
+      setWordStatus((prev) => ({ ...prev, [p.id]: "correct" }));
       const firstCell = inputRefs.current.get(cells[0].key);
       sfx.correct();
       celebrate({ source: firstCell ?? undefined });
-      // All-correct check.
-      const updated = { ...wordStatusRef.current, [p.position]: "correct" as WordStatus };
-      if (placed.every((q) => updated[q.position] === "correct") && !finishedFiredRef.current) {
+      // All-correct check. The ref is updated here too, so a second word
+      // validated in the same pass sees this one as solved and the finish
+      // check can still fire.
+      const updated = { ...wordStatusRef.current, [p.id]: "correct" as WordStatus };
+      wordStatusRef.current = updated;
+      if (placed.every((q) => updated[q.id] === "correct") && !finishedFiredRef.current) {
         finishedFiredRef.current = true;
         setFinished(true);
         setTimeout(() => celebrate({ big: true }), 600);
       }
-    } else {
-      setWordStatus((prev) => ({ ...prev, [p.position]: "wrong" }));
-      setShakeKey((prev) => ({ ...prev, [p.position]: (prev[p.position] ?? 0) + 1 }));
-      if (wordStatusRef.current[p.position] !== "wrong") {
+    } else if (!passive) {
+      setWordStatus((prev) => ({ ...prev, [p.id]: "wrong" }));
+      setShakeKey((prev) => ({ ...prev, [p.id]: (prev[p.id] ?? 0) + 1 }));
+      if (wordStatusRef.current[p.id] !== "wrong") {
         sfx.wrong();
         encourage();
       }
@@ -327,11 +332,17 @@ export default function InteractiveCrossword({
     }
   }
 
-  // When active orientation changes, attempt to check the just-completed word
-  // if the user filled the last cell manually.
+  // After any cell change, validate every filled word — not just the active
+  // one. A crossing word can be completed entirely by its neighbours, and its
+  // cells then lock as those neighbours go green, so no later edit would ever
+  // re-trigger a check on it. Only the active word may be marked wrong:
+  // shaking a crossing word he wasn't working on would be noise.
   useEffect(() => {
-    const word = activeWord();
-    if (word) checkWord(word);
+    const current = activeWord();
+    for (const p of placed) {
+      if (wordStatusRef.current[p.id] === "correct") continue;
+      checkWord(p, p.id !== current?.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values]);
 
@@ -339,7 +350,7 @@ export default function InteractiveCrossword({
   const activeCells = activePlacement
     ? new Set(cellsOf(activePlacement).map((x) => x.key))
     : new Set<string>();
-  const solved = placed.filter((p) => wordStatus[p.position] === "correct").length;
+  const solved = placed.filter((p) => wordStatus[p.id] === "correct").length;
   const activeInfo = active ? cellInfo[`${active.r},${active.c}`] : undefined;
 
   const gridStyle: CSSProperties = {
@@ -456,14 +467,14 @@ export default function InteractiveCrossword({
           title="Across"
           entries={across}
           wordStatus={wordStatus}
-          activeId={activePlacement?.orientation === "across" ? activePlacement.position : null}
+          activeId={activePlacement?.orientation === "across" ? activePlacement.id : null}
           onPick={focusWord}
         />
         <CluesList
           title="Down"
           entries={down}
           wordStatus={wordStatus}
-          activeId={activePlacement?.orientation === "down" ? activePlacement.position : null}
+          activeId={activePlacement?.orientation === "down" ? activePlacement.id : null}
           onPick={focusWord}
         />
       </div>
@@ -531,12 +542,14 @@ function OrientChip({
   onClick: () => void;
 }) {
   if (!available) return null;
+  // 44px tall: it sits between the two step arrows, and missing it jumps him
+  // to a different clue.
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className="h-9 rounded-full px-3 font-display text-xs font-bold uppercase tracking-wide"
+      className="h-11 rounded-full px-3.5 font-display text-xs font-bold uppercase tracking-wide"
       style={
         on
           ? { background: BLUE.soft, color: BLUE.onSoft }
@@ -594,10 +607,10 @@ function CluesList({
       </p>
       <ul className="space-y-1.5">
         {entries.map((e) => {
-          const done = wordStatus[e.position] === "correct";
-          const isActive = activeId === e.position;
+          const done = wordStatus[e.id] === "correct";
+          const isActive = activeId === e.id;
           return (
-            <li key={e.position}>
+            <li key={e.id}>
               <button
                 type="button"
                 onClick={() => onPick(e)}

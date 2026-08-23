@@ -11,7 +11,7 @@ import ProgressRing from "@/components/ui/ProgressRing";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
 import { normalizeAnswer } from "@/lib/items";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult, WordResult } from "@/lib/types";
@@ -29,7 +29,7 @@ export type RememberRunnerProps = {
 };
 
 type Phase = "ready" | "go" | "done";
-type Outcome = { gained: Gained | null; saved: boolean; ms: number };
+type Outcome = { gained: Gained | null; saved: boolean; note?: string; ms: number };
 
 /**
  * Write what you remember: 90 seconds, one box, every word from the list that
@@ -95,7 +95,7 @@ export default function RememberRunner({
     };
     if (found.length > 0) void fireConfetti("small");
     void postSession(result).then((res) => {
-      setOutcome({ gained: res.saved ? res.gained : null, saved: res.saved, ms });
+      setOutcome({ gained: res.saved ? res.gained : null, saved: res.saved, ms, note: saveNote(res) });
     });
   }, [phase, found, words, listId, sessionRef]);
 
@@ -207,7 +207,7 @@ export default function RememberRunner({
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
           secondary={{ label: "All drills", href: "/drill" }}
-          note={outcome.saved ? undefined : "No internet. Saved on this phone for later."}
+          note={outcome.note}
         />
       </div>
     );

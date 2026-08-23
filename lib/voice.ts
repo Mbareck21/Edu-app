@@ -80,13 +80,21 @@ export async function recordAudio(): Promise<Recording> {
 // Playback — point an <audio> element at /api/tts
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * How a playback finished. "failed" means the sound never reached the child —
+ * the TTS call errored, the session had expired, or the browser refused to
+ * play. Callers must not treat it as "the audio is over", or they will race
+ * on in silence.
+ */
+export type PlaybackEnd = "ended" | "failed";
+
 export type Playback = {
   cancel: () => void;
   /** Freeze at the current position. Safe to call twice, or when not playing. */
   pause: () => void;
   /** Carry on from where pause() left off. No-op once cancelled or finished. */
   resume: () => void;
-  promise: Promise<void>;
+  promise: Promise<PlaybackEnd>;
 };
 
 export function playTextThroughTTS(text: string): Playback {
@@ -95,7 +103,7 @@ export function playTextThroughTTS(text: string): Playback {
       cancel: () => {},
       pause: () => {},
       resume: () => {},
-      promise: Promise.resolve(),
+      promise: Promise.resolve<PlaybackEnd>("ended"),
     };
   }
   const audio = new Audio();
@@ -103,21 +111,27 @@ export function playTextThroughTTS(text: string): Playback {
   audio.src = `/api/tts?text=${encodeURIComponent(text)}`;
   let cancelled = false;
   let settled = false;
+  // True between pause() and resume(). A pause taken while play() is still
+  // loading rejects that promise with AbortError; without this flag we would
+  // read a deliberate pause as a playback failure.
+  let pausing = false;
 
   // Deferred resolver so pause()/resume() can live outside the executor.
-  let resolver!: () => void;
-  const promise = new Promise<void>((res) => {
+  let resolver!: (end: PlaybackEnd) => void;
+  const promise = new Promise<PlaybackEnd>((res) => {
     resolver = res;
   });
-  const done = () => {
+  const done = (end: PlaybackEnd) => {
     if (settled) return;
     settled = true;
     audio.onended = null;
     audio.onerror = null;
-    resolver();
+    resolver(end);
   };
-  audio.onended = done;
-  audio.onerror = done;
+  audio.onended = () => done("ended");
+  // A dead src, a 401 from an expired session, or a 502 from the TTS service
+  // all land here. It is a failure, not the end of the sentence.
+  audio.onerror = () => done("failed");
 
   const start = () => {
     // If cancel ran before the deferred play() promise settled, swallow it —
@@ -126,7 +140,11 @@ export function playTextThroughTTS(text: string): Playback {
       () => {
         if (cancelled) audio.pause();
       },
-      done
+      // Our own pause()/cancel() abort the pending play. That is not a failure
+      // — only a genuine playback error is.
+      () => {
+        if (!pausing && !cancelled) done("failed");
+      }
     );
   };
   start();
@@ -135,6 +153,7 @@ export function playTextThroughTTS(text: string): Playback {
     cancel: () => {
       if (cancelled) return;
       cancelled = true;
+      pausing = false;
       try {
         audio.pause();
       } catch { /* ignore */ }
@@ -149,12 +168,14 @@ export function playTextThroughTTS(text: string): Playback {
     // instead of starting the passage again.
     pause: () => {
       if (cancelled || settled) return;
+      pausing = true;
       try {
         audio.pause();
       } catch { /* ignore */ }
     },
     resume: () => {
       if (cancelled || settled) return;
+      pausing = false;
       start();
     },
     promise,

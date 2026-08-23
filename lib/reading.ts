@@ -295,11 +295,23 @@ export function splitParagraphs(text: string): string[] {
   return parts.length > 0 ? parts : [text.trim()];
 }
 
+/** A full stop after one of these ends a title, not a sentence. */
+const ABBREVIATION_END = /(?:^|\s)(?:mr|mrs|ms|dr|st|jr|sr|prof|vs|etc|approx)\.$/i;
+
 export function splitSentences(text: string): string[] {
-  return text
+  const parts = text
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // "Mr. Lopez waved." must not reach echo mode as "Mr." and "Lopez waved." —
+  // he would be asked to read one abbreviation out loud and marked wrong for it.
+  const out: string[] = [];
+  for (const part of parts) {
+    const prev = out[out.length - 1];
+    if (prev !== undefined && ABBREVIATION_END.test(prev)) out[out.length - 1] = `${prev} ${part}`;
+    else out.push(part);
+  }
+  return out;
 }
 
 /** Longest sentence in the passage, in words. Used to police the level. */
