@@ -19,6 +19,7 @@ const SAMPLES = 200;
 /** Biggest answer that still makes sense for each skill. */
 const MAX_ANSWER: Record<MathSkillId, number> = {
   "place-value": 1000000,
+  "number-forms": 1000000,
   "add-sub-big": 1000000,
   "mul-facts": 144,
   "mul-multi": 100000,
@@ -99,7 +100,7 @@ function checkQuestion(q: MathQuestion, id: MathSkillId): void {
 }
 
 test("registry is complete and display-ready", () => {
-  assert.equal(MATH_SKILLS.length, 13);
+  assert.equal(MATH_SKILLS.length, 14);
   assert.equal(new Set(MATH_SKILL_IDS).size, MATH_SKILLS.length);
   for (const skill of MATH_SKILLS) {
     assert.ok(skill.name.trim().split(/\s+/).length <= 2, `${skill.id}: name is more than 2 words`);

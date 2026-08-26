@@ -49,8 +49,8 @@ export const IREADY_UNITS: readonly { id: number; name: string }[] = [
 
 export const IREADY_LESSONS: readonly IreadyLesson[] = [
   // Unit 1 — FPS Unit 1 "Place Value: Add & Subtract"
-  { lesson: 1, title: "Understand Place Value", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.A.1", "4.NBT.A.2"], skills: ["place-value"] },
-  { lesson: 2, title: "Compare Whole Numbers", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.A.2"], skills: ["place-value"] },
+  { lesson: 1, title: "Understand Place Value", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.A.1", "4.NBT.A.2"], skills: ["place-value", "number-forms"] },
+  { lesson: 2, title: "Compare Whole Numbers", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.A.2"], skills: ["place-value", "number-forms"] },
   { lesson: 3, title: "Round Whole Numbers", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.A.3"], skills: ["place-value"] },
   { lesson: 4, title: "Add Whole Numbers", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.B.4"], skills: ["add-sub-big"] },
   { lesson: 5, title: "Subtract Whole Numbers", ireadyUnit: 1, fpsUnit: 1, standards: ["4.NBT.B.4"], skills: ["add-sub-big"] },

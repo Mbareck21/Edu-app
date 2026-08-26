@@ -19,6 +19,7 @@ import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList"
 import {
   itemForSkill,
   makeLearnCard,
+  makeSentenceCombine,
   makeWrite,
   schoolItem,
   type ItemPool,
@@ -320,6 +321,10 @@ export function buildProductionSession({
     items.push(itemForSkill(word, "use", pool, rng, isHard(word, "use")));
     guard++;
   }
+  // One sentence-joining item per production round. Joining two clauses with
+  // because / although / if IS this term's writing objective, and the builder
+  // for it existed but nothing ever called it.
+  if (items.length > 0) items.push(makeSentenceCombine(pool, rng));
   return interleave(items);
 }
 

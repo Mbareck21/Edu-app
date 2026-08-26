@@ -15,13 +15,24 @@ import {
   skillsForUnit,
   type MathSkill,
 } from "@/lib/math";
-import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
+import {
+  LEVEL_UP_RUN,
+  MAX_MATH_LEVEL,
+  MathProgress,
+  cleanRounds,
+  toClientMathProgress,
+} from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Math" };
 
-type Stat = { level: number; best: number | null };
+type Stat = {
+  level: number;
+  best: number | null;
+  /** Rounds at 90%+ in a row, out of LEVEL_UP_RUN. */
+  clean: number;
+};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -65,6 +76,15 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
               {stat.best === null ? "Not played yet" : `Best ${stat.best}%`}
             </span>
           </div>
+          {/* Repeating a skill is fine, but he should be able to see where the
+              repeating leads. LEVEL_UP_RUN clean rounds move him up a level. */}
+          {stat.level < MAX_MATH_LEVEL && stat.best !== null ? (
+            <p className="mt-1.5 text-xs font-bold" style={{ color: "var(--color-purple)" }}>
+              {stat.clean >= LEVEL_UP_RUN
+                ? "Ready to move up."
+                : `${stat.clean} of ${LEVEL_UP_RUN} clean rounds to level ${stat.level + 1}`}
+            </p>
+          ) : null}
         </div>
         <Link
           href={`/math/${skill.id}`}
@@ -87,9 +107,10 @@ export default async function MathPage() {
     stats.set(p.skill, {
       level: p.level,
       best: p.recentPcts.length > 0 ? Math.max(...p.recentPcts) : null,
+      clean: cleanRounds(p.recentPcts),
     });
   }
-  const statFor = (id: string): Stat => stats.get(id) ?? { level: 1, best: null };
+  const statFor = (id: string): Stat => stats.get(id) ?? { level: 1, best: null, clean: 0 };
 
   const today = todayKey();
   const unit = currentUnit(today);

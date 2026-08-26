@@ -1,5 +1,6 @@
 import type { Level, MathQuestion, MathSkill, MathSkillId, PlaceName, Rng, ShapeName, Visual } from "./types";
 import { pick, randInt, shuffle } from "./rng";
+import { group as commas, toExpanded, toUnitForm, toWords } from "@/lib/number-words";
 
 const NONE: Visual = { kind: "none" };
 
@@ -768,6 +769,85 @@ function genPlaceValue(level: Level, rng: Rng): MathQuestion {
   return pvRound(rng, 1000);
 }
 
+// -------------------------------------------------------------- number-forms
+
+/**
+ * The four forms his class names this week: standard, word, expanded and unit.
+ *
+ * Every answer here is a single whole number, because the math runner gives him
+ * a number pad and nothing else. Writing the WORDS is a spelling job, so that
+ * lives in the "Number Words" spelling pack instead — see lib/word-packs.ts.
+ * What this skill drills is reading a form and landing on the number.
+ */
+function nfDigits(level: Level): { lo: number; hi: number } {
+  if (level === 1) return { lo: 11, hi: 999 };
+  if (level === 2) return { lo: 1000, hi: 9999 };
+  return { lo: 10_000, hi: 99_999 };
+}
+
+function nfWordToStandard(level: Level, rng: Rng): MathQuestion {
+  const { lo, hi } = nfDigits(level);
+  const n = randInt(rng, lo, hi);
+  return {
+    prompt: `Write ${toWords(n)} as a number.`,
+    answer: n,
+    visual: NONE,
+    how: `${toWords(n)} is ${commas(n)}.`,
+    op: "?",
+  };
+}
+
+function nfExpandedToStandard(level: Level, rng: Rng): MathQuestion {
+  const { lo, hi } = nfDigits(level);
+  const n = randInt(rng, lo, hi);
+  return {
+    prompt: `${toExpanded(n)} = ?`,
+    answer: n,
+    visual: NONE,
+    how: `Add the parts: ${toExpanded(n)} = ${commas(n)}.`,
+    op: "+",
+  };
+}
+
+function nfUnitToStandard(level: Level, rng: Rng): MathQuestion {
+  // Unit form spells out every place, so it grows fast. Cap it at four digits
+  // to keep the prompt under the 80-character limit.
+  const hi = level === 1 ? 999 : 9999;
+  const n = randInt(rng, level === 1 ? 11 : 1000, hi);
+  return {
+    prompt: `${toUnitForm(n)} = ?`,
+    answer: n,
+    visual: NONE,
+    how: `Each part names a place: ${toUnitForm(n)} is ${commas(n)}.`,
+    op: "+",
+  };
+}
+
+/** "How many tens in 340?" — the counting question unit form is really asking. */
+function nfHowManyUnits(level: Level, rng: Rng): MathQuestion {
+  const place = level === 1 ? 10 : pick(rng, [10, 100]);
+  const name = place === 10 ? "tens" : "hundreds";
+  const { lo, hi } = nfDigits(level);
+  const n = Math.floor(randInt(rng, lo, hi) / place) * place;
+  return {
+    prompt: `How many whole ${name} are in ${commas(n)}?`,
+    answer: n / place,
+    visual: NONE,
+    how: `${commas(n)} splits into ${n / place} ${name}.`,
+    op: "÷",
+    a: n,
+    b: place,
+  };
+}
+
+function genNumberForms(level: Level, rng: Rng): MathQuestion {
+  const roll = randInt(rng, 1, 4);
+  if (roll === 1) return nfWordToStandard(level, rng);
+  if (roll === 2) return nfExpandedToStandard(level, rng);
+  if (roll === 3) return nfUnitToStandard(level, rng);
+  return nfHowManyUnits(level, rng);
+}
+
 // ------------------------------------------------------------------- geometry
 
 function genGeometry(level: Level, rng: Rng): MathQuestion {
@@ -1181,6 +1261,16 @@ export const MATH_SKILLS: readonly MathSkill[] = [
     unit: 1,
     standards: ["4.NPV.1", "4.NPV.2"],
     generate: genPlaceValue,
+  },
+  {
+    id: "number-forms",
+    name: "Number Forms",
+    blurb: "Read a number in words, parts or places.",
+    grade: 4,
+    color: "purple",
+    unit: 1,
+    standards: ["4.NPV.1", "4.NPV.2"],
+    generate: genNumberForms,
   },
   {
     id: "add-sub-big",

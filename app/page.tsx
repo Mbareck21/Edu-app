@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import SchoolStrip from "@/components/learn/SchoolStrip";
 import TodayQuest, { type QuestBeat } from "@/components/learn/TodayQuest";
+import { currentLesson } from "@/lib/math/iready";
+import { getSkill } from "@/lib/math";
 import UnitCard from "@/components/learn/UnitCard";
 import AppShell from "@/components/ui/AppShell";
 import { buttonClass, buttonStyle } from "@/components/ui/Button";
@@ -26,6 +28,18 @@ export default async function LearnPage() {
   const doneToday = profile.activity.filter((a) => todayKey(new Date(a.at)) === today);
   const didRef = (ref: string) => doneToday.some((a) => a.ref === ref);
 
+  // The maths his class is on today, so the quest points at school rather than
+  // at whatever he played last. His day was covering reading and vocabulary but
+  // never asking for maths at all.
+  const lesson = currentLesson(today);
+  // A lesson usually maps to more than one skill, and he has been grinding
+  // place value for a week. Rotate by the date so the day picks a different one
+  // of that lesson's skills — deterministic, so the page stays pure.
+  const dayIndex = Number(today.slice(8, 10)) + Number(today.slice(5, 7)) * 31;
+  const schoolSkill = getSkill(
+    lesson.skills[dayIndex % Math.max(1, lesson.skills.length)] ?? "place-value"
+  );
+
   const beats: QuestBeat[] = [
     {
       id: "review",
@@ -49,7 +63,28 @@ export default async function LearnPage() {
       blurb: "Read, then answer",
       icon: "book",
       href: unit ? `/learn/${unit._id}/read` : null,
-      done: doneToday.some((a) => a.kind === "reading" || a.ref.endsWith(":read")),
+      done: doneToday.some(
+        (a) =>
+          (a.kind === "reading" && a.ref !== "read:structure") ||
+          a.ref.endsWith(":read")
+      ),
+    },
+    {
+      id: "structure",
+      name: "Text structure",
+      blurb: "How is it built?",
+      icon: "words",
+      href: "/learn/structure",
+      done: didRef("read:structure"),
+    },
+    {
+      id: "math",
+      name: "Math",
+      blurb: schoolSkill.name,
+      icon: "math",
+      href: `/math/${schoolSkill.id}`,
+      // Any math counts: the skill page, a drill, whichever he opened.
+      done: doneToday.some((a) => a.kind === "math"),
     },
     {
       id: "production",

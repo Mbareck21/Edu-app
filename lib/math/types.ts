@@ -2,6 +2,7 @@
 
 export type MathSkillId =
   | "place-value"
+  | "number-forms"
   | "add-sub-big"
   | "mul-facts"
   | "mul-multi"

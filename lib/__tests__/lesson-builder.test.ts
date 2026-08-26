@@ -269,10 +269,13 @@ test("review still has work when nothing is due", () => {
   assert.ok(items.length <= 12);
 });
 
-test("production is 6 spell-and-use items", () => {
+test("production is 6 spell-and-use items plus one sentence to join", () => {
   const items = buildProductionSession({ words: SEEN_LIST, now: NOW, rng: mulberry32(9) });
-  assert.equal(items.length, 6);
+  assert.equal(items.length, 7);
   assert.equal(items.every((i) => i.skill === "spell" || i.skill === "use"), true);
+  // Joining two clauses with because / although / if is the term's writing
+  // objective. The builder existed for it, but nothing used to call it.
+  assert.equal(items.filter((i) => i.kind === "sentence-combine").length, 1);
 });
 
 test("production types the word once its spell streak is 2", () => {

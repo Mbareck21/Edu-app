@@ -7,6 +7,7 @@ import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import DeleteListButton from "@/components/words/DeleteListButton";
 import NewListForm from "@/components/words/NewListForm";
 import SchoolLists, { type SeedOption } from "@/components/words/SchoolLists";
+import { WORD_PACKS } from "@/lib/word-packs";
 import {
   READING_THEMES,
   SCIENCE_UNITS,
@@ -82,6 +83,16 @@ function seedOptions(lists: ClientWordList[]): SeedOption[] {
   const currentTheme = themeForWeek(todayISO);
 
   const all: SeedOption[] = [
+    // Skill packs first and always "current": these are the words he is missing
+    // right now, not a unit that comes round on the calendar.
+    ...WORD_PACKS.map((p) => ({
+      kind: "pack" as const,
+      id: p.id,
+      title: p.name,
+      wordCount: p.words.length,
+      current: true,
+      existingListId: byName.get(`School: ${p.name}`) ?? null,
+    })),
     ...SCIENCE_UNITS.map((u) => ({
       kind: "science" as const,
       id: u.id,

@@ -5,6 +5,7 @@ import ItemFrame from "@/components/items/ItemFrame";
 import TypeAnswer from "@/components/items/TypeAnswer";
 import Card from "@/components/ui/Card";
 import { spellingKey, type WriteItem as WriteItemType } from "@/lib/items";
+import { hintFor } from "@/lib/number-words";
 import type { ItemControlProps } from "@/components/items/props";
 
 /** Letters he missed come back red; the rest stay black. */
@@ -38,6 +39,9 @@ export default function WriteItem({
   // Judge it the way the grader did. A raw compare called "rocklayer" a miss
   // for "rock layer" and painted the word red under a green "Nice work!".
   const missed = revealed && spellingKey(chosen ?? "") !== spellingKey(item.answer);
+  // Number words are where he actually loses marks — "fefte" for fifty, "ghate"
+  // for eighty. Naming the rule beats a second red word.
+  const hint = missed ? hintFor(chosen ?? "", item.answer) : null;
 
   return (
     <ItemFrame prompt={item.prompt} arabic={item.arabic} glossFaded={item.glossFaded}>
@@ -61,6 +65,9 @@ export default function WriteItem({
             >
               {item.parts.join(" + ")}
             </p>
+          ) : null}
+          {hint ? (
+            <p className="text-center font-body text-[15px] leading-snug">{hint}</p>
           ) : null}
         </Card>
       ) : (

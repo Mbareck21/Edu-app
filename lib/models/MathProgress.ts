@@ -1,8 +1,8 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
 // One document per math skill id (see lib/math/skills.ts, workstream C).
-// `level` adapts: 3 recent sessions at >= 90% level up, a session under 60%
-// levels down. `recentPcts` keeps the last 3 scores that drive that.
+// `level` adapts: 3 recent sessions at >= 90% level up, two in a row under 60%
+// level down. `recentPcts` keeps the last 3 scores that drive that.
 
 const MathProgressSchema = new Schema(
   {
@@ -27,6 +27,12 @@ export const MathProgress: Model<MathProgressDoc> =
 
 export const MAX_MATH_LEVEL = 3;
 export const RECENT_PCTS = 3;
+/** Sessions in a row at this mark or better to move up. */
+export const LEVEL_UP_PCT = 90;
+export const LEVEL_UP_RUN = 3;
+/** Sessions in a row below this to move down. */
+export const LEVEL_DOWN_PCT = 60;
+export const LEVEL_DOWN_RUN = 2;
 
 export type ClientMathProgress = {
   skill: string;
@@ -67,12 +73,33 @@ export function toClientMathProgress(doc: unknown): ClientMathProgress {
  */
 export function nextLevel(level: number, recentPcts: number[]): number {
   const cur = Math.min(MAX_MATH_LEVEL, Math.max(1, level));
-  const last = recentPcts[0];
-  if (last === undefined) return cur;
-  if (last < 60) return Math.max(1, cur - 1);
-  const three = recentPcts.slice(0, RECENT_PCTS);
-  if (three.length === RECENT_PCTS && three.every((p) => p >= 90)) {
+  if (recentPcts.length === 0) return cur;
+
+  const up = recentPcts.slice(0, LEVEL_UP_RUN);
+  if (up.length === LEVEL_UP_RUN && up.every((p) => p >= LEVEL_UP_PCT)) {
     return Math.min(MAX_MATH_LEVEL, cur + 1);
   }
+  // Two in a row, not one. He learns by repetition and grinds a skill for days;
+  // one bad round used to drop him a level AND clear the window, so an off
+  // afternoon erased a week of clean rounds.
+  const down = recentPcts.slice(0, LEVEL_DOWN_RUN);
+  if (down.length === LEVEL_DOWN_RUN && down.every((p) => p < LEVEL_DOWN_PCT)) {
+    return Math.max(1, cur - 1);
+  }
   return cur;
+}
+
+/**
+ * Clean rounds banked toward the next level, out of LEVEL_UP_RUN.
+ *
+ * The math page shows this so a long grind on one skill has a visible target:
+ * he can see that two good rounds are in the bank and one more moves him up.
+ */
+export function cleanRounds(recentPcts: readonly number[]): number {
+  let n = 0;
+  for (const pct of recentPcts.slice(0, LEVEL_UP_RUN)) {
+    if (pct < LEVEL_UP_PCT) break;
+    n++;
+  }
+  return n;
 }

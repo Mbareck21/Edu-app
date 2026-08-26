@@ -8,7 +8,7 @@ import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 
 export type SeedOption = {
-  kind: "science" | "theme";
+  kind: "science" | "theme" | "pack";
   id: string;
   title: string;
   wordCount: number;

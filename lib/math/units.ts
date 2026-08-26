@@ -32,7 +32,7 @@ export const MATH_UNITS: readonly MathUnit[] = [
     start: Q.Q1.start,
     end: Q.Q1.end,
     standards: ["4.NPV.1", "4.NPV.2", "4.CAR.2"],
-    skills: ["place-value", "add-sub-big"],
+    skills: ["place-value", "number-forms", "add-sub-big"],
   },
   {
     id: 2,

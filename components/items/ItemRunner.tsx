@@ -13,8 +13,9 @@ import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
 import { clock } from "@/components/ui/time";
 import type { AccentColor } from "@/components/ui/colors";
-import { gradeItem, reEnqueue, type LessonItem } from "@/lib/items";
+import { gradeItem, type LessonItem } from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
+import { insertRepeat, repeatsFor, SESSION_REPEAT_CAP } from "@/lib/repetition";
 import type { Rng } from "@/lib/math/types";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
@@ -164,6 +165,10 @@ export default function ItemRunner({
   const itemStartedAt = useRef(0);
   const rng = useRef<Rng | null>(null);
   const posted = useRef(false);
+  // Returns still owed per item id. A ref, not state: repeats must never touch
+  // the score, and the plan only changes inside advance() anyway.
+  const repeatPlans = useRef<Map<string, { left: number; index: number }>>(new Map());
+  const repeatsScheduled = useRef(0);
 
   const total = items.length;
   const remaining = new Set(queue.map((i) => i.id)).size;
@@ -301,7 +306,33 @@ export default function ItemRunner({
     const [head, ...rest] = queue;
     const roll = rng.current ?? mulberry32(Date.now() % 2147483647);
     rng.current = roll;
-    setQueue(wrong && head ? reEnqueue(rest, head, roll) : rest);
+    let next = rest;
+    if (head) {
+      // A miss earns extra same-session returns — spelling most, because that
+      // is where he struggles. Topped up (never shrunk) on every miss so a
+      // word missed again keeps coming back, within the session cap.
+      let plan = repeatPlans.current.get(head.id);
+      if (wrong) {
+        if (!plan) {
+          plan = { left: 0, index: 0 };
+          repeatPlans.current.set(head.id, plan);
+        }
+        const grant = Math.min(
+          Math.max(repeatsFor(head.kind) - plan.left, 0),
+          SESSION_REPEAT_CAP - repeatsScheduled.current
+        );
+        plan.left += grant;
+        repeatsScheduled.current += grant;
+      }
+      // Right or wrong, an owed return is consumed here. A word he missed and
+      // then got right once is exactly the word that needs seeing again.
+      if (plan && plan.left > 0) {
+        plan.left -= 1;
+        next = insertRepeat(rest, head, plan.index, roll);
+        plan.index += 1;
+      }
+    }
+    setQueue(next);
     setFeedback(null);
     setChosen(null);
     setAlmost(false);
