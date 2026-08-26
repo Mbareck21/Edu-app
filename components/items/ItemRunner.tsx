@@ -21,12 +21,16 @@ import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained, type GainedBadge } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
-import type { SessionResult, StepId, WordResult } from "@/lib/types";
+import { stepById, type SessionResult, type StepId, type WordResult } from "@/lib/types";
 
 /** Under this many ms an answer earns the speed bonus. */
 const FAST_MS = 3000;
-/** The unit chest opens at this score. */
-export const CHEST_PCT = 80;
+/**
+ * The unit chest opens at the challenge step's own mark. It used to be 80 here
+ * while the map painted the chest won at 70, so a 75% round got no ceremony and
+ * a permanently won chest.
+ */
+export const CHEST_PCT = stepById("challenge").passPct;
 
 export type RunnerPost = {
   /** Activity ref: "listId:step", "quest:review", "quest:new", ... */
@@ -212,7 +216,8 @@ export default function ItemRunner({
     const all = attempts.current;
     const answered = all.length;
     const correct = all.filter((a) => a.correct).length;
-    const pct = answered === 0 ? 100 : Math.round((correct / answered) * 100);
+    // Answering nothing is not a perfect round; it used to open the chest.
+    const pct = answered === 0 ? 0 : Math.round((correct / answered) * 100);
     if (chest && pct >= CHEST_PCT) {
       sfx.chest();
       void fireConfetti("big");
@@ -370,7 +375,7 @@ export default function ItemRunner({
         </div>
       );
     }
-    const accuracy = outcome.answered === 0 ? 1 : outcome.correct / outcome.answered;
+    const accuracy = outcome.answered === 0 ? 0 : outcome.correct / outcome.answered;
     const won = chest && Math.round(accuracy * 100) >= CHEST_PCT;
     const badge = outcome.gained?.newBadges[0];
 

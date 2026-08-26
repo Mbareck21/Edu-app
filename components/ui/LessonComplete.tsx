@@ -20,8 +20,8 @@ export type LessonCompleteProps = {
   xp: number;
   /** Time on task, ms. */
   ms: number;
-  /** 0..1. */
-  accuracy: number;
+  /** 0..1, or null when the step grades nothing — then no score tile is shown. */
+  accuracy: number | null;
   perfect?: boolean;
   leveledUp?: boolean;
   /** Shown as a callout under the tiles. */
@@ -101,7 +101,7 @@ export default function LessonComplete({
   }, [perfect, leveledUp]);
 
   const xpShown = useCountUp(xp);
-  const pctShown = useCountUp(Math.round(Math.max(0, Math.min(1, accuracy)) * 100));
+  const pctShown = useCountUp(Math.round(Math.max(0, Math.min(1, accuracy ?? 0)) * 100));
 
   return (
     <div className="flex min-h-dvh flex-col px-4 pt-10 pb-6">
@@ -122,7 +122,9 @@ export default function LessonComplete({
         <div className="mt-7 flex w-full gap-2">
           <Tile label="XP" value={`+${xpShown}`} />
           <Tile label="Time" value={clock(ms)} />
-          <Tile label="Right" value={`${pctShown}%`} />
+          {/* An ungraded step has no score. Showing 100% for looking at cards
+              is the app congratulating him for something he did not show. */}
+          {accuracy === null ? null : <Tile label="Right" value={`${pctShown}%`} />}
         </div>
 
         {leveledUp ? (

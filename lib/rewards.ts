@@ -11,6 +11,7 @@ import type {
   ReadingResult,
   SessionResult,
 } from "@/lib/types";
+import { STEP_PASS_PCT, stepById } from "@/lib/types";
 import type { IconName } from "@/components/ui/Icon";
 
 export const XP = {
@@ -25,8 +26,12 @@ export const XP = {
 
 export const ACTIVITY_CAP = 200;
 
-/** Score that marks a unit-path step done. Shared by the API and the runners. */
-export const STEP_PASS_PCT = 70;
+/**
+ * Re-exported so the API and the runners keep importing it from one place. The
+ * value lives in lib/types.ts next to the steps it applies to; each step now
+ * carries its own `passPct`, and production steps sit at PRODUCE_PASS_PCT.
+ */
+export { STEP_PASS_PCT };
 
 /** Four beats of Today's quest. The /me editor allows MIN..MAX. */
 export const DEFAULT_DAILY_GOAL = 4;
@@ -153,7 +158,7 @@ export const BADGES: readonly Badge[] = [
       r.kind === "vocab" &&
       r.step === "challenge" &&
       r.answered > 0 &&
-      Math.round((r.correct / r.answered) * 100) >= STEP_PASS_PCT,
+      Math.round((r.correct / r.answered) * 100) >= stepById("challenge").passPct,
   },
 ];
 

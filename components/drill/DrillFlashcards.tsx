@@ -11,7 +11,6 @@ import Card from "@/components/ui/Card";
 import LessonComplete from "@/components/ui/LessonComplete";
 import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
-import { fireConfetti } from "@/components/ui/Confetti";
 import type { ClientWord } from "@/lib/models/WordList";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
@@ -112,22 +111,11 @@ export default function DrillFlashcards({
     } catch {
       // The SRS write can wait — the session post is the record that counts.
     }
-    if (!results.current.some((r) => r.word === card.word.word)) {
-      results.current.push({
-        word: card.word.word,
-        // Cross-list decks: the SRS write has to land on the card's own list.
-        ...(card.listId ? { listId: card.listId } : {}),
-        skill: "recognize",
-        correct: rating === "easy",
-      });
-      listCounts.current.set(card.listId, (listCounts.current.get(card.listId) ?? 0) + 1);
-    }
-    if (rating === "easy") {
-      sfx.correct();
-      void fireConfetti("small");
-    } else {
-      sfx.wrong();
-    }
+    // Rating himself "Easy" is not evidence, so it no longer writes a recognize
+    // streak or earns confetti — the Match step grades recognition for real.
+    // The card's own SRS interval still moves, via the review call above.
+    listCounts.current.set(card.listId, (listCounts.current.get(card.listId) ?? 0) + 1);
+    sfx.tap();
     const [head, ...rest] = queue;
     setQueue(
       rating === "easy"
@@ -167,10 +155,10 @@ export default function DrillFlashcards({
       <div className="safe-top safe-bottom min-h-dvh px-4">
         <LessonComplete
           title="Cards done!"
-          subtitle={subtitle ?? `${outcome.correct} of ${outcome.answered} felt easy.`}
+          subtitle={subtitle ?? `You went through ${cards.length} ${cards.length === 1 ? "card" : "cards"}.`}
           xp={outcome.gained?.xp ?? 0}
           ms={outcome.ms}
-          accuracy={outcome.answered === 0 ? 1 : outcome.correct / outcome.answered}
+          accuracy={null}
           leveledUp={outcome.gained?.leveledUp}
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}

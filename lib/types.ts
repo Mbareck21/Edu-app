@@ -5,6 +5,16 @@ import type { IconName } from "@/components/ui/Icon";
 
 // ── Unit path steps ───────────────────────────────────────────────────────
 
+/** Default mark for a scored step: a four-option pick, so 70 is a real pass. */
+export const STEP_PASS_PCT = 70;
+/**
+ * Spelling a word and using it are production, not recognition. He does not
+ * move on until he can do 9 in 10 — no ticking a node he has not earned.
+ */
+export const PRODUCE_PASS_PCT = 90;
+/** The timed mixed round, and the chest that opens with it. One mark, not two. */
+export const CHEST_PASS_PCT = 80;
+
 export const STEP_IDS = [
   "flashcards",
   "match",
@@ -22,8 +32,17 @@ export type Step = {
   name: string;
   blurb: string;
   icon: IconName;
-  /** Scored steps need STEP_PASS_PCT to complete; unscored ones complete on play. */
+  /** Scored steps need `passPct` to complete; unscored ones complete on play. */
   scored: boolean;
+  /**
+   * Score that marks this step done.
+   *
+   * Producing a word is the real test, so spelling and using it are held at 90.
+   * Match and Listen are four-option picks with a 25% guess floor, so a high
+   * bar there measures luck as much as knowledge — they stay at 70 and let him
+   * reach the steps that count.
+   */
+  passPct: number;
   /** Runner accent color and the completion-screen title. */
   accent: "green" | "blue" | "purple" | "gold";
   doneTitle: string;
@@ -38,13 +57,14 @@ const step = (
   name: string,
   blurb: string,
   icon: IconName,
-  extra?: Partial<Pick<Step, "scored" | "accent" | "doneTitle" | "timed" | "chest">>
+  extra?: Partial<Pick<Step, "scored" | "passPct" | "accent" | "doneTitle" | "timed" | "chest">>
 ): Step => ({
   id,
   name,
   blurb,
   icon,
   scored: true,
+  passPct: STEP_PASS_PCT,
   accent: "green",
   doneTitle: `${name} done!`,
   timed: false,
@@ -53,13 +73,15 @@ const step = (
 });
 
 export const STEPS: readonly Step[] = [
-  step("flashcards", "Learn", "See the words.", "book", { scored: false, accent: "blue", doneTitle: "Words learned!" }),
+  // Flipping cards is seeing them, not learning them — the title used to claim
+  // more than he had shown.
+  step("flashcards", "Learn", "See the words.", "book", { scored: false, accent: "blue", doneTitle: "Cards done!" }),
   step("match", "Match", "Pick the right word.", "check", { doneTitle: "Match done!" }),
   step("listen", "Listen", "Hear it, then pick.", "volume", { doneTitle: "Good ears!" }),
-  step("spell", "Spell", "Build the word.", "words", { doneTitle: "Spelled it!" }),
-  step("use", "Use It", "Put it in a sentence.", "sparkles", { doneTitle: "You used them!" }),
+  step("spell", "Spell", "Build the word.", "words", { passPct: PRODUCE_PASS_PCT, doneTitle: "Spelled it!" }),
+  step("use", "Use It", "Put it in a sentence.", "sparkles", { passPct: PRODUCE_PASS_PCT, doneTitle: "You used them!" }),
   step("read", "Read", "Read and answer.", "chat", { scored: false, accent: "purple", doneTitle: "Reading done!" }),
-  step("challenge", "Challenge", "Go fast. Win the chest.", "bolt", { accent: "gold", doneTitle: "Challenge done!", timed: true, chest: true }),
+  step("challenge", "Challenge", "Go fast. Win the chest.", "bolt", { passPct: CHEST_PASS_PCT, accent: "gold", doneTitle: "Challenge done!", timed: true, chest: true }),
 ] as const;
 
 export function stepById(id: StepId): Step {

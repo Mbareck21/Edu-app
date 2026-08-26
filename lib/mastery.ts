@@ -1,16 +1,19 @@
 // Per-skill mastery. Pure functions — server + client safe, no Mongo.
 //
 // A word is only "known" when every one of the four skills (recognize,
-// listen, spell, use) has stuck three times in a row. "Mastered" also needs
-// the flashcard SRS interval to have grown past a week.
+// listen, spell, use) has stuck three times in a row, and every one of those
+// three was recalled in its own review window rather than ground out in one
+// sitting.
+//
+// It used to also require the flashcard SRS interval to pass a week. That
+// interval only grows when the child himself taps "Easy", so the app's headline
+// "words known" rested on a nine-year-old marking his own homework. The spacing
+// that clause was really buying is now enforced objectively in scheduleSkill.
 
 import { SKILL_IDS, type ClientWord, type SkillId, type SkillState } from "@/lib/models/WordList";
 
 export const KNOWN_STREAK = 3;
 export const MASTERED_STREAK = 4;
-/** Flashcard SRS interval a word needs before it counts as known / mastered. */
-export const KNOWN_INTERVAL_DAYS = 7;
-export const MASTERED_INTERVAL_DAYS = 16;
 /** Days to the next review, indexed by streak (see docs/pedagogy.md). */
 export const SKILL_LADDER_DAYS = [1, 3, 7, 16, 35, 90] as const;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -53,6 +56,12 @@ export function skillDue(skill: SkillState, now: Date): boolean {
  * One answer for one skill.
  * Right → streak + 1 and the next review moves out along the day ladder.
  * Wrong → streak back to 0 and the word is due again straight away.
+ *
+ * A right answer given BEFORE the word was due keeps the streak where it is.
+ * He practises the same list several times a day on purpose, and that repetition
+ * is how he learns — but three recalls in one afternoon are not the evidence
+ * three recalls a week apart are, and only the second kind should be allowed to
+ * call a word known.
  */
 export function scheduleSkill(state: SkillState, correct: boolean, now: Date): SkillState {
   if (!correct) {
@@ -64,14 +73,16 @@ export function scheduleSkill(state: SkillState, correct: boolean, now: Date): S
       dueAt: now.toISOString(),
     };
   }
-  const streak = state.streak + 1;
-  const days = skillGapDays(streak);
+  // Practice before it was due still counts as practice, just not as progress.
+  const early = now.getTime() < new Date(state.dueAt).getTime();
+  const streak = early ? state.streak : state.streak + 1;
+  const days = skillGapDays(Math.max(1, streak));
   return {
     correct: state.correct + 1,
     wrong: state.wrong,
     streak,
     lastAt: now.toISOString(),
-    dueAt: new Date(now.getTime() + days * MS_PER_DAY).toISOString(),
+    dueAt: early ? state.dueAt : new Date(now.getTime() + days * MS_PER_DAY).toISOString(),
   };
 }
 
@@ -84,20 +95,17 @@ function touched(word: ClientWord): boolean {
 }
 
 /**
- * Recognising a word is not knowing it — the kid has to have produced it at
- * least once (spelled it or used it) and held it across a week of reviews.
+ * Recognising a word is not knowing it — he has to have produced it at least
+ * once (spelled it or used it) and held all four skills across three separate
+ * review windows. scheduleSkill is what makes those windows real.
  */
 export function wordKnowledge(word: ClientWord): Knowledge {
   const produced = word.skills.spell.correct >= 1 || word.skills.use.correct >= 1;
   const known =
-    produced &&
-    word.srs.interval >= KNOWN_INTERVAL_DAYS &&
-    SKILL_IDS.every((id) => word.skills[id].streak >= KNOWN_STREAK);
+    produced && SKILL_IDS.every((id) => word.skills[id].streak >= KNOWN_STREAK);
   if (!known) return touched(word) ? "learning" : "new";
 
-  const mastered =
-    word.srs.interval >= MASTERED_INTERVAL_DAYS &&
-    SKILL_IDS.every((id) => word.skills[id].streak >= MASTERED_STREAK);
+  const mastered = SKILL_IDS.every((id) => word.skills[id].streak >= MASTERED_STREAK);
   return mastered ? "mastered" : "known";
 }
 

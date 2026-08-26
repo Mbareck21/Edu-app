@@ -14,7 +14,7 @@ import {
 } from "@/lib/models/Profile";
 import { SKILL_IDS, WordList, toSkillState } from "@/lib/models/WordList";
 import { getProfile, saveProfile } from "@/lib/profile";
-import { STEP_PASS_PCT, applyReading, applySession, levelFor } from "@/lib/rewards";
+import { applyReading, applySession, levelFor } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
 
@@ -62,9 +62,10 @@ function pctOf(body: ParsedBody): number {
 
 type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
 
-/** Scored steps need STEP_PASS_PCT; unscored ones complete just for showing up. */
+/** Each step carries its own mark; unscored ones complete just for showing up. */
 function stepCompleted(step: StepId, pct: number): boolean {
-  return !stepById(step).scored || pct >= STEP_PASS_PCT;
+  const info = stepById(step);
+  return !info.scored || pct >= info.passPct;
 }
 
 /** The unit-path entry for the step the session just played. */

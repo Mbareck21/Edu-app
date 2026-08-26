@@ -13,7 +13,7 @@ import {
 } from "@/lib/mastery";
 import { SKILL_IDS, type ClientWord, type SkillState } from "@/lib/models/WordList";
 import { applyReading, emptyProfile, nextReadingLevel } from "@/lib/rewards";
-import type { ProfileState, ReadingLog } from "@/lib/types";
+import { STEPS, stepById, type ProfileState, type ReadingLog } from "@/lib/types";
 
 const NOW = new Date("2026-08-19T10:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -57,12 +57,43 @@ function withStreaks(streak: number, interval = 0): ClientWord {
 test("right answers walk the 1/3/7/16/35/90 day ladder", () => {
   const gaps = [1, 3, 7, 16, 35, 90];
   let s: SkillState = newSkillState(NOW);
+  let at = NOW;
   for (let i = 0; i < gaps.length; i++) {
-    s = scheduleSkill(s, true, NOW);
+    // Answer each one when it comes due, which is how the ladder is climbed.
+    s = scheduleSkill(s, true, at);
     assert.equal(s.streak, i + 1);
-    assert.equal(new Date(s.dueAt).getTime(), NOW.getTime() + gaps[i] * DAY);
+    assert.equal(new Date(s.dueAt).getTime(), at.getTime() + gaps[i] * DAY);
+    at = new Date(at.getTime() + gaps[i] * DAY);
   }
   assert.equal(s.correct, gaps.length);
+});
+
+test("grinding the same word all afternoon does not walk the ladder", () => {
+  // He practises a list several times a day on purpose. That is how he learns,
+  // but it is not evidence he will still have it next week.
+  let s: SkillState = newSkillState(NOW);
+  s = scheduleSkill(s, true, NOW);
+  assert.equal(s.streak, 1);
+  const dueAfterFirst = s.dueAt;
+
+  for (let i = 1; i <= 5; i++) {
+    s = scheduleSkill(s, true, new Date(NOW.getTime() + i * 60_000));
+    assert.equal(s.streak, 1, `still 1 after ${i} extra tries the same day`);
+    assert.equal(s.dueAt, dueAfterFirst, "and the review date does not slide out");
+  }
+  // The practice itself is still recorded.
+  assert.equal(s.correct, 6);
+
+  // Once it is genuinely due again, the streak moves.
+  s = scheduleSkill(s, true, new Date(NOW.getTime() + 1 * DAY));
+  assert.equal(s.streak, 2);
+});
+
+test("an early miss still resets the streak", () => {
+  let s: SkillState = newSkillState(NOW);
+  s = scheduleSkill(s, true, NOW);
+  s = scheduleSkill(s, false, new Date(NOW.getTime() + 60_000));
+  assert.equal(s.streak, 0, "getting it wrong counts whenever it happens");
 });
 
 test("the review gap stops growing at 90 days", () => {
@@ -93,11 +124,12 @@ test("one answer makes a word learning", () => {
   assert.equal(wordKnowledge(w), "learning");
 });
 
-test("known needs 4 streaks of 3, a produced answer and a week of SRS", () => {
-  // Streaks are there but the SRS interval has not reached a week.
-  assert.equal(wordKnowledge(withStreaks(3, 2)), "learning");
-  assert.equal(wordKnowledge(withStreaks(3, 7)), "known");
-  assert.equal(wordKnowledge(withStreaks(2, 30)), "learning");
+test("known needs 4 streaks of 3 and a produced answer, not a self-rating", () => {
+  // The SRS interval no longer counts: it only grew when he tapped "Easy" on a
+  // flashcard, which is him marking his own homework.
+  assert.equal(wordKnowledge(withStreaks(3, 0)), "known", "no self-rating needed");
+  assert.equal(wordKnowledge(withStreaks(3, 2)), "known");
+  assert.equal(wordKnowledge(withStreaks(2, 30)), "learning", "a long interval cannot buy it");
 });
 
 test("known needs the word produced, not just recognised", () => {
@@ -109,14 +141,14 @@ test("known needs the word produced, not just recognised", () => {
   assert.equal(wordKnowledge(w), "known");
 });
 
-test("mastered needs 4 streaks of 4 and a 16 day interval", () => {
-  assert.equal(wordKnowledge(withStreaks(4, 7)), "known");
+test("mastered needs 4 streaks of 4", () => {
   assert.equal(wordKnowledge(withStreaks(3, 16)), "known");
+  assert.equal(wordKnowledge(withStreaks(4, 0)), "mastered");
   assert.equal(wordKnowledge(withStreaks(4, 16)), "mastered");
 });
 
 test("counts split the list and words known covers known + mastered", () => {
-  const words = [word(), withStreaks(1), withStreaks(3, 7), withStreaks(4, 16)];
+  const words = [word(), withStreaks(1), withStreaks(3, 0), withStreaks(4, 0)];
   assert.deepEqual(countKnowledge(words), {
     new: 1,
     learning: 1,
@@ -185,4 +217,33 @@ test("applyReading moves the level after three strong readings", () => {
   p = applyReading(p, { level: 2, pct: 40, wordsCount: 60 }, now);
   p = applyReading(p, { level: 2, pct: 45, wordsCount: 60 }, now);
   assert.equal(p.reading.level, 1);
+});
+
+// ── progression gates ─────────────────────────────────────────────────────
+
+test("producing a word is held at 90, recognising it at 70", () => {
+  // His father's rule: no progressing past a level he cannot write or use.
+  assert.equal(stepById("spell").passPct, 90);
+  assert.equal(stepById("use").passPct, 90);
+  // Four-option picks have a 25% guess floor, so a high bar there measures luck.
+  assert.equal(stepById("match").passPct, 70);
+  assert.equal(stepById("listen").passPct, 70);
+  // One mark for the timed round and the chest that opens with it.
+  assert.equal(stepById("challenge").passPct, 80);
+});
+
+test("every scored step has a mark between 70 and 90", () => {
+  for (const step of STEPS) {
+    if (!step.scored) continue;
+    assert.ok(
+      step.passPct >= 70 && step.passPct <= 90,
+      `${step.id}: passPct ${step.passPct} is outside the range`
+    );
+  }
+});
+
+test("no step title claims more than the step proves", () => {
+  // Flipping cards is seeing words, not learning them.
+  assert.equal(stepById("flashcards").scored, false);
+  assert.equal(stepById("flashcards").doneTitle, "Cards done!");
 });

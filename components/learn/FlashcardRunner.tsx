@@ -9,7 +9,6 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import LessonComplete from "@/components/ui/LessonComplete";
 import RunnerHeader from "@/components/ui/RunnerHeader";
-import { fireConfetti } from "@/components/ui/Confetti";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { Gained } from "@/lib/rewards";
@@ -135,16 +134,10 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
     } catch {
       // The SRS write can wait — the session post is the record that counts.
     }
-    // One line per card in this session: Easy means the meaning came back.
-    if (!results.current.some((r) => r.word === card.word)) {
-      results.current.push({ word: card.word, skill: "recognize", correct: rating === "easy" });
-    }
-    if (rating === "easy") {
-      sfx.correct();
-      void fireConfetti("small");
-    } else {
-      sfx.wrong();
-    }
+    // Tapping "Easy" is him marking his own homework. It no longer writes a
+    // recognize streak — the Match step grades recognition for real — and it no
+    // longer earns confetti for a self-report.
+    sfx.tap();
     setQueue(applyRating(queue, rating).queue);
     setRevealed(false);
     setBusy(false);
@@ -178,11 +171,12 @@ export default function FlashcardRunner({ list, nowIso, needsExamples }: Flashca
     return (
       <div className="safe-top safe-bottom min-h-dvh px-4">
         <LessonComplete
-          title="Words learned!"
-          subtitle={`${outcome.correct} of ${outcome.answered} felt easy.`}
+          title="Cards done!"
+          subtitle={`You went through ${start.length} ${start.length === 1 ? "card" : "cards"}.`}
           xp={outcome.gained?.xp ?? 0}
           ms={outcome.ms}
-          accuracy={outcome.answered === 0 ? 1 : outcome.correct / outcome.answered}
+          // Nothing here was graded — he rated himself. No score to show.
+          accuracy={null}
           leveledUp={outcome.gained?.leveledUp}
           newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Back to path", href: pathHref }}
