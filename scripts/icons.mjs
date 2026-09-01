@@ -1,6 +1,7 @@
 // Renders the Quest app mark to the PNG sizes a PWA needs.
 //   node scripts/icons.mjs   (or: npm run icons)
-// Writes public/icons/icon.svg, icon-192.png, icon-512.png, maskable-512.png.
+// Writes public/icons/icon.svg, icon-192.png, icon-512.png, maskable-512.png
+// and apple-touch-icon.png.
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -51,6 +52,10 @@ async function main() {
     { file: "icon-512.png", markup: svg({ size: 512 }), size: 512 },
     // Maskable: full-bleed green square with the art pulled in from the edges.
     { file: "maskable-512.png", markup: svg({ size: 512, inset: 0.22, square: true }), size: 512 },
+    // iOS wants exactly 180 and has no maskable concept: it rounds the corners
+    // itself, so this is the square art, not the disc. Feeding it the 192 icon
+    // left the home screen rescaling and softening the mark.
+    { file: "apple-touch-icon.png", markup: svg({ size: 512, inset: 0.12, square: true }), size: 180 },
   ];
 
   for (const job of jobs) {

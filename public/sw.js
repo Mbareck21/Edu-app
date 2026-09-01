@@ -2,9 +2,15 @@
    - precache the shell so the tabs open offline
    - network-first for page navigations, falling back to /offline
    - cache-first for hashed build assets and Google font files
-   Nothing here caches API responses — progress must come from the server. */
+   Nothing here caches API responses — progress must come from the server.
 
-const VERSION = "quest-v3";
+   Updates wait to be let in. This used to call skipWaiting() during install,
+   so a deploy mid-session put a new worker in charge of a tab still running
+   the old JavaScript — the new worker serving new build chunks to old code.
+   Now a new version sits in "waiting" until the page asks for it, which the
+   page does when he taps the update bar. See components/RegisterSW.tsx. */
+
+const VERSION = "quest-v4";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
@@ -44,9 +50,14 @@ self.addEventListener("install", (event) => {
           );
         })
       );
-      await self.skipWaiting();
+      // No skipWaiting() here on purpose — see the note at the top.
     })()
   );
+});
+
+// The page asks for the new version when the child taps the update bar.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

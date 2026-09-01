@@ -50,3 +50,8 @@ next-env.d.ts
 .probe-out.txt
 .probe-when-ready.sh
 .tmp-probe/
+
+# Throwaway Chrome profiles used by the probe scripts
+.chrome-pwa/
+.chrome-shots/
+.prod.log

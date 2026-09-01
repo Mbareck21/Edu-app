@@ -12,7 +12,10 @@ const PUBLIC_PATHS = new Set([
   "/sw.js",
   "/offline",
 ]);
-const PUBLIC_PREFIXES = ["/icons/"];
+// The install dialog fetches the manifest's screenshots with no session, so a
+// redirect to /login would leave the dialog blank. Safe to expose: these are
+// work screens with no name and no progress on them (scripts/screenshots.mjs).
+const PUBLIC_PREFIXES = ["/icons/", "/screenshots/"];
 
 async function valid(token: string | undefined): Promise<boolean> {
   if (!token) return false;
