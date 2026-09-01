@@ -10,6 +10,7 @@ import {
   structureById,
   structureChoices,
   structureSession,
+  STRUCTURE_ROUNDS,
   passagesFor,
 } from "@/lib/text-structure";
 
@@ -59,11 +60,41 @@ test("the teacher's five passages are still here, word for word", () => {
   );
 });
 
+test("passages are written in the English his school grades him in", () => {
+  // He is at an Arkansas public school and spelling is his weakest skill, so
+  // the app must not teach a spelling his teacher marks wrong. Ten passages
+  // added on 2026-09-01 shipped colour/vapour/autumn/towards before this.
+  const BRITISH = /(colour|colours|vapour|autumn|towards|behaviour|grey|centre|metre|practise|realise|neighbour|favourite)/i;
+  for (const passage of STRUCTURE_PASSAGES) {
+    const hit = passage.text.match(BRITISH) ?? passage.title.match(BRITISH);
+    assert.equal(hit, null, `${passage.id} uses "${hit?.[0]}"`);
+  }
+});
+
+test("no structure can be answered by elimination", () => {
+  // One round per structure meant the fifth answer was free: whatever had not
+  // come up yet. The session runs one extra round so counting settles nothing.
+  for (let seed = 1; seed <= 60; seed++) {
+    const session = structureSession(mulberry32(seed));
+    assert.equal(session.length, STRUCTURE_ROUNDS);
+    assert.ok(STRUCTURE_ROUNDS > STRUCTURE_IDS.length, "an extra round is what breaks the count");
+    const counts = new Map<string, number>();
+    for (const r of session) {
+      counts.set(r.passage.structure, (counts.get(r.passage.structure) ?? 0) + 1);
+    }
+    // Still every structure practised, but one appears twice.
+    assert.equal(counts.size, STRUCTURE_IDS.length, `seed ${seed} skipped a structure`);
+    assert.ok([...counts.values()].some((n) => n === 2), `seed ${seed} has no repeat`);
+    // The repeat should be a different text where the pool allows one.
+    assert.equal(new Set(session.map((r) => r.passage.id)).size, session.length);
+  }
+});
+
 test("a session covers all five structures in a varying order", () => {
   const ids = (seed: number) => structureSession(mulberry32(seed)).map((r) => r.passage.structure);
   for (let seed = 1; seed <= 50; seed++) {
     const session = structureSession(mulberry32(seed));
-    assert.equal(session.length, 5, `seed ${seed} did not give five rounds`);
+    assert.equal(session.length, STRUCTURE_ROUNDS);
     assert.equal(new Set(session.map((r) => r.passage.structure)).size, 5);
     for (const round of session) {
       assert.equal(round.choices.answer, round.passage.structure);

@@ -67,10 +67,14 @@ export default async function StepPage({
     const generatedOn = list.currentReading?.generatedAt
       ? todayKey(new Date(list.currentReading.generatedAt))
       : "";
-    // ?saved=1 is how the "read this one instead" link asks for the passage
-    // already on the list, rather than a new one.
-    const wantsSaved = (await searchParams).saved === "1";
-    const stale = !wantsSaved && generatedOn !== todayKey();
+    // ?saved=<day> is how the "read this one instead" link asks for the passage
+    // already on the list. It carries the day it was issued rather than a bare
+    // flag: it means "show me this one now", not "staleness off". A bookmarked
+    // or back-navigated URL must not quietly serve a week-old passage as
+    // today's reading, which is the bug the staleness check exists for.
+    const today = todayKey();
+    const wantsSaved = (await searchParams).saved === today;
+    const stale = !wantsSaved && generatedOn !== today;
 
     // If this list cannot serve a reading — nothing saved, or only something
     // old — find one that can. The home page's Reading beat always points at
@@ -89,7 +93,11 @@ export default async function StepPage({
     const spareTitle = spareDoc?.currentReading?.title;
     const spare =
       spareDoc && spareTitle
-        ? { listId: String(spareDoc._id), title: String(spareTitle) }
+        ? {
+            listId: String(spareDoc._id),
+            title: String(spareTitle),
+            href: `/learn/${String(spareDoc._id)}/read?saved=${today}`,
+          }
         : null;
 
     return (

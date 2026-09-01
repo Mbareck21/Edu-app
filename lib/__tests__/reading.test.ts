@@ -22,7 +22,7 @@ import {
   scaffoldFor,
   splitParagraphs,
   wordsPerMinute,
-  MIN_CREDIBLE_WPM,
+  MAX_READ_MS,
   castFor,
   OPENING_MOVES,
   STORY_NAMES,
@@ -221,13 +221,17 @@ test("Sam is not in the roster", () => {
   assert.ok(!STORY_NAMES.includes("Sam" as (typeof STORY_NAMES)[number]));
 });
 
-test("an abandoned timer scores nothing, not a slow rate", () => {
-  // 110 words with the clock left running for 20 minutes reads as 6 wpm. That
-  // is not a fluency measurement, and it used to be saved as one.
+test("an abandoned timer scores nothing, but a slow read still counts", () => {
+  // 110 words with the clock left running for 20 minutes is a tab left open,
+  // not a reading, and it used to be saved as 6 wpm.
   assert.equal(wordsPerMinute(110, 20 * 60_000), 0);
-  // Just under the floor is still rejected; a real slow read is kept.
-  assert.equal(wordsPerMinute(MIN_CREDIBLE_WPM - 1, 60_000), 0);
-  assert.equal(wordsPerMinute(MIN_CREDIBLE_WPM, 60_000), MIN_CREDIBLE_WPM);
+  assert.equal(wordsPerMinute(110, MAX_READ_MS + 1), 0);
+
+  // But a genuinely slow read-aloud is a real measurement and must survive.
+  // He is an Arabic-L1 reader who sounds words out; a rate floor threw these
+  // away and so could never show him improving from a low base.
+  assert.equal(wordsPerMinute(110, 6 * 60_000), 18);
+  assert.equal(wordsPerMinute(60, 10 * 60_000), 6);
   assert.equal(wordsPerMinute(45, 60_000), 45);
 });
 

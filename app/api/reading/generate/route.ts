@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { todayKey } from "@/lib/day";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
-import { getProfile } from "@/lib/profile";
+import { getProfileWithSeen } from "@/lib/profile";
 import {
   currentQuarter,
   scienceUnitForWeek,
@@ -175,7 +175,7 @@ export async function POST(req: Request) {
 
   // The reading ladder lives on the profile, not the list. An explicit level
   // in the body wins (the drill / practice screens may want to pin one).
-  const profile = await getProfile();
+  const { state: profile, seen: allSeen } = await getProfileWithSeen();
   const level = clampLevel(parsed.data.level ?? profile.reading.level ?? 1);
   const params = readingParams(level);
 
@@ -185,11 +185,9 @@ export async function POST(req: Request) {
 
   // What he has been given anywhere, not just on this list. The per-list
   // history stays for the list's own stats; this is what the writer is told to
-  // avoid, because he is one reader with one memory.
-  const profileDoc = await Profile.findOne({ key: PROFILE_KEY }).select("readingSeen");
-  const seen = ((profileDoc?.get("readingSeen") as SeenEntry[] | undefined) ?? []).slice(
-    -READING_SEEN_MAX
-  );
+  // avoid, because he is one reader with one memory. It rode along with the
+  // profile read above rather than costing a second round trip.
+  const seen: SeenEntry[] = allSeen.slice(-READING_SEEN_MAX);
   const kind: PassageKind = parsed.data.kind ?? nextKind(seen);
 
   // What the class is doing this week. Informational passages ride the science
@@ -291,12 +289,19 @@ Write the passage and the questions now. Strict JSON only.`;
   // this point cannot finish inside that, so it would burn the budget and
   // still return nothing. Better to hand back what attempt 1 wrote.
   const startedAt = Date.now();
-  const RETRY_DEADLINE_MS = 30_000;
+  // Attempt 2 is only started when what is left of the 60s budget covers how
+  // long attempt 1 actually took. Gating on a flat 30s let a 29s first attempt
+  // wave through a 50s second one and blow the limit, which on Vercel is a
+  // killed function and a raw gateway error rather than our own message.
+  const BUDGET_MS = 55_000;
 
   for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
     if (attempt === 2 && hardFail) break;
-    if (attempt === 2 && Date.now() - startedAt > RETRY_DEADLINE_MS) {
-      console.warn("[reading/generate] no time for a second attempt; keeping the first");
+    const spent = Date.now() - startedAt;
+    if (attempt === 2 && spent * 2 > BUDGET_MS) {
+      console.warn(
+        `[reading/generate] attempt 1 took ${Math.round(spent / 1000)}s; no room for a second`
+      );
       break;
     }
     try {
@@ -319,7 +324,21 @@ Write the passage and the questions now. Strict JSON only.`;
       // problem, not a writing problem, and telling it to mind the shape is
       // useless — it has to be told to write less.
       const truncated = completion.choices[0]?.finish_reason === "length";
-      const validated = ResponseShape.safeParse(JSON.parse(text));
+      // Parsed here rather than inline so a SyntaxError does not fall into the
+      // catch below and get treated as a hard failure. Truncated JSON is the
+      // commonest fault and a retry is precisely what fixes it.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        lastErr = "the reading was cut off before it finished";
+        console.warn(`[reading/generate] attempt ${attempt} returned unparseable JSON`);
+        correction = `
+
+Your last answer was not valid JSON — it ran out of room before the closing brace. Write the SHORTEST passage the word target allows, keep every "acceptable" list to 4 entries, and keep hints under 12 words.`;
+        continue;
+      }
+      const validated = ResponseShape.safeParse(parsed);
       if (!validated.success) {
         // Name the field that broke. "malformed reading" on its own left
         // nothing to debug when one generation in five failed.

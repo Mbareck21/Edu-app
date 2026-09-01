@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { friendlyAiError } from "@/lib/groq";
 
@@ -66,14 +67,21 @@ test("every AI route runs its failures through the mapper", () => {
       return e.isDirectory() ? walk(full) : full.endsWith(".ts") ? [full] : [];
     });
 
-  const offenders = walk(path.join(process.cwd(), "app", "api")).filter((file) => {
+  // Anchored on this file, not the working directory. Run from anywhere else
+  // and a cwd-relative walk either throws or finds an empty tree and passes
+  // while leaks ship — confirmed by running this test from another folder.
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const apiDir = path.join(repoRoot, "app", "api");
+  assert.ok(fs.existsSync(apiDir), `no app/api under ${repoRoot}`);
+
+  const offenders = walk(apiDir).filter((file) => {
     const src = fs.readFileSync(file, "utf8");
     // Only routes that return the caught error to the client.
     return /catch\s*\(\s*err/.test(src) && /err instanceof Error \? err\.message/.test(src);
   });
 
   assert.deepEqual(
-    offenders.map((f) => path.relative(process.cwd(), f)),
+    offenders.map((f) => path.relative(repoRoot, f)),
     [],
     "these routes return raw upstream text to the child"
   );

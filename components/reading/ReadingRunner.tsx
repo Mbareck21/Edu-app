@@ -51,7 +51,7 @@ export type ReadingRunnerProps = {
    * list; that list having nothing saved is not a reason for him to have
    * nothing to read at all.
    */
-  spare?: { listId: string; title: string } | null;
+  spare?: { listId: string; title: string; href: string } | null;
   /** Called from the finish screen's main button. Falls back to a link home. */
   onDone?: () => void;
 };
@@ -167,6 +167,25 @@ export default function ReadingRunner({
 
   // ── Generating ──────────────────────────────────────────────────────────
 
+  /**
+   * Put a passage on screen and clear everything the last one left behind.
+   * Both paths that install a reading go through here — they had drifted, and
+   * the fallback one was forgetting to reset the echo summary and the timer.
+   */
+  const installReading = useCallback((next: CurrentReading | null) => {
+    setReading(next);
+    setEcho(null);
+    setQStates(freshQ(next?.questions.length ?? 0));
+    setQIdx(0);
+    setWpm(null);
+    setTimerStart(null);
+    savedRef.current = false;
+    // The clock starts when he does, not while a passage is being written —
+    // generation runs 30s and up, and it used to land on his time on task.
+    startedAtRef.current = Date.now();
+    watch.current = startStopwatch();
+  }, []);
+
   const generate = useCallback(async () => {
     setError(null);
     setBusy("generating");
@@ -182,13 +201,7 @@ export default function ReadingRunner({
         return null;
       }
       const fresh = (data as ClientWordList).currentReading;
-      setReading(fresh);
-      setEcho(null);
-      setQStates(freshQ(fresh?.questions.length ?? 0));
-      setQIdx(0);
-      setWpm(null);
-      setTimerStart(null);
-      savedRef.current = false;
+      installReading(fresh);
       return fresh;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error.");
@@ -196,7 +209,7 @@ export default function ReadingRunner({
     } finally {
       setBusy(null);
     }
-  }, [list._id]);
+  }, [list._id, installReading]);
 
   // ── Listen mode playback ────────────────────────────────────────────────
 
@@ -407,11 +420,7 @@ export default function ReadingRunner({
           onClick: () => {
             void (async () => {
               const fresh = await generate();
-              if (fresh) {
-                startedAtRef.current = Date.now();
-                watch.current = startStopwatch();
-                setPhase("mode");
-              }
+              if (fresh) setPhase("mode");
             })();
           },
         }}
@@ -438,11 +447,7 @@ export default function ReadingRunner({
           disabled={busy !== null}
           onClick={() => {
             void (async () => {
-              const fresh = await generate();
-              if (fresh) {
-                startedAtRef.current = Date.now();
-                watch.current = startStopwatch();
-              }
+              await generate();
             })();
           }}
         >
@@ -456,12 +461,7 @@ export default function ReadingRunner({
             color="green"
             onClick={() => {
               setError(null);
-              setReading(shelved);
-              setQStates(freshQ(shelved.questions.length));
-              setQIdx(0);
-              savedRef.current = false;
-              startedAtRef.current = Date.now();
-              watch.current = startStopwatch();
+              installReading(shelved);
             }}
           >
             Read {shelved.title} again
@@ -472,7 +472,7 @@ export default function ReadingRunner({
             actually belongs to. */}
         {error && !shelved && spare ? (
           <Link
-            href={`/learn/${spare.listId}/read?saved=1`}
+            href={spare.href}
             className={buttonClass({ variant: "secondary", color: "green", size: "lg", fullWidth: true })}
             style={buttonStyle({ variant: "secondary", color: "green", size: "lg" })}
           >

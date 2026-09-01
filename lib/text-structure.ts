@@ -193,7 +193,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
     title: "How Rain Falls",
     structure: "sequence",
     signalWords: ["first", "next", "then", "finally"],
-    text: "Water travels in a circle that never really stops. First, the sun heats water in lakes, rivers and the sea until it turns into vapour. Next, the vapour rises high into the cool air and gathers into clouds. Then the tiny drops inside the cloud bump together and grow heavier. Finally, the drops fall back to the ground as rain, and the journey starts again. Scientists call this circle the water cycle.",
+    text: "Water travels in a circle that never really stops. First, the sun heats water in lakes, rivers and the sea until it turns into water vapor. Next, the water vapor rises high into the cool air and gathers into clouds. Then the tiny drops inside the cloud bump together and grow heavier. Finally, the drops fall back to the ground as rain, and the journey starts again. Scientists call this circle the water cycle.",
   },
   {
     id: "planting-seed",
@@ -209,7 +209,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
     title: "Why Leaves Change",
     structure: "cause-effect",
     signalWords: ["because", "as a result", "effect", "this is why"],
-    text: "Leaves change colour in autumn because the days grow shorter and colder. Trees stop making the green food colour called chlorophyll when there is less sunlight. As a result, yellow and orange colours that were hiding all summer finally show. Another effect is that the leaf dries out and falls to the ground. This is why bare branches in winter are a normal, healthy sign and not a sick one.",
+    text: "Leaves change color in the fall because the days grow shorter and colder. Trees stop making the green food color called chlorophyll when there is less sunlight. As a result, yellow and orange colors that were hiding all summer finally show. Another effect is that the leaf dries out and falls to the ground. This is why bare branches in winter are a normal, healthy sign and not a sick one.",
   },
   {
     id: "shaking-ground",
@@ -233,7 +233,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
     title: "Saving Water",
     structure: "problem-solution",
     signalWords: ["problem", "one way to fix", "solution"],
-    text: "Many towns run short of clean water in a long, dry summer. The problem is that people use the most water at exactly the time there is least of it. One way to fix this is to water gardens early in the morning, before the sun dries the soil. Another solution is to catch rain from the roof in a barrel and use it later. Saving a little water every day adds up to a great deal by autumn.",
+    text: "Many towns run short of clean water in a long, dry summer. The problem is that people use the most water at exactly the time there is least of it. One way to fix this is to water gardens early in the morning, before the sun dries the soil. Another solution is to catch rain from the roof in a barrel and use it later. Saving a little water every day adds up to a great deal by the end of summer.",
   },
   {
     id: "camels-horses",
@@ -249,7 +249,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
     title: "Rivers and Lakes",
     structure: "compare-contrast",
     signalWords: ["one way they are the same", "they both", "one way they are different", "unlike"],
-    text: "Rivers and lakes are both bodies of fresh water, but they behave in different ways. One way they are the same is that they both give homes to fish, birds and water plants. They both also collect the rain that falls on the land around them. One way they are different is that a river always flows downhill towards the sea. Unlike a river, a lake sits still in a low dip in the ground.",
+    text: "Rivers and lakes are both bodies of fresh water, but they behave in different ways. One way they are the same is that they both give homes to fish, birds and water plants. They both also collect the rain that falls on the land around them. One way they are different is that a river always flows downhill toward the sea. Unlike a river, a lake sits still in a low dip in the ground.",
   },
 ];
 
@@ -303,13 +303,30 @@ export function passagesFor(id: TextStructureId): StructurePassage[] {
  * reliable tell — he could answer "cause and effect" third without reading.
  * Shuffling the order removes the tell; drawing from a pool of three means the
  * text is new about two visits in three as well.
+ *
+ * The extra round matters as much. With exactly one round per structure he can
+ * answer the last one by elimination without reading it — the same shortcut in
+ * a different disguise. A sixth round repeats one structure, so counting what
+ * is left over no longer settles anything.
  */
+export const STRUCTURE_ROUNDS = STRUCTURE_IDS.length + 1;
+
 export function structureSession(rng: Rng, choiceCount = 4): StructureRound[] {
-  const rounds = STRUCTURE_IDS.map((id) => {
-    const pool = passagesFor(id);
-    const passage = pool[Math.floor(rng() * pool.length)];
-    return { passage, choices: structureChoices(passage, rng, choiceCount) };
-  });
+  const pick = (pool: readonly StructurePassage[]): StructurePassage =>
+    pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+
+  // Every structure gets practised...
+  const chosen = STRUCTURE_IDS.map((id) => pick(passagesFor(id)));
+  // ...and one gets a second turn, on a different text where there is one.
+  const encore = STRUCTURE_IDS[Math.min(STRUCTURE_IDS.length - 1, Math.floor(rng() * STRUCTURE_IDS.length))];
+  const taken = new Set(chosen.map((p) => p.id));
+  const spare = passagesFor(encore).filter((p) => !taken.has(p.id));
+  chosen.push(pick(spare.length > 0 ? spare : passagesFor(encore)));
+
+  const rounds = chosen.map((passage) => ({
+    passage,
+    choices: structureChoices(passage, rng, choiceCount),
+  }));
   return shuffle(rng, rounds);
 }
 

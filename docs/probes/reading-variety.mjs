@@ -65,8 +65,20 @@ const listId = String(insertedId);
 const before = await profiles.findOne({ key: "default" });
 const savedGlobal = before?.readingSeen ?? null;
 
-const NAME = /\b(?:[A-Z][a-z]{2,9})\b/g;
-const STOP = new Set(["The","A","An","In","It","He","She","They","One","Every","When","Grade","But","On","At","This","That","There","Then","Now","Sunlight","Water","Roots","Some","Many","Most","After","Before","Each","His","Her","Two","Three"]);
+// Only count a capitalised word as a name when it appears somewhere other than
+// the start of a sentence. A hand-kept stop list could not keep up: the first
+// run of this probe scored "Nature", "What", "Together", "Soon", "Suddenly"
+// and "Patience" as characters, and the pass/fail verdict is computed from
+// that tally.
+function charactersIn(text) {
+  const names = new Set();
+  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+    // Drop the opening word: a sentence-initial capital says nothing.
+    const rest = sentence.replace(/^\s*\S+\s*/, "");
+    for (const m of rest.matchAll(/\b([A-Z][a-z]{2,9})\b/g)) names.add(m[1]);
+  }
+  return [...names];
+}
 
 // Warm mode measures the real product: one reset, then N in a row with the
 // profile-wide memory filling up as it would for him.
@@ -96,7 +108,7 @@ for (let i = 0; i < N; i++) {
     continue;
   }
   const opening = cr.paragraph.split(/\s+/).slice(0, 6).join(" ");
-  const names = [...new Set((cr.paragraph.match(NAME) || []).filter((w) => !STOP.has(w)))];
+  const names = charactersIn(cr.paragraph);
   rows.push({ i, title: cr.title, opening, names });
   console.log(`${i + 1}/${N}  ${JSON.stringify(cr.title)}  ::  ${opening}`);
 }

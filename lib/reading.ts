@@ -322,19 +322,28 @@ export type StoryCast = {
  * draws — so the recent leads are removed from the pool rather than merely
  * discouraged. When avoiding everything would leave nothing, the full roster
  * comes back: a repeated name beats no story.
+ *
+ * `avoidAdults` is separate because the two rosters share no names. Filtering
+ * STORY_ADULTS against the child leads was a no-op that read like a guarantee,
+ * and Mr. Diaz duly turned up twice in eight passages.
  */
 export function castFor(
   rng: () => number = Math.random,
-  avoid: readonly string[] = []
+  avoid: readonly string[] = [],
+  avoidAdults: readonly string[] = []
 ): StoryCast {
-  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rng() * xs.length)];
+  // Math.min guards an rng that can return exactly 1; Math.random cannot, but
+  // a caller-supplied one might.
+  const pick = <T,>(xs: readonly T[]): T =>
+    xs[Math.min(xs.length - 1, Math.floor(rng() * xs.length))];
   const taken = new Set(avoid.map((n) => n.toLowerCase()));
+  const takenAdults = new Set(avoidAdults.map((n) => n.toLowerCase()));
   const free = STORY_NAMES.filter((n) => !taken.has(n.toLowerCase()));
   const pool: readonly string[] = free.length >= 2 ? free : STORY_NAMES;
 
   const child = pick(pool);
   const others = pool.filter((n) => n !== child);
-  const freeAdults = STORY_ADULTS.filter((a) => !taken.has(a.toLowerCase()));
+  const freeAdults = STORY_ADULTS.filter((a) => !takenAdults.has(a.toLowerCase()));
   return {
     child,
     other: pick(others.length > 0 ? others : STORY_NAMES.filter((n) => n !== child)),
@@ -462,19 +471,21 @@ export function longestSentenceWords(text: string): number {
 export const MAX_WPM = 1000;
 
 /**
- * Slowest reading that is still a reading. Below this he stopped part way and
- * the clock kept going — a stretch that says nothing about his fluency and
- * would drag his logged rate down for weeks. The slowest Grade 4 readers on
- * the Hasbrouck & Tindal table sit near 45 wpm, so 20 is well under any real
- * performance and only catches an abandoned timer.
+ * Longest a timed read can run before it is treated as a timer he walked away
+ * from rather than a reading.
+ *
+ * This was a rate floor first (under 20 wpm scored nothing), which was wrong:
+ * a rate cannot tell a slow reader from an abandoned clock, and he is exactly
+ * the reader who sounds words out. At 380 words — the level 10 target — even
+ * 40 wpm finishes inside ten minutes, so fifteen clears any real read while
+ * still catching a tab left open.
  */
-export const MIN_CREDIBLE_WPM = 20;
+export const MAX_READ_MS = 15 * 60_000;
 
 /** Words per minute for a timed read. 0 when the timing is unusable. */
 export function wordsPerMinute(wordsCount: number, ms: number): number {
-  if (wordsCount <= 0 || ms < 2000) return 0;
+  if (wordsCount <= 0 || ms < 2000 || ms > MAX_READ_MS) return 0;
   const wpm = Math.round(wordsCount / (ms / 60000));
-  if (wpm < MIN_CREDIBLE_WPM) return 0;
   return Math.min(MAX_WPM, Math.max(0, wpm));
 }
 
