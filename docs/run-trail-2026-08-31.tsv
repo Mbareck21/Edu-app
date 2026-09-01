@@ -27,3 +27,7 @@ when	phase	unit	decision / hypothesis	evidence	verdict
 2026-08-31	C	fix-8	friendlyAiError maps upstream failures to one short line and logs the real reason server-side. Verified against a live 429: he sees 'That is all the new writing for today...' and the org id goes to the log.	lib/groq.ts; 5 tests; live 429	VERIFIED
 2026-08-31	E	whole	247 tests pass (was 234). tsc --noEmit clean. eslint on app/components/lib/docs: 5 errors, unchanged pre-existing baseline. npm run build compiles.	local run	VERIFIED
 2026-08-31	E	cleanup	Probe artifacts removed from the live database: scratch word lists deleted, Profile.readingSeen unset.	clean script	VERIFIED
+2026-08-31	C	bug-6b	The same raw-error leak existed in six more AI routes, two of them (tts, transcribe) used by the reading section's own 'read after me' mode. Live at the time of writing, since the daily budget was exhausted.	grep app/api	VERIFIED
+2026-08-31	C	fix-9	All seven routes now map failures through friendlyAiError. Zero routes return err.message to the client.	app/api/*	VERIFIED
+2026-08-31	E	gate	Regression guard: a test walks app/api and fails if any route returns raw upstream text. Proved it works by reintroducing the pattern in tts — the test failed — then restoring it.	lib/__tests__/ai-errors.test.ts	VERIFIED
+2026-08-31	E	whole	Final: 248 tests pass (was 234). tsc --noEmit clean. eslint on app/components/lib/docs back to the 5 pre-existing errors. npm run build compiles.	local run	VERIFIED

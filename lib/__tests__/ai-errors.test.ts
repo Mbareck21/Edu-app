@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import fs from "node:fs";
+import path from "node:path";
+
 import { friendlyAiError } from "@/lib/groq";
 
 /**
@@ -51,4 +54,27 @@ test("a bad key asks for a grown-up, not another tap", () => {
 test("anything unrecognised falls back to the caller's wording", () => {
   assert.equal(friendlyAiError(new Error("something odd"), "fb"), "fb");
   assert.equal(friendlyAiError(null, "fb"), "fb");
+});
+
+test("every AI route runs its failures through the mapper", () => {
+  // A guard, not a style rule. Seven routes hand upstream text to the screen;
+  // the reading one was fixed first and the other six leaked identically. If a
+  // new route reintroduces `err.message`, this fails instead of shipping.
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      return e.isDirectory() ? walk(full) : full.endsWith(".ts") ? [full] : [];
+    });
+
+  const offenders = walk(path.join(process.cwd(), "app", "api")).filter((file) => {
+    const src = fs.readFileSync(file, "utf8");
+    // Only routes that return the caught error to the client.
+    return /catch\s*\(\s*err/.test(src) && /err instanceof Error \? err\.message/.test(src);
+  });
+
+  assert.deepEqual(
+    offenders.map((f) => path.relative(process.cwd(), f)),
+    [],
+    "these routes return raw upstream text to the child"
+  );
 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { groq, CLUE_MODEL, CLUE_SYSTEM_PROMPT, rateLimit, getClientIp } from "@/lib/groq";
+import { CLUE_MODEL, CLUE_SYSTEM_PROMPT, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ clues: out });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown error";
-    return NextResponse.json({ error: `Groq error: ${msg}` }, { status: 502 });
+    const msg = friendlyAiError(err, "The clues would not come. Try again.");
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

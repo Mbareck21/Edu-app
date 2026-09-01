@@ -1,6 +1,6 @@
 import { EdgeTTS } from "@andresaya/edge-tts";
 import { NextResponse } from "next/server";
-import { AI_ENGLISH_VOICE, AI_ARABIC_VOICE } from "@/lib/groq";
+import { AI_ARABIC_VOICE, AI_ENGLISH_VOICE, friendlyAiError } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -73,7 +73,7 @@ export async function GET(req: Request) {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "tts failed";
+    const msg = friendlyAiError(err, "The sound would not play. Tap it again.");
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { groq, STT_MODEL, rateLimit, getClientIp } from "@/lib/groq";
+import { STT_MODEL, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       language: (result as unknown as { language?: string }).language ?? null,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "transcription failed";
+    const msg = friendlyAiError(err, "I did not catch that. Tap the mic and say it again.");
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

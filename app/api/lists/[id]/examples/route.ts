@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
-import { CLUE_MODEL, getClientIp, groq, rateLimit } from "@/lib/groq";
+import { CLUE_MODEL, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -131,7 +131,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (batch.includes(key)) filled.set(key, value);
       }
     } catch (err) {
-      failure = err instanceof Error ? err.message : "examples failed";
+      failure = friendlyAiError(err, "The examples would not come. Try again.");
       break;
     }
   }

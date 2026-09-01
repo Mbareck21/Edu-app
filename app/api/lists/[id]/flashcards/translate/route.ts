@@ -3,13 +3,7 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
-import {
-  groq,
-  CLUE_MODEL,
-  TRANSLATE_SYSTEM_PROMPT,
-  rateLimit,
-  getClientIp,
-} from "@/lib/groq";
+import { CLUE_MODEL, TRANSLATE_SYSTEM_PROMPT, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -119,7 +113,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const fresh = await WordList.findById(id).lean();
     return NextResponse.json(toClient(fresh!));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "translation failed";
+    const msg = friendlyAiError(err, "That translation would not come. Try again.");
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
