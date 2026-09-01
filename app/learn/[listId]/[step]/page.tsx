@@ -21,7 +21,7 @@ export default async function StepPage({
   searchParams,
 }: {
   params: Promise<{ listId: string; step: string }>;
-  searchParams: Promise<{ r?: string }>;
+  searchParams: Promise<{ r?: string; saved?: string }>;
 }) {
   const { listId, step } = await params;
   if (!isStepId(step) || !mongoose.isValidObjectId(listId)) notFound();
@@ -67,12 +67,38 @@ export default async function StepPage({
     const generatedOn = list.currentReading?.generatedAt
       ? todayKey(new Date(list.currentReading.generatedAt))
       : "";
+    // ?saved=1 is how the "read this one instead" link asks for the passage
+    // already on the list, rather than a new one.
+    const wantsSaved = (await searchParams).saved === "1";
+    const stale = !wantsSaved && generatedOn !== todayKey();
+
+    // If this list cannot serve a reading — nothing saved, or only something
+    // old — find one that can. The home page's Reading beat always points at
+    // the most recently touched list, and that list having no passage is not a
+    // reason for him to have nothing to read while another list holds one.
+    const needsSpare = stale || !list.currentReading;
+    const spareDoc = needsSpare
+      ? await WordList.findOne({
+          _id: { $ne: list._id },
+          currentReading: { $ne: null },
+        })
+          .sort({ "currentReading.generatedAt": -1 })
+          .select("_id name currentReading.title")
+          .lean()
+      : null;
+    const spareTitle = spareDoc?.currentReading?.title;
+    const spare =
+      spareDoc && spareTitle
+        ? { listId: String(spareDoc._id), title: String(spareTitle) }
+        : null;
+
     return (
       <ReadingRunner
         key={runKey}
         list={list}
         scaffold={scaffoldFor(profile.reading.recent)}
-        stale={generatedOn !== todayKey()}
+        stale={stale}
+        spare={spare}
       />
     );
   }

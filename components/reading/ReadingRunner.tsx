@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
-import Button from "@/components/ui/Button";
+import Button, { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
 import Icon from "@/components/ui/Icon";
@@ -44,6 +45,13 @@ export type ReadingRunnerProps = {
    * it. Decided on the server — see app/learn/[listId]/[step]/page.tsx.
    */
   stale?: boolean;
+  /**
+   * A passage sitting on another list, for when this one cannot serve any.
+   * The home page's Reading beat always points at the most recently touched
+   * list; that list having nothing saved is not a reason for him to have
+   * nothing to read at all.
+   */
+  spare?: { listId: string; title: string } | null;
   /** Called from the finish screen's main button. Falls back to a link home. */
   onDone?: () => void;
 };
@@ -68,6 +76,7 @@ export default function ReadingRunner({
   list,
   scaffold = "none",
   stale = false,
+  spare = null,
   onDone,
 }: ReadingRunnerProps) {
   const [reading, setReading] = useState<CurrentReading | null>(
@@ -457,6 +466,18 @@ export default function ReadingRunner({
           >
             Read {shelved.title} again
           </Button>
+        ) : null}
+        {/* Nothing on this list, but something on another. Link rather than
+            render it here, so the reading is logged against the list it
+            actually belongs to. */}
+        {error && !shelved && spare ? (
+          <Link
+            href={`/learn/${spare.listId}/read?saved=1`}
+            className={buttonClass({ variant: "secondary", color: "green", size: "lg", fullWidth: true })}
+            style={buttonStyle({ variant: "secondary", color: "green", size: "lg" })}
+          >
+            Read {spare.title} instead
+          </Link>
         ) : null}
       </div>
     );

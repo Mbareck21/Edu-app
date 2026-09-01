@@ -22,6 +22,8 @@ import { SignJWT } from "jose";
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const PORT = process.env.PORT || 3000;
 const PROBE_LIST = "__probe__ staleness";
+const SPARE_LIST = "__probe__ spare";
+const SPARE_TITLE = "A Passage On Another List";
 
 const env = Object.fromEntries(
   fs
@@ -56,7 +58,22 @@ const reading = (generatedAt) => ({
   generatedAt,
 });
 
-await lists.deleteMany({ name: PROBE_LIST });
+await lists.deleteMany({ name: { $in: [PROBE_LIST, SPARE_LIST] } });
+
+// A second list holding a readable passage. The home page's Reading beat
+// always points at the most recently touched list, and on 2026-09-01 that list
+// had no passage at all — so a failed generation left the screen empty while
+// another list held one.
+const spare = await lists.insertOne({
+  name: SPARE_LIST,
+  words: [],
+  readingLevel: 1,
+  readingHistory: [],
+  currentReading: { ...reading(new Date()), title: SPARE_TITLE },
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
 const { insertedId } = await lists.insertOne({
   name: PROBE_LIST,
   words: [],
@@ -73,13 +90,20 @@ const { insertedId } = await lists.insertOne({
  * whether or not anything puts it on screen — the first version of this probe
  * failed on exactly that.
  */
-const render = async () => {
+const renderRaw = async () => {
   const res = await fetch(`http://127.0.0.1:${PORT}/learn/${insertedId}/read`, {
     headers: { cookie: `eduapp_session=${token}` },
   });
-  const html = await res.text();
-  return html.replace(/<script[\s\S]*?<\/script>/g, "");
+  return res.text();
 };
+
+/**
+ * The rendered markup only. The props travel down inside <script> payloads
+ * too, so a plain string search on the whole response finds the old title
+ * whether or not anything puts it on screen — the first version of this probe
+ * failed on exactly that.
+ */
+const render = async () => (await renderRaw()).replace(/<script[\s\S]*?<\/script>/g, "");
 
 const results = [];
 const check = (name, pass, detail) => {
@@ -96,7 +120,26 @@ const today = await render();
 check("today's passage is still shown", today.includes(TITLE));
 check("and he can ask for a different one", today.includes("I want a different story"));
 
+// A list with nothing saved at all: the reading page must still point him at
+// the passage another list holds rather than dead-ending.
+await lists.updateOne({ _id: insertedId }, { $set: { currentReading: null } });
+const empty = await render();
+check("an empty list still offers to write him one", empty.includes("Write my reading"));
+
+// The fallback link itself only appears once a generation has actually failed,
+// so what is checkable without spending an AI call is that the server FOUND a
+// spare and handed it to the runner. That is the part that regresses silently
+// — the visible button was confirmed by hand against a live rate limit on
+// 2026-09-01, screenshot in the session log.
+const payload = await renderRaw();
+check("the server found a spare passage on another list", payload.includes(SPARE_TITLE));
+check(
+  "and passes its list id, which is what the link is built from",
+  payload.includes(String(spare.insertedId))
+);
+
 await lists.deleteOne({ _id: insertedId });
+await lists.deleteOne({ _id: spare.insertedId });
 await client.close();
 
 const failed = results.filter((r) => !r.pass).length;
