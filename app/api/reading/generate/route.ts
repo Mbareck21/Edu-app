@@ -18,6 +18,7 @@ import {
   castFor,
   clampLevel,
   countWords,
+  MAX_PASSAGE_PARAGRAPHS,
   foldParagraphs,
   longestSentenceWords,
   questionPlan,
@@ -383,7 +384,7 @@ Write the passage and the questions now. Strict JSON only.`;
     );
   }
 
-  const passage = foldParagraphs(reading.paragraphs, params.paragraphs).join("\n\n");
+  const passage = foldParagraphs(reading.paragraphs, MAX_PASSAGE_PARAGRAPHS).join("\n\n");
 
   // Normalise the questions: MCQs must have a usable answerIndex, free-text
   // must not carry stray options, and every question keeps exactly 2 hints.

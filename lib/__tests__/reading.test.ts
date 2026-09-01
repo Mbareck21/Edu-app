@@ -12,6 +12,7 @@ import {
   atGradeLevel,
   clampLevel,
   countWords,
+  MAX_PASSAGE_PARAGRAPHS,
   foldParagraphs,
   levelAtGrade,
   lexileForLevel,
@@ -263,4 +264,12 @@ test("an exhausted roster still returns a cast", () => {
   const cast = castFor(seeded(7), [...STORY_NAMES]);
   assert.ok(cast.child);
   assert.notEqual(cast.child, cast.other);
+});
+
+test("the fold ceiling leaves normal passages alone", () => {
+  // The point is to rescue a runaway generation, not to reshape a passage the
+  // writer split sensibly. More paragraph breaks help him read, not less.
+  const six = ["a", "b", "c", "d", "e", "f"];
+  assert.deepEqual(foldParagraphs(six, MAX_PASSAGE_PARAGRAPHS), six);
+  assert.equal(foldParagraphs([...six, "g"], MAX_PASSAGE_PARAGRAPHS).length, 6);
 });

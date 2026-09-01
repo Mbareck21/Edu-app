@@ -427,6 +427,15 @@ export function splitSentences(text: string): string[] {
 }
 
 /**
+ * The most paragraphs a passage may arrive in. Not a readability rule — the
+ * level's own paragraph target is prompt guidance, and MORE breaks suit a
+ * struggling reader, not fewer. This is only a runaway guard, kept at the
+ * number the response schema used to reject at so nothing that worked before
+ * is reshaped now.
+ */
+export const MAX_PASSAGE_PARAGRAPHS = 6;
+
+/**
  * Squash a passage down to at most `max` paragraphs by folding the extras into
  * the last one.
  *
