@@ -73,6 +73,11 @@ export default function ReadingRunner({
   const [reading, setReading] = useState<CurrentReading | null>(
     stale ? null : list.currentReading
   );
+  // The passage being held back for being old. Kept, not discarded: when a new
+  // one cannot be written — the writing service is down, or the day's budget
+  // is spent — an old story is far better than an empty screen. Hiding it was
+  // only ever meant to stop it being served as today's.
+  const shelved = stale ? list.currentReading : null;
   const [phase, setPhase] = useState<Phase>("mode");
   const [mode, setMode] = useState<Mode>("listen");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
@@ -434,6 +439,25 @@ export default function ReadingRunner({
         >
           {busy === "generating" ? "Writing it…" : "Write my reading"}
         </Button>
+        {error && shelved ? (
+          <Button
+            fullWidth
+            size="lg"
+            variant="secondary"
+            color="green"
+            onClick={() => {
+              setError(null);
+              setReading(shelved);
+              setQStates(freshQ(shelved.questions.length));
+              setQIdx(0);
+              savedRef.current = false;
+              startedAtRef.current = Date.now();
+              watch.current = startStopwatch();
+            }}
+          >
+            Read {shelved.title} again
+          </Button>
+        ) : null}
       </div>
     );
   }

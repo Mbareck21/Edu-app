@@ -44,3 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local scratch from debugging runs
+.dev.log
+.probe-out.txt
+.probe-when-ready.sh
+.tmp-probe/
