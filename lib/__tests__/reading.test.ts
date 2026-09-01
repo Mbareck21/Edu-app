@@ -12,6 +12,7 @@ import {
   atGradeLevel,
   clampLevel,
   countWords,
+  foldParagraphs,
   levelAtGrade,
   lexileForLevel,
   longestSentenceWords,
@@ -20,7 +21,23 @@ import {
   scaffoldFor,
   splitParagraphs,
   wordsPerMinute,
+  MIN_CREDIBLE_WPM,
+  castFor,
+  OPENING_MOVES,
+  STORY_NAMES,
+  STORY_SETTINGS,
 } from "@/lib/reading";
+
+/** Tiny deterministic rng so the cast tests are not flaky. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 test("level params follow the plan's formulas", () => {
   assert.equal(readingParams(1).targetWords, 110);
@@ -164,4 +181,86 @@ test("the answer scaffold fades with his record, not the calendar", () => {
 
   // Right on the threshold counts as steady.
   assert.equal(scaffoldFor(runs(SCAFFOLD_LIGHT_SESSIONS, SCAFFOLD_STEADY_PCT)), "none");
+});
+
+// ── Story cast ────────────────────────────────────────────────────────────
+//
+// The bug: every list's first passage came back as the same "Sam walked to..."
+// story, ten times out of ten on a cold probe. The cast is sampled in code now
+// precisely so variety cannot depend on the model's mood.
+
+test("a cast never casts the same child twice", () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const cast = castFor(seeded(seed));
+    assert.notEqual(cast.child, cast.other);
+  }
+});
+
+test("every cast field comes from its roster", () => {
+  for (let seed = 1; seed <= 50; seed++) {
+    const cast = castFor(seeded(seed));
+    assert.ok(STORY_NAMES.includes(cast.child as (typeof STORY_NAMES)[number]));
+    assert.ok(STORY_NAMES.includes(cast.other as (typeof STORY_NAMES)[number]));
+    assert.ok(STORY_SETTINGS.includes(cast.setting as (typeof STORY_SETTINGS)[number]));
+    assert.ok(OPENING_MOVES.includes(cast.opening as (typeof OPENING_MOVES)[number]));
+  }
+});
+
+test("the roster is wide enough that repeats are rare", () => {
+  // 8 passages is READING_SEEN_MAX. Over many runs of 8, the same child should
+  // almost never fill the set — that is the whole point of the fix.
+  const names = new Set<string>();
+  for (let seed = 1; seed <= 100; seed++) names.add(castFor(seeded(seed)).child);
+  assert.ok(names.size >= 12, `only ${names.size} distinct names in 100 draws`);
+});
+
+test("Sam is not in the roster", () => {
+  // Not superstition: the old system prompt named Sam as an example and the
+  // model used it in 10 of 10 cold generations.
+  assert.ok(!STORY_NAMES.includes("Sam" as (typeof STORY_NAMES)[number]));
+});
+
+test("an abandoned timer scores nothing, not a slow rate", () => {
+  // 110 words with the clock left running for 20 minutes reads as 6 wpm. That
+  // is not a fluency measurement, and it used to be saved as one.
+  assert.equal(wordsPerMinute(110, 20 * 60_000), 0);
+  // Just under the floor is still rejected; a real slow read is kept.
+  assert.equal(wordsPerMinute(MIN_CREDIBLE_WPM - 1, 60_000), 0);
+  assert.equal(wordsPerMinute(MIN_CREDIBLE_WPM, 60_000), MIN_CREDIBLE_WPM);
+  assert.equal(wordsPerMinute(45, 60_000), 45);
+});
+
+test("too many paragraphs are folded, not rejected", () => {
+  // A real generation came back with more paragraphs than the schema allowed
+  // and the whole passage was discarded. The words were fine; only the shape
+  // was wrong (server log, 2026-08-31).
+  const seven = ["a", "b", "c", "d", "e", "f", "g"];
+  assert.deepEqual(foldParagraphs(seven, 3), ["a", "b", "c d e f g"]);
+  // Under the cap nothing moves.
+  assert.deepEqual(foldParagraphs(["a", "b"], 4), ["a", "b"]);
+  // Blank paragraphs are dropped, and whitespace is trimmed.
+  assert.deepEqual(foldParagraphs([" a ", "", "b"], 4), ["a", "b"]);
+  // No paragraph is ever lost.
+  const folded = foldParagraphs(seven, 2);
+  assert.equal(folded.length, 2);
+  for (const part of seven) assert.ok(folded.join(" ").includes(part));
+});
+
+test("a cast steps around the leads he has just read", () => {
+  // The product loop: each passage's lead goes into the memory, and the next
+  // cast is drawn from what is left. Eight is READING_SEEN_MAX.
+  const seenLeads: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const cast = castFor(seeded(i + 1), seenLeads);
+    assert.ok(!seenLeads.includes(cast.child), `${cast.child} repeated at ${i}`);
+    seenLeads.push(cast.child);
+  }
+  assert.equal(new Set(seenLeads).size, 8);
+});
+
+test("an exhausted roster still returns a cast", () => {
+  // Avoiding every name must not deadlock or return nothing.
+  const cast = castFor(seeded(7), [...STORY_NAMES]);
+  assert.ok(cast.child);
+  assert.notEqual(cast.child, cast.other);
 });

@@ -15,18 +15,23 @@ import {
 } from "@/lib/curriculum";
 import {
   MAX_GLOSSARY_ENTRIES,
+  castFor,
   clampLevel,
   countWords,
+  foldParagraphs,
   longestSentenceWords,
   questionPlan,
   readingParams,
   type PassageKind,
   type QuestionSpec,
+  type StoryCast,
 } from "@/lib/reading";
+import { PROFILE_KEY, Profile, READING_SEEN_MAX } from "@/lib/models/Profile";
 import {
   groq,
   CLUE_MODEL,
   READING_SYSTEM_PROMPT,
+  friendlyAiError,
   rateLimit,
   getClientIp,
 } from "@/lib/groq";
@@ -56,7 +61,9 @@ const QuestionShape = z.object({
 
 const ResponseShape = z.object({
   title: z.string().min(2).max(70),
-  paragraphs: z.array(z.string().min(20).max(1200)).min(1).max(6),
+  // Generous on purpose: a passage split into more paragraphs than the level
+  // wants is folded back to size below, not thrown away. See foldParagraphs.
+  paragraphs: z.array(z.string().min(20).max(1200)).min(1).max(14),
   usedWords: z.array(z.string()).default([]),
   glossary: z
     .array(
@@ -82,6 +89,9 @@ type HistoryEntry = {
   generatedAt: Date;
 };
 
+/** A passage he has already been given, from the profile-wide memory. */
+type SeenEntry = { title: string; opening: string; kind?: string; cast?: string };
+
 /**
  * Shuffle the options and report where the right one landed. Models park the
  * correct answer at index 0 far too often; this kills the position tell.
@@ -95,9 +105,13 @@ function shuffleOptions(options: string[], answerIndex: number): {
   return { options: shuffled, answerIndex: Math.max(0, shuffled.indexOf(answer)) };
 }
 
-/** Story and informational passages alternate so both standards get worked. */
-function nextKind(history: HistoryEntry[]): PassageKind {
-  const last = history[history.length - 1];
+/**
+ * Story and informational passages alternate so both standards get worked.
+ * Reads the profile-wide memory, not one list's: the alternation is his, and
+ * when it was per-list every list opened on a story.
+ */
+function nextKind(seen: SeenEntry[]): PassageKind {
+  const last = seen[seen.length - 1];
   return last?.kind === "story" ? "info" : "story";
 }
 
@@ -167,7 +181,15 @@ export async function POST(req: Request) {
   const history = ((doc.get("readingHistory") as HistoryEntry[] | undefined) ?? []).slice(
     -MAX_HISTORY_ENTRIES
   );
-  const kind: PassageKind = parsed.data.kind ?? nextKind(history);
+
+  // What he has been given anywhere, not just on this list. The per-list
+  // history stays for the list's own stats; this is what the writer is told to
+  // avoid, because he is one reader with one memory.
+  const profileDoc = await Profile.findOne({ key: PROFILE_KEY }).select("readingSeen");
+  const seen = ((profileDoc?.get("readingSeen") as SeenEntry[] | undefined) ?? []).slice(
+    -READING_SEEN_MAX
+  );
+  const kind: PassageKind = parsed.data.kind ?? nextKind(seen);
 
   // What the class is doing this week. Informational passages ride the science
   // unit when there is one; stories ride the Benchmark reading theme.
@@ -193,13 +215,35 @@ export async function POST(req: Request) {
   // when the reading ladder has not reached them yet.
   const plan = questionPlan(level, kind, useScience, currentQuarter(todayISO));
 
+  // One de-duplicated list, newest last. A passage generated on this list is
+  // already in `seen`; matching on the opening keeps it from being listed twice.
+  const recent = [
+    ...seen,
+    ...history.filter((h) => !seen.some((v) => v.opening === h.opening)),
+  ].slice(-READING_SEEN_MAX);
+
   const historyBlock =
-    history.length > 0
-      ? `\n\nRECENT PASSAGES on this list (make this one genuinely different):\n` +
-        history
+    recent.length > 0
+      ? `\n\nRECENT PASSAGES he has already been given (make this one genuinely different — new names, new place, new situation):\n` +
+        recent
           .map((h, i) => `${i + 1}. "${h.title}" (${h.kind ?? "story"}) — opens: ${h.opening}`)
           .join("\n")
       : "";
+
+  // The cast comes from here, not from the writer, and it steps around whoever
+  // led the passages he has just read. See lib/reading.ts.
+  const recentLeads = seen.map((h) => h.cast ?? "").filter(Boolean);
+  const cast: StoryCast | null = kind === "story" ? castFor(Math.random, recentLeads) : null;
+  const castBlock = cast
+    ? `
+CAST — use these names and no others:
+  main character: ${cast.child}
+  the other child: ${cast.other}
+  the grown-up: ${cast.adult}
+SETTING: ${cast.setting}
+OPENING MOVE: ${cast.opening}
+PROBLEM the story turns on: ${cast.problem}`
+    : "";
 
   const kindBlock =
     kind === "info"
@@ -211,7 +255,7 @@ The writer must make one clear point and back it with reasons and examples.`
 TOPIC: ${topic} — the reading unit his class is on now (week ${themeWeek} of 3)
 BIG QUESTION the class is asking: ${essentialQuestion}
 ANGLE: ${topicIdea ?? essentialQuestion}
-The story must carry a lesson he could name in one sentence.`;
+The story must carry a lesson he could name in one sentence.${castBlock}`;
 
   const userPrompt = `LEVEL: ${level} of 10
 TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never more than ${params.maxWords})
@@ -232,10 +276,28 @@ Write the passage and the questions now. Strict JSON only.`;
 
   // Generate, and retry once when the passage misses the level targets.
   let reading: z.infer<typeof ResponseShape> | null = null;
+  // A first attempt that parsed but missed a target. Worth keeping: a passage
+  // ten words short is still a passage, and handing him an error instead was
+  // the worse outcome whenever the retry also failed.
+  let fallback: z.infer<typeof ResponseShape> | null = null;
   let lastErr: string | null = null;
+  // The call itself failed, as opposed to the writing missing a target. A
+  // second attempt cannot fix a rate limit or a bad key, so it is not made.
+  let hardFail = false;
   let correction = "";
 
+  // The route is declared maxDuration = 60. A second attempt started after
+  // this point cannot finish inside that, so it would burn the budget and
+  // still return nothing. Better to hand back what attempt 1 wrote.
+  const startedAt = Date.now();
+  const RETRY_DEADLINE_MS = 30_000;
+
   for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
+    if (attempt === 2 && hardFail) break;
+    if (attempt === 2 && Date.now() - startedAt > RETRY_DEADLINE_MS) {
+      console.warn("[reading/generate] no time for a second attempt; keeping the first");
+      break;
+    }
     try {
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
@@ -245,14 +307,29 @@ Write the passage and the questions now. Strict JSON only.`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.75,
-        max_tokens: 5000,
-      reasoning_effort: "low",
+        // The retry gets more room: the commonest first-attempt failure was
+        // the JSON being cut off mid-question, and repeating the same budget
+        // just fails the same way twice.
+        max_tokens: attempt === 1 ? 5000 : 8000,
+        reasoning_effort: "low",
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
+      // "length" means the model was cut off mid-JSON. That is a budget
+      // problem, not a writing problem, and telling it to mind the shape is
+      // useless — it has to be told to write less.
+      const truncated = completion.choices[0]?.finish_reason === "length";
       const validated = ResponseShape.safeParse(JSON.parse(text));
       if (!validated.success) {
-        lastErr = "AI returned a malformed reading";
-        correction = `\n\nYour last answer did not match the JSON shape. Return every field exactly as the shape shows, and exactly ${plan.length} questions.`;
+        // Name the field that broke. "malformed reading" on its own left
+        // nothing to debug when one generation in five failed.
+        const issue = validated.error.issues[0];
+        lastErr = truncated
+          ? "the reading was cut off before it finished"
+          : `bad ${issue?.path.join(".") || "shape"}: ${issue?.message ?? "unknown"}`;
+        console.warn(`[reading/generate] attempt ${attempt} rejected — ${lastErr}`);
+        correction = truncated
+          ? `\n\nYour last answer ran out of room before the JSON closed. Write the SHORTEST passage the word target allows, keep every "acceptable" list to 4 entries, and keep hints under 12 words.`
+          : `\n\nYour last answer did not match the JSON shape (${lastErr}). Return every field exactly as the shape shows, and exactly ${plan.length} questions.`;
         continue;
       }
 
@@ -281,12 +358,22 @@ Write the passage and the questions now. Strict JSON only.`;
           );
         }
         correction = fixes.join("\n");
+        fallback = validated.data;
         continue;
       }
       reading = validated.data;
     } catch (err) {
-      lastErr = err instanceof Error ? err.message : "unknown error";
+      // Never hand the upstream text to the screen — it carried org ids and a
+      // billing link the day the daily token budget ran out.
+      lastErr = friendlyAiError(err, "The story would not come. Tap it again.");
+      hardFail = true;
     }
+  }
+
+  // An imperfect passage beats no passage. Only fail when nothing came back.
+  if (!reading && fallback) {
+    console.warn("[reading/generate] using the first attempt despite its misses");
+    reading = fallback;
   }
 
   if (!reading) {
@@ -296,7 +383,7 @@ Write the passage and the questions now. Strict JSON only.`;
     );
   }
 
-  const passage = reading.paragraphs.map((p) => p.trim()).join("\n\n");
+  const passage = foldParagraphs(reading.paragraphs, params.paragraphs).join("\n\n");
 
   // Normalise the questions: MCQs must have a usable answerIndex, free-text
   // must not carry stray options, and every question keeps exactly 2 hints.
@@ -366,6 +453,23 @@ Write the passage and the questions now. Strict JSON only.`;
   doc.set("readingHistory", newHistory);
 
   await doc.save();
+
+  // Remember it profile-wide too, so the next passage on ANY list knows this
+  // one exists. $push with $slice keeps the array capped without a read.
+  await Profile.updateOne(
+    { key: PROFILE_KEY },
+    {
+      $push: {
+        readingSeen: {
+          $each: [
+            { at: now, title: reading.title, opening, kind, cast: cast?.child ?? "" },
+          ],
+          $slice: -READING_SEEN_MAX,
+        },
+      },
+    },
+    { upsert: true }
+  );
 
   return NextResponse.json(toClient(doc.toObject()));
 }

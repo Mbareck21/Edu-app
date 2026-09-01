@@ -78,6 +78,25 @@ const ReadingLogSchema = new Schema(
   { _id: false }
 );
 
+/**
+ * One passage he has already been given, for the generator to avoid repeating.
+ *
+ * This lives on the profile rather than on the word list because the reader is
+ * one boy, not one list. When it was per-list, every list's first passage came
+ * back as the same story — the generator could not see what it had already
+ * written anywhere else. See docs/probes/reading-variety.mjs.
+ */
+const ReadingSeenSchema = new Schema(
+  {
+    at: { type: Date, default: Date.now },
+    title: { type: String, default: "" },
+    opening: { type: String, default: "" },
+    kind: { type: String, default: "story" },
+    cast: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const ReadingSchema = new Schema(
   {
     level: { type: Number, default: 1, min: 1, max: 10 },
@@ -85,6 +104,9 @@ const ReadingSchema = new Schema(
   },
   { _id: false }
 );
+
+/** How many past passages the generator is told to avoid repeating. */
+export const READING_SEEN_MAX = 8;
 
 const ProfileSchema = new Schema(
   {
@@ -106,6 +128,11 @@ const ProfileSchema = new Schema(
     // Ids of sessions already applied, newest first, capped at RECENT_SESSION_IDS.
     // Server-only: never part of ClientProfile.
     recentSessionIds: { type: [String], default: [] },
+    // Passages already written for him, oldest first, capped at
+    // READING_SEEN_MAX. Top-level on purpose: saveProfile() replaces the whole
+    // `reading` subdocument, so anything nested in there gets wiped on every
+    // session save. Server-only: never part of ClientProfile.
+    readingSeen: { type: [ReadingSeenSchema], default: [] },
   },
   { timestamps: true }
 );

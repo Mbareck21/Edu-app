@@ -222,8 +222,13 @@ questions, in that order, with those types and formats.
    bullet points, no headings inside paragraphs.
 
 KIND = "story":
-  - Named characters (real names: Sam, Layla, Mr. Diaz), a named place, and a
-    small plot with a beginning, a middle and an end.
+  - The request names a CAST, a SETTING, an OPENING MOVE and a PROBLEM. They
+    are not suggestions. Use those names and no others for your characters,
+    set it in that setting, start the way the opening move says, and build the
+    story on that problem.
+  - Never invent a name of your own, and never reuse a name from RECENT
+    PASSAGES. If you catch yourself writing a character walking somewhere in
+    the first sentence, delete it and follow the opening move instead.
   - Use pronouns to refer back. Do not subject-hop every sentence.
   - The story must carry a LESSON a child could name in one sentence — that is
     what the theme question asks about. Show the lesson, never state it.
@@ -239,7 +244,8 @@ KIND = "info":
 ═══ VARIETY ═══
 If RECENT PASSAGES are listed, this one must be genuinely different:
 different characters, different setting, different situation. Renaming the
-same cast is not enough.
+same cast is not enough. Your first sentence must not begin the way any of
+them begins — check them before you write it.
 
 ═══ THE QUESTIONS ═══
 Each item in the QUESTION PLAN becomes one question object, same order.
@@ -355,6 +361,38 @@ export function rateLimit(ip: string): { ok: boolean; retryAfterSec: number } {
   recent.push(now);
   HITS.set(ip, recent);
   return { ok: true, retryAfterSec: 0 };
+}
+
+/**
+ * Turn whatever the model host threw into one short line a nine-year-old can
+ * read and act on.
+ *
+ * This exists because the raw text went straight to his screen. When the free
+ * tier's daily token budget ran out on 2026-08-31, what the app showed him was
+ * the upstream JSON: the organisation id, the byte counts and a link to a
+ * billing page. That is not an error message, it is a leak with a child in
+ * front of it.
+ *
+ * The real reason still goes to the server log, where it belongs.
+ */
+export function friendlyAiError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const status =
+    typeof err === "object" && err !== null && "status" in err
+      ? Number((err as { status?: unknown }).status)
+      : 0;
+  console.warn(`[ai] ${status || "?"} ${raw}`);
+
+  if (status === 429 || /rate.?limit|quota|tokens per day/i.test(raw)) {
+    // The daily budget, not a passing blip. Say so plainly rather than
+    // inviting him to hammer a button that cannot work yet.
+    return "That is all the new writing for today. Try again tomorrow — everything already made still works.";
+  }
+  if (status === 401 || status === 403) return "The writing key is not working. Ask a grown-up to check it.";
+  if (status === 408 || status >= 500 || /timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(raw)) {
+    return "That took too long. Tap it again.";
+  }
+  return fallback;
 }
 
 export function getClientIp(req: Request): string {

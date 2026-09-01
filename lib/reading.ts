@@ -233,6 +233,118 @@ export function questionPlan(
   return out;
 }
 
+// ── Story cast ────────────────────────────────────────────
+//
+// The generator used to leave the cast to the model, and the system prompt
+// happened to name Sam first as an example. Ten cold generations on
+// 2026-08-31 produced Sam ten times out of ten, three of them opening with the
+// same six words (docs/probes/reading-variety.mjs). A model picks its mode and
+// stays there; asking it for variety in prose does not move it.
+//
+// So the request now carries the cast. The sampler decides who this passage is
+// about, where it happens and how it opens, and the prompt states those as
+// facts to obey. Variety becomes a property of the code, not of the weather
+// inside the model.
+
+/** Names he meets in class, plus names from home. Both belong to him. */
+export const STORY_NAMES = [
+  "Amina", "Yusuf", "Layla", "Omar", "Nadia", "Karim", "Salma", "Idris",
+  "Maya", "Diego", "Ruby", "Theo", "Jonah", "Nia", "Marcus", "Priya",
+  "Ella", "Hana", "Leo", "Zainab", "Caleb", "Rosa", "Tariq", "June",
+] as const;
+
+/** A grown-up for the story to need. Titles keep them clearly adult. */
+export const STORY_ADULTS = [
+  "Mr. Diaz", "Ms. Okafor", "Mrs. Hassan", "Mr. Whitaker", "Ms. Bello",
+  "Grandma Farah", "Uncle Sami", "Coach Reed", "Mr. Nguyen", "Ms. Alvarez",
+] as const;
+
+/** Places a Grade 4 reader in Arkansas can picture without being told. */
+export const STORY_SETTINGS = [
+  "a school library on a rainy afternoon",
+  "the corner of a busy classroom before the bell",
+  "a back garden with one stubborn tomato plant",
+  "the bus stop at the end of a long street",
+  "a kitchen the morning of a family visit",
+  "a school car park where a bird has built a nest",
+  "the shallow end of a swimming pool",
+  "a farmers market stall with too much fruit left",
+  "a shed full of tools nobody has sorted",
+  "the bottom of a hill with a bicycle at the top",
+  "a science lab bench with one broken scale",
+  "a bedroom the night before a school trip",
+  "the edge of a football pitch at half time",
+  "a corner shop with a queue out the door",
+] as const;
+
+/**
+ * How the first sentence moves. This is the part that broke: without it every
+ * story opened by walking a character somewhere. Each move forbids that.
+ */
+export const OPENING_MOVES = [
+  "Open with someone speaking. The first sentence is a line of dialogue.",
+  "Open in the middle of the trouble, already happening.",
+  "Open with a question the main character asks themselves.",
+  "Open on a sound, and only then say who heard it.",
+  "Open with a thing that is wrong — broken, missing, or late.",
+  "Open with what the main character is holding.",
+  "Open with the time and the place, then bring the character in.",
+  "Open with something the main character has decided not to do.",
+] as const;
+
+/** What the story is about underneath. Keeps the plots from converging too. */
+export const STORY_PROBLEMS = [
+  "someone has to admit a mistake",
+  "two people want the same thing",
+  "a plan works, but not the way it was meant to",
+  "something takes far longer than expected",
+  "help arrives from the person least expected to give it",
+  "a small kindness is repaid much later",
+  "the easy way turns out to cost more",
+  "someone keeps trying after failing twice",
+] as const;
+
+export type StoryCast = {
+  child: string;
+  other: string;
+  adult: string;
+  setting: string;
+  opening: string;
+  problem: string;
+};
+
+/**
+ * Pick a cast. Two children so the story can have a relationship in it, and
+ * `other` is never the same person as `child`.
+ *
+ * `avoid` holds the leads of the passages he has read recently. Drawing at
+ * random alone still bunched up — one name came back three times in eight cold
+ * draws — so the recent leads are removed from the pool rather than merely
+ * discouraged. When avoiding everything would leave nothing, the full roster
+ * comes back: a repeated name beats no story.
+ */
+export function castFor(
+  rng: () => number = Math.random,
+  avoid: readonly string[] = []
+): StoryCast {
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rng() * xs.length)];
+  const taken = new Set(avoid.map((n) => n.toLowerCase()));
+  const free = STORY_NAMES.filter((n) => !taken.has(n.toLowerCase()));
+  const pool: readonly string[] = free.length >= 2 ? free : STORY_NAMES;
+
+  const child = pick(pool);
+  const others = pool.filter((n) => n !== child);
+  const freeAdults = STORY_ADULTS.filter((a) => !taken.has(a.toLowerCase()));
+  return {
+    child,
+    other: pick(others.length > 0 ? others : STORY_NAMES.filter((n) => n !== child)),
+    adult: pick(freeAdults.length > 0 ? freeAdults : STORY_ADULTS),
+    setting: pick(STORY_SETTINGS),
+    opening: pick(OPENING_MOVES),
+    problem: pick(STORY_PROBLEMS),
+  };
+}
+
 // ── Scaffolding ───────────────────────────────────────────────────────────
 //
 // A comprehension question has two jobs in it: find where the answer lives,
@@ -314,6 +426,24 @@ export function splitSentences(text: string): string[] {
   return out;
 }
 
+/**
+ * Squash a passage down to at most `max` paragraphs by folding the extras into
+ * the last one.
+ *
+ * The writer sometimes breaks a passage into more, shorter paragraphs than the
+ * level asked for. That used to fail the whole generation on a schema cap and
+ * hand him an error instead of a story he could have read perfectly well
+ * (server log, 2026-08-31: "bad paragraphs: Too big"). The words are fine; only
+ * the shape is wrong, and the shape is fixable here.
+ */
+export function foldParagraphs(paragraphs: string[], max: number): string[] {
+  const clean = paragraphs.map((p) => p.trim()).filter(Boolean);
+  if (max < 1) return clean;
+  if (clean.length <= max) return clean;
+  const head = clean.slice(0, max - 1);
+  return [...head, clean.slice(max - 1).join(" ")];
+}
+
 /** Longest sentence in the passage, in words. Used to police the level. */
 export function longestSentenceWords(text: string): number {
   return splitSentences(text).reduce((max, s) => Math.max(max, countWords(s)), 0);
@@ -322,10 +452,20 @@ export function longestSentenceWords(text: string): number {
 /** Highest wpm the server will store. Matches the zod max on the session route. */
 export const MAX_WPM = 1000;
 
+/**
+ * Slowest reading that is still a reading. Below this he stopped part way and
+ * the clock kept going — a stretch that says nothing about his fluency and
+ * would drag his logged rate down for weeks. The slowest Grade 4 readers on
+ * the Hasbrouck & Tindal table sit near 45 wpm, so 20 is well under any real
+ * performance and only catches an abandoned timer.
+ */
+export const MIN_CREDIBLE_WPM = 20;
+
 /** Words per minute for a timed read. 0 when the timing is unusable. */
 export function wordsPerMinute(wordsCount: number, ms: number): number {
   if (wordsCount <= 0 || ms < 2000) return 0;
   const wpm = Math.round(wordsCount / (ms / 60000));
+  if (wpm < MIN_CREDIBLE_WPM) return 0;
   return Math.min(MAX_WPM, Math.max(0, wpm));
 }
 

@@ -6,6 +6,7 @@ import FlashcardRunner from "@/components/learn/FlashcardRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
 import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
+import { todayKey } from "@/lib/day";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
 import { getProfile } from "@/lib/profile";
@@ -56,11 +57,22 @@ export default async function StepPage({
     // How much help finding the answer he still gets. Read from the profile so
     // it follows him across word lists, not per list.
     const profile = await getProfile();
+    // A passage he was given on an earlier day is not today's reading. Without
+    // this the Read step reopened a story from over a week ago and gave him no
+    // way to ask for another. Decided on the server so the runner never has to
+    // read the clock during render.
+    // Both sides go through todayKey(): generatedAt is UTC, and his day
+    // boundary is Chicago. Slicing the ISO string instead would call every
+    // passage written after 6pm his time "yesterday's".
+    const generatedOn = list.currentReading?.generatedAt
+      ? todayKey(new Date(list.currentReading.generatedAt))
+      : "";
     return (
       <ReadingRunner
         key={runKey}
         list={list}
         scaffold={scaffoldFor(profile.reading.recent)}
+        stale={generatedOn !== todayKey()}
       />
     );
   }

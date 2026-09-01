@@ -37,6 +37,13 @@ export type ReadingRunnerProps = {
   list: ClientWordList;
   /** How much help finding the answer he still gets. See scaffoldFor(). */
   scaffold?: Scaffold;
+  /**
+   * True when list.currentReading was written on an earlier day. The Read step
+   * used to reopen whatever passage was last saved, however old, so a list he
+   * had read a week ago handed him the same story again with no way to refuse
+   * it. Decided on the server — see app/learn/[listId]/[step]/page.tsx.
+   */
+  stale?: boolean;
   /** Called from the finish screen's main button. Falls back to a link home. */
   onDone?: () => void;
 };
@@ -60,9 +67,12 @@ function freshQ(n: number): QState[] {
 export default function ReadingRunner({
   list,
   scaffold = "none",
+  stale = false,
   onDone,
 }: ReadingRunnerProps) {
-  const [reading, setReading] = useState<CurrentReading | null>(list.currentReading);
+  const [reading, setReading] = useState<CurrentReading | null>(
+    stale ? null : list.currentReading
+  );
   const [phase, setPhase] = useState<Phase>("mode");
   const [mode, setMode] = useState<Mode>("listen");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
@@ -215,7 +225,16 @@ export default function ReadingRunner({
       setTimerStart(Date.now());
       return;
     }
-    setWpm(wordsPerMinute(wordsCount, Date.now() - timerStart));
+    // 0 means the span was not a read — too short to be one, or so long he
+    // had clearly stopped. Show nothing rather than a number that would go
+    // into his fluency record and stay there.
+    const measured = wordsPerMinute(wordsCount, Date.now() - timerStart);
+    setWpm(measured > 0 ? measured : null);
+    setTimerStart(null);
+  }
+
+  /** Drop a running timer without scoring it. Only Stop produces a rate. */
+  function cancelTimer() {
     setTimerStart(null);
   }
 
@@ -534,6 +553,22 @@ export default function ReadingRunner({
           <strong>Read after me</strong> plays one sentence at a time and listens
           while you say it back.
         </p>
+        {/* He must never be stuck with a passage he does not want. Before this
+            the only way to a new one was to finish every question first. */}
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void generate()}
+          className="min-h-[44px] w-full text-sm font-bold underline underline-offset-4"
+          style={{ color: "var(--color-muted)" }}
+        >
+          {busy === "generating" ? "Writing a new one…" : "I want a different story"}
+        </button>
+        {error ? (
+          <p className="text-sm" style={{ color: "var(--color-coral-dark)" }}>
+            {error}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -648,7 +683,9 @@ export default function ReadingRunner({
             color="green"
             onClick={() => {
               stopAudio();
-              if (timerStart !== null) toggleTimer();
+              // Walking off the read screen is not a finished read. Scoring it
+              // here logged a rate for however long the tab had been open.
+              cancelTimer();
               setPhase("questions");
             }}
           >
