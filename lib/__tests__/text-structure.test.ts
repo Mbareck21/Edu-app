@@ -9,6 +9,8 @@ import {
   findSignalWords,
   structureById,
   structureChoices,
+  structureSession,
+  passagesFor,
 } from "@/lib/text-structure";
 
 test("every passage's declared signal words really appear in its text", () => {
@@ -31,10 +33,61 @@ test("every structure has a distinct id, name, question and a non-empty frame", 
   }
 });
 
-test("the five passages cover the five structures, one each", () => {
-  assert.equal(STRUCTURE_PASSAGES.length, 5);
-  const covered = new Set(STRUCTURE_PASSAGES.map((p) => p.structure));
-  for (const id of STRUCTURE_IDS) assert.ok(covered.has(id), `no passage for ${id}`);
+test("every structure has several passages, not one", () => {
+  // One passage each meant the lesson ran the same five texts in the same
+  // order every time, so he could answer from position without reading.
+  for (const id of STRUCTURE_IDS) {
+    assert.ok(passagesFor(id).length >= 3, `only ${passagesFor(id).length} for ${id}`);
+  }
+  assert.equal(new Set(STRUCTURE_PASSAGES.map((p) => p.id)).size, STRUCTURE_PASSAGES.length);
+});
+
+test("the teacher's five passages are still here, word for word", () => {
+  // These are his actual homework. A later edit must not quietly reword them.
+  const teacher = STRUCTURE_PASSAGES.filter((p) => p.source === "teacher");
+  assert.equal(teacher.length, 5);
+  assert.deepEqual(
+    teacher.map((p) => p.id).sort(),
+    ["butterfly-grows", "frogs-toads", "ocean-plastic", "sea-otters", "wildfires"]
+  );
+  // One structure each, so a session can always draw a teacher passage.
+  assert.equal(new Set(teacher.map((p) => p.structure)).size, 5);
+  const otters = teacher.find((p) => p.id === "sea-otters");
+  assert.ok(
+    otters?.text.startsWith("Sea otters are amazing ocean animals with many interesting features."),
+    "the sea otters passage has been reworded"
+  );
+});
+
+test("a session covers all five structures in a varying order", () => {
+  const ids = (seed: number) => structureSession(mulberry32(seed)).map((r) => r.passage.structure);
+  for (let seed = 1; seed <= 50; seed++) {
+    const session = structureSession(mulberry32(seed));
+    assert.equal(session.length, 5, `seed ${seed} did not give five rounds`);
+    assert.equal(new Set(session.map((r) => r.passage.structure)).size, 5);
+    for (const round of session) {
+      assert.equal(round.choices.answer, round.passage.structure);
+    }
+  }
+  // The order is not fixed — this is what stopped him answering by position.
+  const orders = new Set(Array.from({ length: 40 }, (_, i) => ids(i + 1).join(",")));
+  assert.ok(orders.size >= 10, `only ${orders.size} distinct orders in 40 sessions`);
+});
+
+test("a session draws different texts, not just a different order", () => {
+  const texts = new Set<string>();
+  for (let seed = 1; seed <= 40; seed++) {
+    for (const round of structureSession(mulberry32(seed))) texts.add(round.passage.id);
+  }
+  // Every passage in the pool should be reachable.
+  assert.equal(texts.size, STRUCTURE_PASSAGES.length);
+});
+
+test("the same seed gives the same session", () => {
+  // The page renders on the server and hydrates on the client from one seed.
+  const a = structureSession(mulberry32(99)).map((r) => r.passage.id);
+  const b = structureSession(mulberry32(99)).map((r) => r.passage.id);
+  assert.deepEqual(a, b);
 });
 
 test("structure choices include the right answer and plausible distractors", () => {

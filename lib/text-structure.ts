@@ -3,10 +3,18 @@
 // uses. Pure data plus pure functions — the lesson surface renders it, this
 // module never touches React or the DB.
 //
-// The passages are verbatim from the teacher's handout: he practices on the
-// exact text she sent home, so school and app agree word for word. The frame
-// slot labels and signal words follow her worksheet's pattern; the layout and
-// prose of that worksheet are not reproduced here.
+// The teacher's five passages are verbatim from her handout: he practices on
+// the exact text she sent home, so school and app agree word for word. The
+// frame slot labels and signal words follow her worksheet's pattern; the
+// layout and prose of that worksheet are not reproduced here.
+//
+// Those five alone were not enough. The lesson used to walk all five in the
+// order they are written here, every single time, so after two runs he could
+// answer from position — "the third one is cause and effect" — without
+// reading a word. Identifying structure is the whole skill, so the pool now
+// holds several passages per structure and a session draws one of each in a
+// random order. The extra passages ride his science units so the reading is
+// not wasted on filler.
 
 import { shuffle } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
@@ -105,11 +113,17 @@ export type StructurePassage = {
   structure: TextStructureId;
   /** Only the signal words that really appear in this text (tests verify). */
   signalWords: readonly string[];
+  /**
+   * "teacher" marks the five from her handout, which must stay word for word.
+   * A test pins their text so a later edit cannot quietly reword his homework.
+   */
+  source: "teacher" | "app";
 };
 
 export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
   {
     id: "sea-otters",
+    source: "teacher",
     title: "Sea Otters",
     structure: "description",
     signalWords: ["first", "in addition", "for example"],
@@ -117,6 +131,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
   },
   {
     id: "butterfly-grows",
+    source: "teacher",
     title: "How a Butterfly Grows",
     structure: "sequence",
     signalWords: ["first", "next", "after that", "finally"],
@@ -124,6 +139,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
   },
   {
     id: "wildfires",
+    source: "teacher",
     title: "Wildfires",
     structure: "cause-effect",
     signalWords: ["cause", "because", "as a result", "effect", "this is why"],
@@ -131,6 +147,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
   },
   {
     id: "ocean-plastic",
+    source: "teacher",
     title: "Ocean Plastic Pollution",
     structure: "problem-solution",
     signalWords: ["problem", "solution"],
@@ -138,6 +155,7 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
   },
   {
     id: "frogs-toads",
+    source: "teacher",
     title: "Frogs and Toads",
     structure: "compare-contrast",
     signalWords: [
@@ -149,6 +167,89 @@ export const STRUCTURE_PASSAGES: readonly StructurePassage[] = [
       "even though",
     ],
     text: "Frogs and toads look similar, but they have some important differences. One way they are the same is that both are amphibians that hatch from eggs laid in water. They both eat insects and other small bugs. One way they are different is that frogs have smooth, wet skin, while toads have dry, bumpy skin. Unlike frogs, toads spend most of their time on land instead of in water. Even though they look alike, frogs and toads live very different kinds of lives.",
+  },
+  // ── Extra passages, written for this app ────────────────────────────────
+  // Same five structures, different texts, so the answer cannot be memorised
+  // from where a passage sits. Topics ride his science units.
+  {
+    id: "cactus-plants",
+    source: "app",
+    title: "Cactus Plants",
+    structure: "description",
+    signalWords: ["first", "in addition", "another", "for example"],
+    text: "A cactus is a plant built to live where there is almost no rain. First, a cactus has a thick stem that stores water for many months. In addition, its sharp spines keep hungry animals from biting into it. Another feature is its shallow roots, which spread wide to catch every drop. For example, a saguaro cactus can soak up water from a light shower in minutes. Every part of a cactus helps it live in the dry desert.",
+  },
+  {
+    id: "owls-hunt",
+    source: "app",
+    title: "How Owls Hunt",
+    structure: "description",
+    signalWords: ["first", "also", "in addition", "for example"],
+    text: "Owls have special body parts that make them great night hunters. First, an owl has huge eyes that let it see in almost no light. Its ears are also placed unevenly on its head, which helps it work out exactly where a sound came from. In addition, the soft edges of an owl's feathers make its wings nearly silent. For example, a mouse often hears nothing at all until the owl is already above it.",
+  },
+  {
+    id: "water-cycle",
+    source: "app",
+    title: "How Rain Falls",
+    structure: "sequence",
+    signalWords: ["first", "next", "then", "finally"],
+    text: "Water travels in a circle that never really stops. First, the sun heats water in lakes, rivers and the sea until it turns into vapour. Next, the vapour rises high into the cool air and gathers into clouds. Then the tiny drops inside the cloud bump together and grow heavier. Finally, the drops fall back to the ground as rain, and the journey starts again. Scientists call this circle the water cycle.",
+  },
+  {
+    id: "planting-seed",
+    source: "app",
+    title: "Planting a Seed",
+    structure: "sequence",
+    signalWords: ["first", "next", "after that", "last"],
+    text: "Growing a bean plant takes a few careful steps. First, fill a small pot with soft, damp soil. Next, push one bean seed about as deep as your finger and cover it over. After that, put the pot on a sunny windowsill and give it a little water each day. Last, watch for a green shoot to push up through the soil after about a week. With sun and water, that shoot will grow into a whole plant.",
+  },
+  {
+    id: "leaves-change",
+    source: "app",
+    title: "Why Leaves Change",
+    structure: "cause-effect",
+    signalWords: ["because", "as a result", "effect", "this is why"],
+    text: "Leaves change colour in autumn because the days grow shorter and colder. Trees stop making the green food colour called chlorophyll when there is less sunlight. As a result, yellow and orange colours that were hiding all summer finally show. Another effect is that the leaf dries out and falls to the ground. This is why bare branches in winter are a normal, healthy sign and not a sick one.",
+  },
+  {
+    id: "shaking-ground",
+    source: "app",
+    title: "Shaking Ground",
+    structure: "cause-effect",
+    signalWords: ["cause", "because", "as a result", "so"],
+    text: "Huge slabs of rock under our feet can cause the ground to shake. Because these slabs press against each other for years, pressure builds up along their edges. When the rock finally slips, the stored energy races outward as waves. As a result, buildings above can sway, crack or even fall down. The waves lose strength as they travel, so towns far away feel only a gentle rocking.",
+  },
+  {
+    id: "noisy-classroom",
+    source: "app",
+    title: "The Noisy Classroom",
+    structure: "problem-solution",
+    signalWords: ["problem", "solution", "solve"],
+    text: "Reading is hard in a classroom that is full of noise. The problem is that voices from the hallway carry straight through an open door. One solution is a soft rug and cloth curtains, which soak up sound instead of bouncing it back. Another solution is a quiet corner with headphones for anyone who needs one. Small changes like these solve most of the noise without costing very much.",
+  },
+  {
+    id: "saving-water",
+    source: "app",
+    title: "Saving Water",
+    structure: "problem-solution",
+    signalWords: ["problem", "one way to fix", "solution"],
+    text: "Many towns run short of clean water in a long, dry summer. The problem is that people use the most water at exactly the time there is least of it. One way to fix this is to water gardens early in the morning, before the sun dries the soil. Another solution is to catch rain from the roof in a barrel and use it later. Saving a little water every day adds up to a great deal by autumn.",
+  },
+  {
+    id: "camels-horses",
+    source: "app",
+    title: "Camels and Horses",
+    structure: "compare-contrast",
+    signalWords: ["they both", "one way they are different", "while", "unlike", "even though"],
+    text: "Camels and horses are large animals that people have ridden for hundreds of years. They both have long legs, eat plants and can carry heavy loads for miles. One way they are different is that a camel stores fat in its hump, while a horse has no hump at all. Unlike a horse, a camel can go for days without drinking. Even though both are strong, each one suits a very different kind of country.",
+  },
+  {
+    id: "rivers-lakes",
+    source: "app",
+    title: "Rivers and Lakes",
+    structure: "compare-contrast",
+    signalWords: ["one way they are the same", "they both", "one way they are different", "unlike"],
+    text: "Rivers and lakes are both bodies of fresh water, but they behave in different ways. One way they are the same is that they both give homes to fish, birds and water plants. They both also collect the rain that falls on the land around them. One way they are different is that a river always flows downhill towards the sea. Unlike a river, a lake sits still in a low dip in the ground.",
   },
 ];
 
@@ -179,6 +280,37 @@ export function structureChoices(
     options: shuffle(rng, [right, ...distractors]),
     answer: right.id,
   };
+}
+
+// ── One session's worth of passages ───────────────────────────────────────
+
+export type StructureRound = {
+  passage: StructurePassage;
+  choices: StructureChoices;
+};
+
+/** Every passage written for one structure. */
+export function passagesFor(id: TextStructureId): StructurePassage[] {
+  return STRUCTURE_PASSAGES.filter((p) => p.structure === id);
+}
+
+/**
+ * One round per structure, each drawn from that structure's own passages, in
+ * a shuffled order.
+ *
+ * The order matters as much as the draw. The lesson used to run the five
+ * passages in the order they are declared, so the position of a passage was a
+ * reliable tell — he could answer "cause and effect" third without reading.
+ * Shuffling the order removes the tell; drawing from a pool of three means the
+ * text is new about two visits in three as well.
+ */
+export function structureSession(rng: Rng, choiceCount = 4): StructureRound[] {
+  const rounds = STRUCTURE_IDS.map((id) => {
+    const pool = passagesFor(id);
+    const passage = pool[Math.floor(rng() * pool.length)];
+    return { passage, choices: structureChoices(passage, rng, choiceCount) };
+  });
+  return shuffle(rng, rounds);
 }
 
 // ── Signal word highlighting ──────────────────────────────────────────────

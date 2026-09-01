@@ -11,11 +11,10 @@ import { mulberry32 } from "@/lib/math/rng";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { sfx } from "@/lib/sfx";
 import {
-  STRUCTURE_PASSAGES,
+  structureSession,
   TEXT_STRUCTURES,
   findSignalWords,
   structureById,
-  structureChoices,
   type TextStructureId,
 } from "@/lib/text-structure";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
@@ -60,13 +59,13 @@ function SignalText({
 
 export default function StructureRunner({ seed }: StructureRunnerProps) {
   // Same seed on the server and here, so the options never jump on hydration.
-  const rounds = useMemo(() => {
-    const rng = mulberry32(seed % 2147483647);
-    return STRUCTURE_PASSAGES.map((passage) => ({
-      passage,
-      choices: structureChoices(passage, rng),
-    }));
-  }, [seed]);
+  // The seed changes every visit, so the passages and their order do too —
+  // walking the five in declaration order taught him the positions, not the
+  // structures. See structureSession().
+  const rounds = useMemo(
+    () => structureSession(mulberry32(seed % 2147483647)),
+    [seed]
+  );
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [idx, setIdx] = useState(0);
