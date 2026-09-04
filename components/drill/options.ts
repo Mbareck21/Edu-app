@@ -31,7 +31,7 @@ export function isVocabMode(value: string): value is VocabMode {
 
 /** Short, Grade-3 labels for the mode chips. */
 export const VOCAB_MODE_LABEL: Record<VocabMode, string> = {
-  flashcards: "Cards",
+  flashcards: "Write it",
   match: "Match",
   listen: "Listen",
   spell: "Spell",
@@ -43,7 +43,7 @@ export const VOCAB_MODE_LABEL: Record<VocabMode, string> = {
 
 /** One line under the mode row, so he knows what he picked. */
 export const VOCAB_MODE_BLURB: Record<VocabMode, string> = {
-  flashcards: "Flip a card. Easy or hard.",
+  flashcards: "Write each word ten times.",
   match: "Read the meaning. Pick the word.",
   listen: "Hear the word. Pick it.",
   spell: "Build or type the word.",

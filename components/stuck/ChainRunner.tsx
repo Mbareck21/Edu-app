@@ -14,7 +14,9 @@ import {
   rungFor,
   type ChainState,
 } from "@/lib/spell-chain";
+import { postSession } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
+import type { StepId } from "@/lib/types";
 import { playTextThroughTTS } from "@/lib/voice";
 
 /** How many writes make one sitting. Enough to move, short enough to finish. */
@@ -28,6 +30,14 @@ export type ChainRunnerProps = {
   words: string[];
   /** Meaning per word. A word lands in the pool because he does not know it. */
   senses: Record<string, WordSense>;
+  /**
+   * Set when this sitting is a step on a unit path, so finishing it marks the
+   * step done. Left off for the Words tab, where writing is its own thing and
+   * completes nothing.
+   */
+  post?: { ref: string; listId: string; step: StepId };
+  /** Where the finish screen sends him. Defaults back to the Words tab. */
+  exit?: { label: string; href: string };
   /** Their counts as the server has them right now. */
   chains: Record<string, ChainState>;
   onDone?: () => void;
@@ -54,7 +64,14 @@ function chunkMask(word: string): string {
   return word.slice(0, keep) + "_".repeat(word.length - keep);
 }
 
-export default function ChainRunner({ words, senses, chains, onDone }: ChainRunnerProps) {
+export default function ChainRunner({
+  words,
+  senses,
+  chains,
+  post,
+  exit,
+  onDone,
+}: ChainRunnerProps) {
   const [state, setState] = useState<Record<string, ChainState>>(chains);
   const [writeIndex, setWriteIndex] = useState(0);
   /** Advances only on a correct write, so a miss does not rotate away. */
@@ -76,6 +93,8 @@ export default function ChainRunner({ words, senses, chains, onDone }: ChainRunn
   const [hidden, setHidden] = useState(false);
 
   const watch = useRef<Stopwatch | null>(null);
+  const postedRef = useRef(false);
+  const correctRef = useRef(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     watch.current = startStopwatch();
@@ -116,6 +135,7 @@ export default function ChainRunner({ words, senses, chains, onDone }: ChainRunn
 
       setState((s) => ({ ...s, [word]: data.state }));
       if (data.correct) {
+        correctRef.current += 1;
         sfx.correct();
         setMissed(null);
         setAfterMiss(false);
@@ -132,8 +152,26 @@ export default function ChainRunner({ words, senses, chains, onDone }: ChainRunn
 
       const next = writeIndex + 1;
       if (next >= SITTING_WRITES) {
-        setElapsedMs(watch.current?.read() ?? 0);
+        const ms = watch.current?.read() ?? 0;
+        setElapsedMs(ms);
         setDone(true);
+        if (post && !postedRef.current) {
+          postedRef.current = true;
+          // Unscored step: it completes on being played, so the score here is
+          // only for the activity log. The chain itself is the real record and
+          // it was written per attempt, so a lost post costs nothing but XP.
+          void postSession({
+            kind: "vocab",
+            ref: post.ref,
+            listId: post.listId,
+            step: post.step,
+            answered: next,
+            correct: correctRef.current,
+            fastCount: 0,
+            ms,
+            perfect: false,
+          });
+        }
       } else {
         watch.current?.mark();
         setWriteIndex(next);
@@ -144,7 +182,7 @@ export default function ChainRunner({ words, senses, chains, onDone }: ChainRunn
     } finally {
       setBusy(false);
     }
-  }, [word, typed, afterMiss, busy, writeIndex]);
+  }, [word, typed, afterMiss, busy, writeIndex, post]);
 
   if (done) {
     const best = words.map((w) => state[w]?.current ?? 0);
@@ -161,7 +199,11 @@ export default function ChainRunner({ words, senses, chains, onDone }: ChainRunn
         ms={elapsedMs}
         accuracy={null}
         perfect={wonNow.length > 0}
-        primary={onDone ? { label: "Done", onClick: onDone } : { label: "Back to Words", href: "/words" }}
+        primary={
+          onDone
+            ? { label: "Done", onClick: onDone }
+            : (exit ?? { label: "Back to Words", href: "/words" })
+        }
       />
     );
   }

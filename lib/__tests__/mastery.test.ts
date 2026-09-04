@@ -243,7 +243,21 @@ test("every scored step has a mark between 70 and 90", () => {
 });
 
 test("no step title claims more than the step proves", () => {
-  // Flipping cards is seeing words, not learning them.
-  assert.equal(stepById("flashcards").scored, false);
-  assert.equal(stepById("flashcards").doneTitle, "Cards done!");
+  // This step was flipping cards, and its title used to say "Words learned!"
+  // for a child rating himself. It is a writing drill now, so "Writing done!"
+  // is the honest claim: he did the writing. It stays UNSCORED because
+  // finishing a sitting is not the same as knowing the words — the ten-in-a-
+  // row chain is the record that means something, and that lives per word.
+  const step = stepById("flashcards");
+  assert.equal(step.scored, false);
+  assert.equal(step.doneTitle, "Writing done!");
+  assert.ok(!/learn|master|know/i.test(step.doneTitle), "claims more than it proves");
+});
+
+test("the flashcards step id survives the rename to a writing drill", () => {
+  // pathProgress is keyed by step id and sessions queued on his phone carry
+  // it, so changing the id would relock every finished unit and get those
+  // sessions rejected by the API's enum. Only the label changed.
+  assert.equal(stepById("flashcards").id, "flashcards");
+  assert.equal(stepById("flashcards").name, "Write It");
 });

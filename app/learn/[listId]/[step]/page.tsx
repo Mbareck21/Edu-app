@@ -2,13 +2,17 @@ import mongoose from "mongoose";
 import { notFound } from "next/navigation";
 
 import ItemRunner from "@/components/items/ItemRunner";
-import FlashcardRunner from "@/components/learn/FlashcardRunner";
+import ChainRunner from "@/components/stuck/ChainRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
 import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
 import { todayKey } from "@/lib/day";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
+import { orderByNeed } from "@/lib/practice-order";
+import { skillDue } from "@/lib/mastery";
+import { SpellChain } from "@/lib/models/SpellChain";
+import { ROTATE_WIDTH, newChain, type ChainState } from "@/lib/spell-chain";
 import { getProfile } from "@/lib/profile";
 import { scaffoldFor } from "@/lib/reading";
 import { WordList, toClient } from "@/lib/models/WordList";
@@ -43,12 +47,47 @@ export default async function StepPage({
   const seed = requestSeed();
 
   if (step === "flashcards") {
+    // The step id is still "flashcards" so already-finished units stay
+    // finished and queued offline sessions still parse — see lib/types.ts.
+    // What it does is now writing, because flipping a card and telling
+    // yourself you knew it is not evidence of anything.
+    const chosen = orderByNeed(
+      list.words,
+      mulberry32(seed % 2147483647),
+      // Due first, then weakest: the words he most needs to write.
+      (w) => ({
+        due: skillDue(w.skills.spell, new Date(seed)),
+        streak: w.skills.spell.streak,
+      })
+    )
+      .slice(0, ROTATE_WIDTH)
+      .map((w) => w.word);
+    const rows = chosen.length > 0 ? await SpellChain.find({ word: { $in: chosen } }).lean() : [];
+    const chains: Record<string, ChainState> = {};
+    const senses: Record<string, { clue: string; arabic: string }> = {};
+    for (const w of list.words) {
+      if (!chosen.includes(w.word)) continue;
+      senses[w.word] = { clue: w.clue, arabic: w.arabic };
+      const row = rows.find((r) => r.word === w.word);
+      chains[w.word] = row
+        ? {
+            word: w.word,
+            current: Number(row.current) || 0,
+            best: Number(row.best) || 0,
+            reps: Number(row.reps) || 0,
+            attempts: Number(row.attempts) || 0,
+            graduatedAt: row.graduatedAt ? new Date(row.graduatedAt).toISOString() : null,
+          }
+        : newChain(w.word);
+    }
     return (
-      <FlashcardRunner
+      <ChainRunner
         key={runKey}
-        list={list}
-        nowIso={new Date(seed).toISOString()}
-        needsExamples={needsExamples}
+        words={chosen}
+        senses={senses}
+        chains={chains}
+        post={{ ref: `${list._id}:flashcards`, listId: list._id, step: "flashcards" }}
+        exit={{ label: "Back to path", href: pathHref }}
       />
     );
   }

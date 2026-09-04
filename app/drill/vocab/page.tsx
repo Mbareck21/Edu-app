@@ -1,4 +1,4 @@
-import DrillFlashcards from "@/components/drill/DrillFlashcards";
+import ChainRunner from "@/components/stuck/ChainRunner";
 import RememberRunner from "@/components/drill/RememberRunner";
 import VocabDrillRunner from "@/components/drill/VocabDrillRunner";
 import {
@@ -12,6 +12,8 @@ import {
 import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/components/drill/picks";
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
+import { SpellChain } from "@/lib/models/SpellChain";
+import { ROTATE_WIDTH, newChain, type ChainState } from "@/lib/spell-chain";
 import { connectDB } from "@/lib/db";
 import { getPractice } from "@/lib/word-source";
 
@@ -73,15 +75,38 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   const picked = pickWords(lists, source, now);
 
   if (mode === "flashcards") {
-    const cards = orderWords(picked, now, rng)
-      .slice(0, count)
-      .map((p) => ({ listId: p.pool.listId ?? "", word: p.word }));
+    // Was a flip card rated Easy or Hard by the child himself, which is not
+    // evidence of anything. It is the writing drill now: same mode slot, so
+    // his saved drill settings still resolve.
+    const top = orderWords(picked, now, rng).slice(0, ROTATE_WIDTH);
+    const chosen = top.map((p) => p.word.word);
+    const rows = chosen.length > 0 ? await SpellChain.find({ word: { $in: chosen } }).lean() : [];
+    const senses: Record<string, { clue: string; arabic: string }> = {};
+    const chains: Record<string, ChainState> = {};
+    for (const p of top) {
+      senses[p.word.word] = { clue: p.word.clue, arabic: p.word.arabic };
+    }
+    for (const word of chosen) {
+      const row = rows.find((r) => r.word === word);
+      chains[word] = row
+        ? {
+            word,
+            current: Number(row.current) || 0,
+            best: Number(row.best) || 0,
+            reps: Number(row.reps) || 0,
+            attempts: Number(row.attempts) || 0,
+            graduatedAt: row.graduatedAt ? new Date(row.graduatedAt).toISOString() : null,
+          }
+        : newChain(word);
+      if (!senses[word]) senses[word] = { clue: "", arabic: "" };
+    }
     return (
-      <DrillFlashcards
+      <ChainRunner
         key={runKey}
-        cards={cards}
-        sessionRef={sessionRef}
-        againHref={againHref}
+        words={chosen}
+        senses={senses}
+        chains={chains}
+        exit={{ label: "Again", href: againHref }}
       />
     );
   }

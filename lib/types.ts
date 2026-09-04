@@ -75,7 +75,16 @@ const step = (
 export const STEPS: readonly Step[] = [
   // Flipping cards is seeing them, not learning them — the title used to claim
   // more than he had shown.
-  step("flashcards", "Learn", "See the words.", "book", { scored: false, accent: "blue", doneTitle: "Cards done!" }),
+  // The id stays "flashcards" on purpose even though the step is now a writing
+  // drill. pathProgress is keyed by step id, so renaming it would relock every
+  // unit he has already finished, and any session sitting in his phone's
+  // offline queue carries the old id and would be rejected by the API's enum.
+  // Only what he sees has changed.
+  step("flashcards", "Write It", "Write each word ten times.", "words", {
+    scored: false,
+    accent: "blue",
+    doneTitle: "Writing done!",
+  }),
   step("match", "Match", "Pick the right word.", "check", { doneTitle: "Match done!" }),
   step("listen", "Listen", "Hear it, then pick.", "volume", { doneTitle: "Good ears!" }),
   step("spell", "Spell", "Build the word.", "words", { passPct: PRODUCE_PASS_PCT, doneTitle: "Spelled it!" }),
