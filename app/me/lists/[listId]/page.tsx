@@ -31,7 +31,7 @@ export default async function EditWordListPage({
     <AppShell>
       <header className="pt-4 pb-5">
         <Link
-          href="/words"
+          href="/me/lists"
           className="inline-flex items-center gap-1 text-sm font-bold"
           style={{ color: "var(--color-muted)" }}
         >

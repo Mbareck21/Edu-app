@@ -208,6 +208,13 @@ const WordListSchema = new Schema(
     name: { type: String, required: true, trim: true },
     hiddenMessage: { type: String, trim: true, default: "" },
     words: { type: [WordSchema], default: [] },
+    // "unit" is a school list; "pool" is the one Stuck words list the parent
+    // types into. Additive with a default, so every existing document reads as
+    // a unit without being migrated. The pool IS a WordList on purpose: the
+    // review builder, the drill picker and applyWordResults already route by
+    // listId, and giving the pool its own type would mean a second code path
+    // for the same policy in every one of them.
+    kind: { type: String, enum: ["unit", "pool"], default: "unit", index: true },
     readingLevel: { type: Number, default: 1, min: 1, max: 10 },
     currentReading: { type: CurrentReadingSchema, default: null },
     readingHistory: { type: [ReadingHistoryEntrySchema], default: [] },
@@ -320,6 +327,7 @@ export type ClientWordList = {
   name: string;
   hiddenMessage: string;
   words: ClientWord[];
+  kind: "unit" | "pool";
   readingLevel: number;
   currentReading: CurrentReading | null;
   readingStats: ReadingStats;
@@ -452,6 +460,7 @@ export function toClient(doc: {
   _id: unknown;
   name: string;
   hiddenMessage?: string;
+  kind?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   words: any[];
   readingLevel?: number;
@@ -534,6 +543,7 @@ export function toClient(doc: {
     name: doc.name,
     hiddenMessage: doc.hiddenMessage || "",
     words: doc.words.map((w) => toClientWord(w)),
+    kind: doc.kind === "pool" ? "pool" : "unit",
     readingLevel: Math.max(1, Math.min(10, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,

@@ -52,10 +52,13 @@ function toSummary(doc: any): ListSummary {
   };
 }
 
-/** Every list, newest first, with only what a summary card renders. */
+/**
+ * Every school list, newest first, with only what a summary card renders.
+ * The Stuck-words pool is excluded: it is not a unit and has no path to walk.
+ */
 export async function getListSummaries(): Promise<ListSummary[]> {
   await connectDB();
-  const docs = await WordList.find()
+  const docs = await WordList.find({ kind: { $ne: "pool" } })
     .select(SUMMARY_FIELDS)
     .sort({ updatedAt: -1 })
     .lean();

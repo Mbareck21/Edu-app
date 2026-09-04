@@ -1,4 +1,7 @@
 import AppShell from "@/components/ui/AppShell";
+import Link from "next/link";
+
+import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
@@ -53,7 +56,7 @@ export default async function MePage() {
   const profile = toClientProfile(state);
 
   await connectDB();
-  const docs = await WordList.find().lean();
+  const docs = await WordList.find({ kind: { $ne: "pool" } }).lean();
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
   const counts = countKnowledge(words);
   const wordsKnown = counts.known + counts.mastered;
@@ -208,6 +211,23 @@ export default async function MePage() {
             );
           })}
         </ul>
+      </Card>
+
+      {/* Word lists — grown-up work, moved off the Words tab so the tab a
+          nine-year-old taps hands him something to do instead of an editor. */}
+      <Card className="mt-3">
+        <h2 className="mb-1 font-display text-lg font-bold">Word lists</h2>
+        <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
+          Add school units, edit words, print a crossword or a word search.
+        </p>
+        <Link
+          href="/me/lists"
+          className={buttonClass({ color: "blue", variant: "secondary", size: "md", fullWidth: true })}
+          style={buttonStyle({ color: "blue", variant: "secondary", size: "md" })}
+        >
+          <Icon name="words" size={20} />
+          Open word lists
+        </Link>
       </Card>
 
       {/* Settings */}

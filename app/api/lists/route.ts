@@ -11,7 +11,7 @@ const CreateBody = z.object({
 
 export async function GET() {
   await connectDB();
-  const lists = await WordList.find().sort({ updatedAt: -1 }).lean();
+  const lists = await WordList.find({ kind: { $ne: "pool" } }).sort({ updatedAt: -1 }).lean();
   return NextResponse.json(lists.map(toClient));
 }
 

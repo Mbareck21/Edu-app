@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import ItemRunner from "@/components/items/ItemRunner";
 import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
+import { getPractice } from "@/lib/word-source";
 import {
   buildLesson,
   buildProductionSession,
   buildReviewSession,
 } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
-import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
+import { type ClientWordList } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,8 @@ export default async function TodayBeatPage({
   const runKey = (await searchParams).r ?? "first";
 
   await connectDB();
-  const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
-  const lists = docs.map(toClient).filter((l) => l.words.length > 0);
+  // Pool first: the words he is stuck on get the slot, then the units.
+  const lists = (await getPractice()).filter((l) => l.words.length > 0);
   const seed = requestSeed();
   const now = new Date(seed);
   const rng = mulberry32(seed % 2147483647);

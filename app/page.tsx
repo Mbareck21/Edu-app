@@ -108,7 +108,7 @@ export default async function LearnPage() {
 
       <div className="space-y-3">
         <TodayQuest beats={beats} />
-        <SchoolStrip href={unit ? `/learn/${unit._id}` : "/words"} />
+        <SchoolStrip href={unit ? `/learn/${unit._id}` : "/me/lists"} />
 
         {lists.length === 0 ? (
           <Card className="space-y-3 text-center">
@@ -120,14 +120,14 @@ export default async function LearnPage() {
             </span>
             <p className="font-display text-lg font-bold">No word lists yet</p>
             <p className="font-body text-sm" style={{ color: "var(--color-muted)" }}>
-              Make a list in the Words tab. Then the quest starts.
+              Make a list in Me, and the quest starts.
             </p>
             <Link
-              href="/words"
+              href="/me/lists"
               className={buttonClass({ color: "blue", size: "lg", fullWidth: true })}
               style={buttonStyle({ color: "blue" })}
             >
-              Go to Words
+              Make a list
             </Link>
           </Card>
         ) : (

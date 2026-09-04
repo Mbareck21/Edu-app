@@ -13,7 +13,7 @@ import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/compon
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { getPractice } from "@/lib/word-source";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +44,9 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   const runKey = q.seed ?? "first";
 
   await connectDB();
-  const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
-  const lists: DrillList[] = docs
-    .map(toClient)
+  // Pool first: the words he is stuck on get the slot ahead of the units, so
+  // they are shuffled through the drill like anything else he is learning.
+  const lists: DrillList[] = (await getPractice())
     .filter((l) => l.words.length > 0)
     .map((l) => ({ listId: l._id, name: l.name, words: l.words }));
 

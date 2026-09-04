@@ -19,7 +19,7 @@ export default async function EditListPage({ params }: { params: Promise<{ id: s
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
       <nav className="mb-6 text-sm">
-        <Link href="/words" className="text-slate-600 hover:underline">← All lists</Link>
+        <Link href="/me/lists" className="text-slate-600 hover:underline">← All lists</Link>
       </nav>
       <header className="mb-6">
         <h1 className="text-2xl font-bold">{list.name}</h1>
