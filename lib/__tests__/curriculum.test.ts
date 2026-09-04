@@ -99,8 +99,13 @@ test("science units have enough words and monotonic weeks", () => {
 
 test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2026-08-11")?.id, undefined); // week 1: no unit yet
-  assert.equal(scienceUnitForWeek("2026-08-18")?.id, "adaptations"); // week 2
-  assert.equal(scienceUnitForWeek("2026-09-22")?.id, "senses"); // week 7
+  // The 2-9 span is shared and splits in list order, so adding the Growing
+  // Plants investigation moved the other two along. It goes first on purpose:
+  // it is the investigation his class is running now, and a reading topic a
+  // month after the worksheet is no use to him.
+  assert.equal(scienceUnitForWeek("2026-08-18")?.id, "growing-plants"); // week 2
+  assert.equal(scienceUnitForWeek("2026-09-22")?.id, "adaptations"); // week 7
+  assert.equal(scienceUnitForWeek("2026-09-29")?.id, "senses"); // week 8
   assert.equal(scienceUnitForWeek("2026-11-03")?.id, "earth-features");
   assert.equal(scienceUnitForWeek("2027-01-12")?.id, "energy");
   assert.equal(scienceUnitForWeek("2027-03-16")?.id, "waves");

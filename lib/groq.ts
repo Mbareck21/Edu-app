@@ -210,6 +210,13 @@ questions, in that order, with those types and formats.
 2. Split it into the number of PARAGRAPHS the level asks for. Each paragraph
    is one beat of the passage, 2-5 sentences long.
 3. Hit the TARGET WORDS given. Under the minimum is a failure.
+3a. EVERY sentence must be correct, natural English a teacher would accept.
+   Never stretch a sentence to reach the word count. Padding produced
+   "Maya planned a plant experiment today soon" and "one in dark room today
+   soon" in a real passage — filler words bolted on to make length, and a
+   child learning English is being shown that as a model. If you are short,
+   add another FACT or another beat, never more words to an existing
+   sentence. Articles (a, an, the) are not optional.
 4. NO sentence may be longer than MAX SENTENCE WORDS. Count them.
 5. VOCABULARY BUDGET: no more words he is unlikely to know than the
    UNKNOWN-WORD BUDGET given in the request. Every one of them goes in

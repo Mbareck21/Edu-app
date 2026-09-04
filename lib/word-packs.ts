@@ -68,6 +68,31 @@ export const WORD_PACKS: readonly WordPack[] = [
     ],
   },
   {
+    // From the Growing Plants investigation his class is running: the seven
+    // terms the worksheet lists, plus the words it asks him to DO — form a
+    // hypothesis, collect data, draw conclusions. Definitions are written
+    // here at his reading level rather than copied from the worksheet.
+    id: "growing-plants",
+    name: "Growing Plants",
+    blurb: "Science words for the plant experiment.",
+    words: [
+      { word: "seed", clue: "A small hard case with a tiny baby plant asleep inside it." },
+      { word: "soil", clue: "The top layer of the ground: tiny bits of rock mixed with rotted plants." },
+      { word: "compost", clue: "Rotted food scraps and leaves, mixed into soil to feed plants." },
+      { word: "fertilizer", clue: "Plant food you add to soil so a plant grows better." },
+      { word: "nutrients", clue: "The parts of food or soil that a living thing needs to grow." },
+      { word: "mass", clue: "How much matter is in something. Take it to the moon and this stays the same, but its weight changes." },
+      { word: "variable", clue: "The one thing you change in a test to see what happens." },
+      { word: "fair test", clue: "A test where you change only one thing, so you know what caused the change." },
+      { word: "hypothesis", clue: "Your best guess about what will happen, made before you test it." },
+      { word: "experiment", clue: "A test you set up on purpose to answer a question." },
+      { word: "data", clue: "The numbers and notes you write down while you watch what happens." },
+      { word: "observe", clue: "To watch carefully and notice what changes." },
+      { word: "conclusion", clue: "What you decide the data shows, once the test is done." },
+      { word: "sprout", clue: "When a seed pushes its first tiny green shoot up out of the soil." },
+    ],
+  },
+  {
     id: "math-vocabulary",
     name: "Math Words",
     blurb: "The words your teacher uses for place value and number forms.",

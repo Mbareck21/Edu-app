@@ -415,6 +415,33 @@ export type ScienceUnit = {
 
 export const SCIENCE_UNITS: ScienceUnit[] = [
   {
+    // The Growing Plants investigation his class is running now. It sits
+    // inside the same weeks as adaptations and senses because it is a short
+    // investigation taught alongside them, not a unit of its own; the shared
+    // span splits between the three, so it gets its turn as a reading topic.
+    // Standards here are the science PRACTICE, not a content expectation:
+    // the point of the lesson is planning a fair test, not plant biology.
+    id: "growing-plants",
+    title: "Growing Plants: Fair Tests",
+    weekStart: 2,
+    weekEnd: 9,
+    standards: [
+      {
+        code: "NGSS SEP 3",
+        plain: "Plan and carry out a fair test, changing one thing at a time and keeping everything else the same, then use the measurements to answer the question.",
+      },
+    ],
+    words: ["seed", "soil", "compost", "fertilizer", "nutrients", "mass", "variable", "fair test", "hypothesis", "experiment", "data", "observe", "conclusion", "sprout", "sunlight"],
+    passageIdeas: [
+      "Why a fair test changes only one thing at a time",
+      "What a seed already carries inside it before it grows",
+      "How much water is too much water for a plant",
+      "Why the plant in the dark grew tall but weak",
+      "What compost is made of and how it feeds soil",
+      "Measuring a plant: height tells you one thing, mass another",
+    ],
+  },
+  {
     id: "adaptations",
     title: "Plants & Animals: Adaptations",
     weekStart: 2,
