@@ -23,7 +23,12 @@ import { SignJWT } from "jose";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PORT = process.env.PORT || 3100;
-const ORIGIN = `http://localhost:${PORT}`;
+// ORIGIN=https://... points the read-only checks at a real deployment. The
+// update steps stay local-only: they force an update by editing public/sw.js,
+// which cannot change what a deployed origin serves.
+const ORIGIN = process.env.ORIGIN || `http://localhost:${PORT}`;
+const REMOTE = !/^https?:\/\/(localhost|127\.0\.0\.1)/.test(ORIGIN);
+const COOKIE_DOMAIN = new URL(ORIGIN).hostname;
 const SW_FILE = path.join(ROOT, "public", "sw.js");
 const DEBUG_PORT = 9334;
 
@@ -164,7 +169,7 @@ try {
   await send("Network.setCookie", {
     name: "eduapp_session",
     value: token,
-    domain: "localhost",
+    domain: COOKIE_DOMAIN,
     path: "/",
   });
 
@@ -173,16 +178,25 @@ try {
 
   // 1. It registers and takes control.
   const state = await evalPage(`
-    const reg = await navigator.serviceWorker.ready;
-    for (let i = 0; i < 40 && !navigator.serviceWorker.controller; i++) {
+    // serviceWorker.ready never settles when nothing registers, which hung the
+    // whole probe with no output. Race it so a failure is reported, not waited
+    // on forever.
+    const timeout = new Promise((r) => setTimeout(() => r(null), 20000));
+    const reg = await Promise.race([navigator.serviceWorker.ready, timeout]);
+    for (let i = 0; i < 40 && reg && !navigator.serviceWorker.controller; i++) {
       await new Promise((r) => setTimeout(r, 250));
     }
     return {
-      active: reg.active ? reg.active.state : null,
+      registered: Boolean(reg),
+      active: reg && reg.active ? reg.active.state : null,
       controlled: Boolean(navigator.serviceWorker.controller),
       caches: await caches.keys(),
+      url: location.pathname,
     };
   `);
+  if (!state.registered) {
+    check("the service worker registers and activates", false, `no worker after 20s at ${state.url}`);
+  } else
   check("the service worker registers and activates", state.active === "activated", state.active);
   check("it takes control of the page", state.controlled);
 
@@ -230,6 +244,9 @@ try {
     JSON.stringify(assets.out)
   );
 
+  if (REMOTE) {
+    console.log("(remote origin: skipping the update steps, which edit public/sw.js)");
+  } else {
   // 4. The point of the exercise: a new worker WAITS.
   // Bump the VERSION rather than appending a byte: a new version names its own
   // caches, which is what makes the orphan cleanup testable below.
@@ -320,6 +337,7 @@ try {
       after.every((c) => c.startsWith(NEXT_VERSION) || c === "quest-meta"),
       after.join(", ")
     );
+  }
   }
 } finally {
   restoreSw();
