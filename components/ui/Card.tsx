@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 
 import { tone, type AccentColor } from "@/components/ui/colors";
 
@@ -11,6 +11,9 @@ export type CardProps = {
   padded?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** For callers that need to measure or scroll the card. React 19 takes a
+      ref as a plain prop, so no forwardRef wrapper is needed. */
+  ref?: Ref<HTMLDivElement>;
 };
 
 export default function Card({
@@ -20,6 +23,7 @@ export default function Card({
   padded = true,
   className = "",
   style,
+  ref,
 }: CardProps) {
   const t = color ? tone(color) : null;
   const look: CSSProperties =
@@ -35,6 +39,7 @@ export default function Card({
 
   return (
     <div
+      ref={ref}
       className={[
         "rounded-card border",
         padded ? "p-4" : "",

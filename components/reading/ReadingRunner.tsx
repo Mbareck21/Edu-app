@@ -14,6 +14,7 @@ import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import {
   GRADE4_LEXILE,
@@ -102,6 +103,11 @@ export default function ReadingRunner({
   const [picked, setPicked] = useState<number | null>(null);
   const [shake, setShake] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  // The question card. On a long passage it renders below two screens of text
+  // he has just read, and nothing moved the page — so "Answer the questions"
+  // appeared to do nothing at all.
+  const questionRef = useRef<HTMLDivElement | null>(null);
 
   const [gloss, setGloss] = useState<VocabGloss | null>(null);
   const [showArabic, setShowArabic] = useState(false);
@@ -315,6 +321,11 @@ export default function ReadingRunner({
       setTimeout(() => setPicked(null), 420);
     }
   }
+
+  useEffect(() => {
+    if (phase !== "questions") return;
+    scrollIntoViewIfNeeded(questionRef.current, "start");
+  }, [phase, qIdx]);
 
   const advance = useCallback(() => {
     watch.current?.mark();
@@ -778,7 +789,7 @@ export default function ReadingRunner({
         className="mb-6 opacity-90"
       />
 
-      <Card className={shake ? "q-shake" : ""}>
+      <Card ref={questionRef} className={shake ? "q-shake" : ""}>
         <p
           className="text-xs font-bold uppercase tracking-wide"
           style={{ color: "var(--color-muted)" }}

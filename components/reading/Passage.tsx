@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import type { VocabGloss } from "@/lib/models/WordList";
 import { splitParagraphs } from "@/lib/reading";
+import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 
 export type PassageProps = {
   text: string;
@@ -92,6 +93,15 @@ export default function Passage({
   const paragraphs = useMemo(() => splitParagraphs(text), [text]);
   const mark = highlight?.trim() ?? "";
 
+  // Follow the audio. On a long passage the paragraph being read aloud lit up
+  // below the fold, which makes "the part being read lights up" true and
+  // useless — reading along is the point of listen mode.
+  const paraRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  useEffect(() => {
+    if (activeParagraph === null) return;
+    scrollIntoViewIfNeeded(paraRefs.current[activeParagraph] ?? null, "center");
+  }, [activeParagraph]);
+
   return (
     <div className={`space-y-4 ${className}`}>
       {paragraphs.map((para, pi) => {
@@ -116,6 +126,9 @@ export default function Passage({
         return (
           <p
             key={pi}
+            ref={(el) => {
+              paraRefs.current[pi] = el;
+            }}
             className="rounded-tile px-2 py-1 text-[19px] leading-[1.7] transition-colors"
             style={
               active
