@@ -282,7 +282,10 @@ export const STORY_SETTINGS = [
  * story opened by walking a character somewhere. Each move forbids that.
  */
 export const OPENING_MOVES = [
-  "Open with someone speaking. The first sentence is a line of dialogue.",
+  // "a line of dialogue" alone produced play-script format — "Maya: Look at
+  // the garden" — in 1 of 10 cold generations. He is learning how narrative
+  // prose is written, so the form has to be named.
+  "Open with someone speaking: a line of dialogue in quotation marks with a said-tag, like \"Look at the sky,\" Ella said. Never a script line with a name and a colon.",
   "Open in the middle of the trouble, already happening.",
   "Open with a question the main character asks themselves.",
   "Open on a sound, and only then say who heard it.",

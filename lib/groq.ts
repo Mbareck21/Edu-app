@@ -229,6 +229,8 @@ KIND = "story":
   - Never invent a name of your own, and never reuse a name from RECENT
     PASSAGES. If you catch yourself writing a character walking somewhere in
     the first sentence, delete it and follow the opening move instead.
+  - Prose, never a play script. Dialogue goes in quotation marks with a
+    said-tag ("Look at the sky," Ella said). Never NAME: line.
   - Use pronouns to refer back. Do not subject-hop every sentence.
   - The story must carry a LESSON a child could name in one sentence — that is
     what the theme question asks about. Show the lesson, never state it.
