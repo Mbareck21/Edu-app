@@ -1,4 +1,9 @@
-import { groq, CLUE_MODEL, CLUE_SYSTEM_PROMPT } from "@/lib/groq";
+import {
+  groq,
+  CLUE_MODEL,
+  CLUE_SYSTEM_PROMPT,
+  TRANSLATE_SYSTEM_PROMPT,
+} from "@/lib/groq";
 
 /**
  * One Groq call writes a clue for each word.
@@ -38,6 +43,46 @@ export async function fillClues(words: string[]): Promise<Record<string, string>
     for (const w of words) {
       const v = byNormalized.get(normalize(w));
       if (v) out[w] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The Arabic for each word.
+ *
+ * Arabic is his first language, and the whole reason a word lands in the pool
+ * is that he does not understand it. An English clue for a word he cannot read
+ * is a second puzzle, not an answer — the Arabic is what actually tells him
+ * what he is writing.
+ *
+ * Same contract as fillClues: best effort, silent failure, the word is added
+ * either way.
+ */
+export async function fillArabic(words: string[]): Promise<Record<string, string>> {
+  if (words.length === 0) return {};
+  try {
+    const completion = await groq().chat.completions.create({
+      model: CLUE_MODEL,
+      messages: [
+        { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
+        { role: "user", content: `Translate these words:
+${words.join(", ")}` },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 2000,
+      reasoning_effort: "low",
+    });
+    const payload = JSON.parse(completion.choices[0]?.message?.content || "{}") as {
+      translations?: Record<string, string>;
+    };
+    const out: Record<string, string> = {};
+    for (const w of words) {
+      const v = payload.translations?.[w] ?? payload.translations?.[w.toLowerCase()];
+      if (typeof v === "string" && v.trim()) out[w] = v.trim();
     }
     return out;
   } catch {

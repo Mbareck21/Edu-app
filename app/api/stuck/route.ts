@@ -6,7 +6,7 @@ import { WordList, toClient } from "@/lib/models/WordList";
 import { SpellChain } from "@/lib/models/SpellChain";
 import { getPool } from "@/lib/word-source";
 import { parseWordEntry } from "@/lib/stuck-entry";
-import { fillClues } from "@/lib/fill-clues";
+import { fillArabic, fillClues } from "@/lib/fill-clues";
 
 export const runtime = "nodejs";
 
@@ -43,15 +43,20 @@ export async function POST(req: Request) {
   // sit out the very tests it was added for. One call covers both, and the
   // old ones riding along heals anything that landed while the writer was
   // rate-limited. Best effort throughout: a missing clue never blocks a word.
-  const stale = pool.words.filter((w) => !w.clue.trim()).map((w) => w.word);
-  const clues = await fillClues([...fresh, ...stale]);
+  const needClue = pool.words.filter((w) => !w.clue.trim()).map((w) => w.word);
+  const needArabic = pool.words.filter((w) => !w.arabic.trim()).map((w) => w.word);
+  // Both in parallel: he is waiting with the worksheet in front of him.
+  const [clues, arabic] = await Promise.all([
+    fillClues([...fresh, ...needClue]),
+    fillArabic([...fresh, ...needArabic]),
+  ]);
 
-  for (const word of stale) {
-    if (!clues[word]) continue;
-    await WordList.updateOne(
-      { _id: pool._id, "words.word": word },
-      { $set: { "words.$.clue": clues[word] } }
-    );
+  for (const word of new Set([...needClue, ...needArabic])) {
+    const patch: Record<string, string> = {};
+    if (clues[word]) patch["words.$.clue"] = clues[word];
+    if (arabic[word]) patch["words.$.arabic"] = arabic[word];
+    if (Object.keys(patch).length === 0) continue;
+    await WordList.updateOne({ _id: pool._id, "words.word": word }, { $set: patch });
   }
 
   if (fresh.length > 0) {
@@ -59,7 +64,13 @@ export async function POST(req: Request) {
       { _id: pool._id },
       {
         $push: {
-          words: { $each: fresh.map((word) => ({ word, clue: clues[word] ?? "" })) },
+          words: {
+            $each: fresh.map((word) => ({
+              word,
+              clue: clues[word] ?? "",
+              arabic: arabic[word] ?? "",
+            })),
+          },
         },
       }
     );

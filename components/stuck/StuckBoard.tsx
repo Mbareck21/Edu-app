@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ChainRunner from "@/components/stuck/ChainRunner";
+import type { WordSense } from "@/components/stuck/ChainRunner";
 import { CHAIN_TARGET, ROTATE_WIDTH, type ChainState } from "@/lib/spell-chain";
 import type { ClientWordList } from "@/lib/models/WordList";
 
@@ -23,6 +24,9 @@ export type StuckBoardProps = {
  */
 export default function StuckBoard({ list, chains }: StuckBoardProps) {
   const [words, setWords] = useState(list.words.map((w) => w.word));
+  const [senses, setSenses] = useState<Record<string, WordSense>>(() =>
+    Object.fromEntries(list.words.map((w) => [w.word, { clue: w.clue, arabic: w.arabic }]))
+  );
   const [state, setState] = useState(chains);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,8 +51,10 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
         setNote(typeof data.error === "string" ? data.error : "That did not save.");
         return;
       }
-      const next: string[] = data.list.words.map((w: { word: string }) => w.word);
+      const rows: { word: string; clue: string; arabic: string }[] = data.list.words;
+      const next = rows.map((w) => w.word);
       setWords(next);
+      setSenses(Object.fromEntries(rows.map((w) => [w.word, { clue: w.clue, arabic: w.arabic }])));
       setState((s) => {
         const out = { ...s };
         for (const w of next) {
@@ -80,6 +86,7 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
       <div className="-mx-4">
         <ChainRunner
           words={running}
+          senses={senses}
           chains={state}
           onDone={() => {
             setRunning(null);
@@ -156,6 +163,11 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-display text-lg font-bold">{w}</p>
+                      {senses[w]?.clue ? (
+                        <p className="truncate text-sm" style={{ color: "var(--color-muted)" }}>
+                          {senses[w].clue}
+                        </p>
+                      ) : null}
                       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
                         {done} of {CHAIN_TARGET} in a row
                         {c && c.best > done ? ` · best ${c.best}` : ""}

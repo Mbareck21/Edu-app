@@ -20,9 +20,14 @@ import { playTextThroughTTS } from "@/lib/voice";
 /** How many writes make one sitting. Enough to move, short enough to finish. */
 const SITTING_WRITES = 18;
 
+/** What the word means, in both his languages. */
+export type WordSense = { clue: string; arabic: string };
+
 export type ChainRunnerProps = {
   /** The words in this sitting, already chosen. Up to ROTATE_WIDTH. */
   words: string[];
+  /** Meaning per word. A word lands in the pool because he does not know it. */
+  senses: Record<string, WordSense>;
   /** Their counts as the server has them right now. */
   chains: Record<string, ChainState>;
   onDone?: () => void;
@@ -49,7 +54,7 @@ function chunkMask(word: string): string {
   return word.slice(0, keep) + "_".repeat(word.length - keep);
 }
 
-export default function ChainRunner({ words, chains, onDone }: ChainRunnerProps) {
+export default function ChainRunner({ words, senses, chains, onDone }: ChainRunnerProps) {
   const [state, setState] = useState<Record<string, ChainState>>(chains);
   const [writeIndex, setWriteIndex] = useState(0);
   /** Advances only on a correct write, so a miss does not rotate away. */
@@ -163,6 +168,7 @@ export default function ChainRunner({ words, chains, onDone }: ChainRunnerProps)
 
   if (!word || !chain) return null;
 
+  const sense = senses[word];
   const showWord = rung === "copy" || (rung === "cover" && !hidden);
   const display = rung === "chunk" ? chunkMask(word) : word;
 
@@ -211,6 +217,24 @@ export default function ChainRunner({ words, chains, onDone }: ChainRunnerProps)
             <Icon name="volume" size={22} />
           </button>
         </div>
+
+        {/* What it means, always. A word is in this pool BECAUSE he does not
+            know it — writing it ten times without knowing what it means would
+            train his hand and teach him nothing. The Arabic carries the sense
+            his English cannot yet reach. */}
+        {sense && (sense.clue || sense.arabic) ? (
+          <div
+            className="mt-3 rounded-tile px-3 py-2 text-center"
+            style={{ background: "var(--color-sand)" }}
+          >
+            {sense.clue ? <p className="text-sm">{sense.clue}</p> : null}
+            {sense.arabic ? (
+              <p className="mt-1 font-display text-lg" lang="ar" dir="rtl">
+                {sense.arabic}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {showWord || rung === "chunk" ? (
           <p className="mt-3 text-center font-display text-3xl font-bold tracking-wide">
