@@ -12,10 +12,15 @@ const PUBLIC_PATHS = new Set([
   "/sw.js",
   "/offline",
 ]);
+const PUBLIC_PREFIXES = ["/icons/"];
 // The install dialog fetches the manifest's screenshots with no session, so a
-// redirect to /login would leave the dialog blank. Safe to expose: these are
-// work screens with no name and no progress on them (scripts/screenshots.mjs).
-const PUBLIC_PREFIXES = ["/icons/", "/screenshots/"];
+// redirect to /login would leave it blank. Named one by one rather than
+// opening the whole folder: these two are work screens with no name and no
+// progress on them, but a capture dropped in there later — a screenshot of
+// his progress page, a bug report — must not become public by inheriting a
+// permission granted for something else. Add a file here when you add it to
+// the manifest, and look at it first.
+const PUBLIC_FILES = new Set(["/screenshots/lesson.png", "/screenshots/math.png"]);
 
 async function valid(token: string | undefined): Promise<boolean> {
   if (!token) return false;
@@ -33,6 +38,7 @@ async function proxyImpl(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
+  if (PUBLIC_FILES.has(pathname)) return NextResponse.next();
 
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (await valid(token)) return NextResponse.next();

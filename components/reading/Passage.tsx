@@ -11,6 +11,13 @@ export type PassageProps = {
   glosses: VocabGloss[];
   /** Index of the paragraph the audio is on, or null. */
   activeParagraph?: number | null;
+  /**
+   * Scroll the active paragraph into view as it changes. Off by default: the
+   * same prop carries the stalled paragraph after a playback failure, and
+   * moving the page while he is reading an error message is not following
+   * along, it is a jolt.
+   */
+  follow?: boolean;
   /** A sentence from the passage to mark — the answer's source on reveal. */
   highlight?: string;
   onGlossTap?: (gloss: VocabGloss) => void;
@@ -85,6 +92,7 @@ export default function Passage({
   text,
   glosses,
   activeParagraph = null,
+  follow = false,
   highlight,
   onGlossTap,
   className = "",
@@ -97,10 +105,17 @@ export default function Passage({
   // below the fold, which makes "the part being read lights up" true and
   // useless — reading along is the point of listen mode.
   const paraRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  // Trim to the current passage so a shorter one cannot leave refs behind that
+  // describe paragraphs no longer on screen. In an effect, not during render:
+  // touching a ref while rendering is what react-hooks/refs forbids.
   useEffect(() => {
-    if (activeParagraph === null) return;
+    paraRefs.current.length = paragraphs.length;
+  }, [paragraphs.length]);
+
+  useEffect(() => {
+    if (!follow || activeParagraph === null) return;
     scrollIntoViewIfNeeded(paraRefs.current[activeParagraph] ?? null, "center");
-  }, [activeParagraph]);
+  }, [follow, activeParagraph]);
 
   return (
     <div className={`space-y-4 ${className}`}>

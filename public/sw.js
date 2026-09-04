@@ -13,6 +13,13 @@
 const VERSION = "quest-v4";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
+// Where the running worker records which version is live, so a NEW worker can
+// tell an in-use cache from an orphan. Without it, every update he declines
+// leaves a full shell-plus-chunks cache that only the next activation would
+// clear — and on a phone near its quota, the browser starts evicting the
+// caches actually in use.
+const META = "quest-meta";
+const LIVE_KEY = "https://quest.local/live-version";
 
 const PRECACHE = ["/", "/math", "/drill", "/words", "/me", "/offline"];
 
@@ -25,9 +32,33 @@ function buildAssets(html) {
   return [...found];
 }
 
+/** The version the controlling worker recorded when it activated. */
+async function liveVersion() {
+  try {
+    const meta = await caches.open(META);
+    const hit = await meta.match(LIVE_KEY);
+    return hit ? await hit.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop caches belonging to neither this worker nor the one running now. */
+async function dropOrphans() {
+  const live = await liveVersion();
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((k) => k !== META && !k.startsWith(VERSION) && !(live && k.startsWith(live)))
+      .map((k) => caches.delete(k))
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
+      // A superseded worker that was still waiting left its caches behind.
+      await dropOrphans();
       const cache = await caches.open(SHELL);
       const runtime = await caches.open(RUNTIME);
       // cache.add would happily store a login redirect when the user is not
@@ -65,8 +96,12 @@ self.addEventListener("activate", (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))
+        keys.filter((k) => k !== META && !k.startsWith(VERSION)).map((k) => caches.delete(k))
       );
+      // Tell the next worker which version is in use, so its install can tell
+      // an orphan from a cache this page is still serving from.
+      const meta = await caches.open(META);
+      await meta.put(LIVE_KEY, new Response(VERSION));
       await self.clients.claim();
     })()
   );

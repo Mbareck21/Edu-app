@@ -709,6 +709,7 @@ export default function ReadingRunner({
           text={reading.paragraph}
           glosses={reading.vocabGlosses}
           activeParagraph={mode === "listen" ? (playingIdx ?? stalledAt) : null}
+          follow={playingIdx !== null}
           onGlossTap={(g) => {
             setGloss(g);
             setShowArabic(false);

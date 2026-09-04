@@ -15,7 +15,7 @@
  */
 import { spawn } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +57,34 @@ const check = (name, pass, detail = "") => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const originalSw = await readFile(SW_FILE, "utf8");
+
+// The update step appends a byte to the real public/sw.js to force the browser
+// to see a new version, and the finally below puts it back. A finally does not
+// run on Ctrl+C, and the corrupted file still parses and still works — so it
+// could be committed and deployed without anyone noticing. Restore on the way
+// out too, whatever the exit.
+let restored = false;
+const restoreSw = () => {
+  if (restored) return;
+  restored = true;
+  try {
+    writeFileSync(SW_FILE, originalSw, "utf8");
+  } catch {
+    console.error(`could not restore ${SW_FILE} — check it before committing`);
+  }
+};
+process.on("exit", restoreSw);
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) {
+  process.on(sig, () => {
+    restoreSw();
+    process.exit(130);
+  });
+}
+process.on("uncaughtException", (err) => {
+  restoreSw();
+  console.error(err);
+  process.exit(1);
+});
 
 // Start from a browser that has never seen this app. The profile persists a
 // registered worker, so reusing it made the run depend on what the last run
@@ -158,11 +186,21 @@ try {
   check("the service worker registers and activates", state.active === "activated", state.active);
   check("it takes control of the page", state.controlled);
 
+  // A first install must not reload him. The worker's activate calls
+  // clients.claim(), which fires controllerchange with no update involved;
+  // reloading there threw a brand new visitor out of whatever he had tapped.
+  const nav = await evalPage(`
+    const e = performance.getEntriesByType("navigation")[0];
+    return e ? e.type : null;
+  `);
+  check("a first install does not reload the page under him", nav === "navigate", String(nav));
+
   // 2. It fills its caches, and they belong to the current version.
   const version = originalSw.match(/const VERSION = "([^"]+)"/)[1];
+  const owned = (c) => c.startsWith(version) || c === "quest-meta";
   check(
     `caches are created for ${version}`,
-    state.caches.length > 0 && state.caches.every((c) => c.startsWith(version)),
+    state.caches.length > 0 && state.caches.every(owned),
     state.caches.join(", ") || "none"
   );
   const shell = await evalPage(`
@@ -193,7 +231,14 @@ try {
   );
 
   // 4. The point of the exercise: a new worker WAITS.
-  await writeFile(SW_FILE, `${originalSw}\n// pwa-check touch\n`, "utf8");
+  // Bump the VERSION rather than appending a byte: a new version names its own
+  // caches, which is what makes the orphan cleanup testable below.
+  const NEXT_VERSION = `${version}-probe`;
+  await writeFile(
+    SW_FILE,
+    originalSw.replace(`const VERSION = "${version}"`, `const VERSION = "${NEXT_VERSION}"`),
+    "utf8"
+  );
   const update = await evalPage(`
     const reg = await navigator.serviceWorker.getRegistration();
     await reg.update();
@@ -219,6 +264,31 @@ try {
   check("the running page keeps its old worker", update.stillControlled);
   check("the update bar is offered to him", update.bar);
 
+  // And it is an offer, not a trap. The first cut sat at bottom-0 z-60 over
+  // the tab bar with no dismiss, so a deploy mid-lesson left him unable to
+  // navigate or even finish the question he was on.
+  const reachable = await evalPage(`
+    const bar = Array.from(document.querySelectorAll("button"))
+      .find((b) => /new quest ready/i.test(b.textContent));
+    const dismiss = document.querySelector('[aria-label="Not now"]');
+    const nav = document.querySelector("nav");
+    if (!bar) return { ok: false, why: "no bar" };
+    const barBox = bar.getBoundingClientRect();
+    const navBox = nav ? nav.getBoundingClientRect() : null;
+    return {
+      hasDismiss: Boolean(dismiss),
+      clearsNav: navBox ? barBox.bottom <= navBox.top : null,
+      navBottom: navBox ? Math.round(navBox.top) : null,
+      barBottom: Math.round(barBox.bottom),
+    };
+  `);
+  check("he can refuse the update", reachable.hasDismiss === true);
+  check(
+    "the bar sits clear of the bottom navigation",
+    reachable.clearsNav !== false,
+    `bar bottom ${reachable.barBottom}, nav top ${reachable.navBottom}`
+  );
+
   // 5. And it hands over only when he taps.
   const took = await evalPage(`
     const btn = Array.from(document.querySelectorAll("button"))
@@ -233,8 +303,26 @@ try {
     return { clicked: true, changed };
   `);
   check("tapping it hands over to the new worker", took.clicked && took.changed);
+
+  // 6. The new version cleans up after the old one. A declined update used to
+  //    leave a full shell-plus-chunks cache behind with nothing to clear it.
+  if (took.changed) {
+    const after = await evalPage(`
+      for (let i = 0; i < 40; i++) {
+        const keys = await caches.keys();
+        if (keys.some((k) => k.startsWith("${NEXT_VERSION}"))) return keys;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return await caches.keys();
+    `);
+    check(
+      "the superseded version's caches are cleaned up",
+      after.every((c) => c.startsWith(NEXT_VERSION) || c === "quest-meta"),
+      after.join(", ")
+    );
+  }
 } finally {
-  await writeFile(SW_FILE, originalSw, "utf8");
+  restoreSw();
   ws.close();
   chrome.kill();
 }
