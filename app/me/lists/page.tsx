@@ -15,9 +15,10 @@ import {
   themeForWeek,
 } from "@/lib/curriculum";
 import { connectDB } from "@/lib/db";
+import { getPractice } from "@/lib/word-source";
 import { todayKey } from "@/lib/day";
 import { countKnowledge } from "@/lib/mastery";
-import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
+import { type ClientWordList } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
 
@@ -116,8 +117,10 @@ function seedOptions(lists: ClientWordList[]): SeedOption[] {
 
 export default async function WordsPage() {
   await connectDB();
-  const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
-  const lists = docs.map(toClient);
+  // Everything, the Stuck-words pool included. This is the page where a wrong
+  // AI translation gets corrected, so the pool has to be reachable here even
+  // though it is deliberately hidden from the units strip and the daily beats.
+  const lists = await getPractice();
 
   return (
     <AppShell>

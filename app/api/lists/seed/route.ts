@@ -5,7 +5,7 @@ import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
 import { READING_THEMES, SCIENCE_UNITS } from "@/lib/curriculum";
 import { packById } from "@/lib/word-packs";
-import { fillClues } from "@/lib/fill-clues";
+import { fillArabic, fillClues } from "@/lib/fill-clues";
 import { getClientIp, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
@@ -72,14 +72,30 @@ export async function POST(req: Request) {
 
   // A pack's clues are hand-written for his exact spelling traps ("forty has
   // no u"). Never overwrite those with a generated one.
-  const clues = pack
-    ? Object.fromEntries(pack.words.map((w) => [w.word.toLowerCase(), w.clue]))
-    : await fillClues(words);
+  // Arabic always, clues only when the pack has not written them by hand.
+  // Arabic is his first language and every screen that shows a word's meaning
+  // shows it; leaving it empty at seed time meant a school word only ever got
+  // one if the parent remembered to press a button in the editor.
+  const [clues, arabic] = await Promise.all([
+    pack
+      ? Promise.resolve(
+          // A pack's clues are hand-written for his exact spelling traps
+          // ("forty has no u"). Never overwrite those with a generated one.
+          Object.fromEntries(pack.words.map((w) => [w.word.toLowerCase(), w.clue]))
+        )
+      : fillClues(words),
+    fillArabic(words),
+  ]);
 
   const doc = await WordList.create({
     name,
     hiddenMessage: "",
-    words: words.map((w) => ({ word: w, clue: clues[w] ?? "", arabic: "", explanation: "" })),
+    words: words.map((w) => ({
+      word: w,
+      clue: clues[w] ?? "",
+      arabic: arabic[w] ?? "",
+      explanation: "",
+    })),
   });
 
   return NextResponse.json(toClient(doc.toObject()), { status: 201 });
