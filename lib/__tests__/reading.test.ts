@@ -24,6 +24,7 @@ import {
   wordsPerMinute,
   MAX_READ_MS,
   castFor,
+  checkMcq,
   OPENING_MOVES,
   STORY_NAMES,
   STORY_SETTINGS,
@@ -276,4 +277,21 @@ test("the fold ceiling leaves normal passages alone", () => {
   const six = ["a", "b", "c", "d", "e", "f"];
   assert.deepEqual(foldParagraphs(six, MAX_PASSAGE_PARAGRAPHS), six);
   assert.equal(foldParagraphs([...six, "g"], MAX_PASSAGE_PARAGRAPHS).length, 6);
+});
+
+test("a multiple choice with two right options falls back to open text", () => {
+  // A distractor that is also in the acceptable list would mark a right pick
+  // wrong. The question becomes open text, scored against the whole list.
+  const two = checkMcq(["the roots", "the leaves", "roots", "the stem"], 0, ["the roots", "roots"]);
+  assert.equal(two.answerIndex, -1);
+  // The same option twice is one option; the answer index follows it.
+  const dup = checkMcq(["Roots", "roots", "leaves", "stem"], 1, ["roots"]);
+  assert.deepEqual(dup.options, ["Roots", "leaves", "stem"]);
+  assert.equal(dup.answerIndex, 0);
+  // A clean question passes through untouched.
+  const clean = checkMcq(["roots", "leaves", "stem", "flower"], 2, ["stem"]);
+  assert.equal(clean.answerIndex, 2);
+  assert.equal(clean.options.length, 4);
+  // Losing the answer to de-duplication, or ending with one option, is not an MCQ.
+  assert.equal(checkMcq(["a", "a"], 1, ["a"]).answerIndex, -1);
 });

@@ -19,32 +19,37 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 
 export type WordDrillCardProps = {
-  lists: { listId: string; name: string; count: number }[];
+  lists: { listId: string; name: string; total: number; toGo: number }[];
+  /** Words still to learn across every list. */
   all: number;
+  /** Every word, learned or not — the drill can still run on a finished list. */
+  total: number;
   weak: number;
   due: number;
 };
 
 /** One screen: where the words come from, what to do with them, how many. */
-export default function WordDrillCard({ lists, all, weak, due }: WordDrillCardProps) {
+export default function WordDrillCard({ lists, all, total, weak, due }: WordDrillCardProps) {
   const router = useRouter();
   const firstList = lists[0]?.listId ?? "";
-  const [src, setSrc] = useState<string>(all > 0 ? "all" : "");
+  const [src, setSrc] = useState<string>(total > 0 ? "all" : "");
   const [mode, setMode] = useState<VocabMode>("mixed");
   const [count, setCount] = useState<number>(10);
   const [going, setGoing] = useState(false);
 
   const oneList = needsOneList(mode);
+  // "14 to go" rather than "22": a list he has mastered reads "done" and has
+  // already been sorted to the bottom, instead of looking untouched.
   const listChoices: Choice[] = lists.map((l) => ({
     value: `list:${l.listId}`,
     label: l.name,
-    note: String(l.count),
-    disabled: l.count === 0,
+    note: l.toGo === 0 ? "done" : `${l.toGo} to go`,
+    disabled: l.total === 0,
   }));
   const sourceChoices: Choice[] = oneList
     ? listChoices
     : [
-        { value: "all", label: "All words", note: String(all), disabled: all === 0 },
+        { value: "all", label: "All words", note: all === 0 ? "all done" : `${all} to go`, disabled: total === 0 },
         ...listChoices,
         { value: "weak", label: "Weak", note: String(weak), disabled: weak === 0 },
         { value: "due", label: "Due now", note: String(due), disabled: due === 0 },
@@ -59,7 +64,7 @@ export default function WordDrillCard({ lists, all, weak, due }: WordDrillCardPr
     }
   }
 
-  const ready = all > 0 && src !== "" && (!oneList || src.startsWith("list:"));
+  const ready = total > 0 && src !== "" && (!oneList || src.startsWith("list:"));
 
   function start() {
     if (!ready || going) return;

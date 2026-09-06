@@ -14,6 +14,7 @@ import { clock } from "@/components/ui/time";
 import { buildSession, gradeAnswer, mixedSession, type Level, type MathSkillId } from "@/lib/math";
 import type { MathQuestion } from "@/lib/math/types";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { sessionPerfect } from "@/lib/session-score";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
@@ -146,7 +147,10 @@ export default function MathDrillRunner({
       // Speed bonus lives in timed drills only.
       fastCount: timed ? fastRef.current : 0,
       ms,
-      perfect: answered > 0 && correct === answered,
+      // One answer in sixty seconds used to post as perfect and 100%. The
+      // server applies the same rule, so this is what he will be told.
+      timed,
+      perfect: sessionPerfect({ answered, correct, timed }),
       ...(skill === "mixed" ? {} : { mathSkill: skill }),
     };
     void postSession(result).then((res) => {
@@ -245,8 +249,10 @@ export default function MathDrillRunner({
           }
           xp={outcome.gained?.xp ?? offlineXp}
           ms={outcome.ms}
-          accuracy={outcome.answered === 0 ? 0 : outcome.correct / outcome.answered}
-          perfect={outcome.answered > 0 && outcome.correct === outcome.answered}
+          // A timed run is a count, not a fraction of however few he reached;
+          // the subtitle already says "N right in 60 seconds", so no tile.
+          accuracy={timed ? null : outcome.answered === 0 ? 0 : outcome.correct / outcome.answered}
+          perfect={sessionPerfect({ answered: outcome.answered, correct: outcome.correct, timed })}
           leveledUp={outcome.gained?.leveledUp ?? false}
           newBadge={outcome.gained?.newBadges[0] ?? null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}

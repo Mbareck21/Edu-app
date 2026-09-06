@@ -16,6 +16,7 @@ import {
 import {
   MAX_GLOSSARY_ENTRIES,
   castFor,
+  checkMcq,
   clampLevel,
   countWords,
   MAX_PASSAGE_PARAGRAPHS,
@@ -427,6 +428,20 @@ Your last answer was not valid JSON — it ran out of room before the closing br
         wantsMcq = false;
         options = [];
         answerIndex = -1;
+      }
+    }
+    if (wantsMcq) {
+      // Exactly one right option, or it is not a multiple choice. A distractor
+      // that is also in the model's own acceptable list would mark a right
+      // pick wrong — see checkMcq.
+      const checked = checkMcq(options, answerIndex, q.acceptable);
+      if (checked.answerIndex < 0) {
+        wantsMcq = false;
+        options = [];
+        answerIndex = -1;
+      } else {
+        options = checked.options;
+        answerIndex = checked.answerIndex;
       }
     }
     const hints = q.hints.slice(0, 2);

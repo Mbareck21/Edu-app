@@ -22,6 +22,7 @@
  */
 
 import { spellingKey } from "@/lib/items";
+import { MS_PER_DAY, SKILL_LADDER_DAYS } from "@/lib/spacing";
 
 /** The parent's number. Fixed. */
 export const CHAIN_TARGET = 10;
@@ -37,8 +38,19 @@ export type ChainState = {
   reps: number;
   /** Lifetime submissions, right or wrong. For the parent's view. */
   attempts: number;
-  /** Set the first time the chain reaches CHAIN_TARGET. */
+  /** Set the first time the chain reaches CHAIN_TARGET. Never cleared. */
   graduatedAt: string | null;
+  /**
+   * Passed re-checks in a row since the chain last hit ten. Ten in a row
+   * proves he can spell it today; it says nothing about next week. So a
+   * finished word comes back on the same 1-3-7-16-35-90 day ladder every
+   * other skill in the app uses, for ONE blind write. Pass, and the gap
+   * grows. Miss, and it is a working word again at zero — "finished" that
+   * never re-checks is exactly the fake reward this app keeps removing.
+   */
+  checks: number;
+  /** When the next re-check falls. Null until the chain first reaches ten. */
+  dueAt: string | null;
 };
 
 export function newChain(word: string): ChainState {
@@ -49,7 +61,70 @@ export function newChain(word: string): ChainState {
     reps: 0,
     attempts: 0,
     graduatedAt: null,
+    checks: 0,
+    dueAt: null,
   };
+}
+
+/**
+ * Build a state from a stored row, tolerating anything missing. One place, so
+ * the pages and the write route cannot each hydrate it slightly differently.
+ */
+export function fromRow(
+  word: string,
+  row: {
+    current?: unknown;
+    best?: unknown;
+    reps?: unknown;
+    attempts?: unknown;
+    graduatedAt?: unknown;
+    checks?: unknown;
+    dueAt?: unknown;
+  } | null | undefined
+): ChainState {
+  if (!row) return newChain(word);
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+  const iso = (v: unknown) => {
+    if (v instanceof Date) return v.toISOString();
+    if (typeof v === "string" && v) return new Date(v).toISOString();
+    return null;
+  };
+  const graduatedAt = iso(row.graduatedAt);
+  const current = num(row.current);
+  let dueAt = iso(row.dueAt);
+  // A row finished before re-checks existed has no dueAt. Left null it would
+  // never come due and sit "Finished" for good — seventeen of his words were
+  // in exactly that state. Schedule it from the day he finished, bottom of
+  // the ladder, so it comes round as if the rule had always been there.
+  if (dueAt === null && graduatedAt !== null && current >= CHAIN_TARGET) {
+    dueAt = nextDue(0, graduatedAt);
+  }
+  return {
+    word,
+    current,
+    best: num(row.best),
+    reps: num(row.reps),
+    attempts: num(row.attempts),
+    graduatedAt,
+    checks: num(row.checks),
+    dueAt,
+  };
+}
+
+/** The chain has reached ten and not been broken since. */
+export function isFinished(state: ChainState): boolean {
+  return state.graduatedAt !== null && state.current >= CHAIN_TARGET;
+}
+
+/** A finished word whose re-check has come round. */
+export function checkDue(state: ChainState, nowIso: string): boolean {
+  return isFinished(state) && state.dueAt !== null && nowIso >= state.dueAt;
+}
+
+/** The next re-check, `checks` steps up the ladder from now. */
+function nextDue(checks: number, nowIso: string): string {
+  const i = Math.min(Math.max(0, checks), SKILL_LADDER_DAYS.length - 1);
+  return new Date(new Date(nowIso).getTime() + SKILL_LADDER_DAYS[i] * MS_PER_DAY).toISOString();
 }
 
 /**
@@ -82,6 +157,8 @@ const RUNG_AT_REPS: readonly number[] = [0, 2, 4, 7];
  */
 export function rungFor(state: ChainState, afterMiss: boolean): Rung {
   if (afterMiss) return "copy";
+  // A re-check is a test, not practice: nothing on screen but the meaning.
+  if (isFinished(state)) return "blind";
   let rung: Rung = "copy";
   RUNG_AT_REPS.forEach((need, i) => {
     if (state.reps >= need) rung = RUNGS[i];
@@ -108,11 +185,35 @@ export function applyWrite(
 ): ChainStep {
   const correct = spellingKey(typed) === spellingKey(state.word);
   const attempts = state.attempts + 1;
+
+  if (isFinished(state)) {
+    // A re-check. One blind write decides it.
+    if (!correct) {
+      // Back to a working word. graduatedAt stays: he did do it once.
+      return {
+        state: { ...state, current: 0, attempts, checks: 0, dueAt: null },
+        correct: false,
+      };
+    }
+    const checks = state.checks + 1;
+    return {
+      state: {
+        ...state,
+        reps: state.reps + 1,
+        attempts,
+        checks,
+        dueAt: nextDue(checks, nowIso),
+      },
+      correct: true,
+    };
+  }
+
   if (!correct) {
     return { state: { ...state, current: 0, attempts }, correct: false };
   }
   const current = Math.min(CHAIN_TARGET, state.current + 1);
   const reps = state.reps + 1;
+  const reached = current >= CHAIN_TARGET;
   return {
     state: {
       ...state,
@@ -120,8 +221,10 @@ export function applyWrite(
       best: Math.max(state.best, current),
       reps,
       attempts,
-      graduatedAt:
-        state.graduatedAt ?? (current >= CHAIN_TARGET ? nowIso : null),
+      graduatedAt: state.graduatedAt ?? (reached ? nowIso : null),
+      // The first re-check is tomorrow, the bottom of the ladder.
+      checks: reached ? 0 : state.checks,
+      dueAt: reached ? nextDue(0, nowIso) : state.dueAt,
     },
     correct: true,
   };

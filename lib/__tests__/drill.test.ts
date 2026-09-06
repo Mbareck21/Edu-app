@@ -16,6 +16,7 @@ import {
   modeSkill,
   pickWords,
   sourceCounts,
+  isSettled,
   type DrillList,
 } from "@/components/drill/picks";
 import { mulberry32 } from "@/lib/math/rng";
@@ -125,15 +126,43 @@ test("weak and due read the skill states", () => {
   assert.equal(isDue(strong("solid"), NOW), false);
 });
 
-test("source counts add up per chip", () => {
+test("source counts report what is left, not totals", () => {
+  // The chips used to show plain totals, so a mastered list looked exactly
+  // like one he had never opened. `all` is now words still to learn; `total`
+  // keeps the old number for anything that needs it.
   const counts = sourceCounts(lists(), NOW);
-  assert.equal(counts.all, 4);
+  assert.equal(counts.total, 4);
+  assert.ok(counts.all <= counts.total);
   assert.equal(counts.weak, 2);
   assert.equal(counts.due, 2);
   assert.deepEqual(
-    counts.lists.map((l) => l.count),
-    [3, 1]
+    counts.lists.map((l) => l.total).sort(),
+    [1, 3]
   );
+  for (const l of counts.lists) assert.ok(l.toGo <= l.total);
+  // Lists with the most left come first, so a finished list sinks.
+  for (let i = 1; i < counts.lists.length; i++) {
+    assert.ok(counts.lists[i - 1].toGo >= counts.lists[i].toGo);
+  }
+});
+
+test("a word is settled only once produced and steady on every skill", () => {
+  // strong() holds a streak of 4 everywhere but has never been produced
+  // (correct stays 0), and a word he has never once spelled or used is not
+  // known however steady its recognition looks. Same rule as wordKnowledge.
+  assert.equal(isSettled(strong("solid")), false);
+  const far = new Date(NOW.getTime() + 30 * DAY).toISOString();
+  const produced = word("solid", {
+    skills: skills({
+      recognize: { streak: 4, dueAt: far },
+      listen: { streak: 4, dueAt: far },
+      spell: { streak: 4, dueAt: far, correct: 4 },
+      use: { streak: 4, dueAt: far, correct: 4 },
+    }),
+  });
+  assert.equal(isSettled(produced), true);
+  // A fresh word: never produced, no streaks. Not settled.
+  assert.equal(isSettled(word("wobble")), false);
 });
 
 test("pickWords filters by source", () => {

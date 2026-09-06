@@ -14,7 +14,7 @@ import Icon from "@/components/ui/Icon";
 import { connectDB } from "@/lib/db";
 import { MATH_SKILLS } from "@/lib/math";
 import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
-import { getListSummaries } from "@/lib/lists";
+import { getPractice } from "@/lib/word-source";
 import { getProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +23,17 @@ export const metadata = { title: "Drill" };
 
 export default async function DrillPage() {
   await connectDB();
-  const [summaries, mathDocs, profile] = await Promise.all([
-    getListSummaries(),
+  const [practice, mathDocs, profile] = await Promise.all([
+    getPractice(),
     MathProgress.find().lean(),
     getProfile(),
   ]);
 
   const now = new Date();
-  const lists = summaries
-    .filter((l) => l.wordCount > 0)
+  // getPractice, not the unit summaries: the drill itself runs on the Stuck
+  // words pool too, so "All words" has to count what the drill will use.
+  const lists = practice
+    .filter((l) => l.words.length > 0)
     .map((l) => ({ listId: l._id, name: l.name, words: l.words }));
   const counts = sourceCounts(lists, now);
 
@@ -73,6 +75,7 @@ export default async function DrillPage() {
       <WordDrillCard
         lists={counts.lists}
         all={counts.all}
+        total={counts.total}
         weak={counts.weak}
         due={counts.due}
       />

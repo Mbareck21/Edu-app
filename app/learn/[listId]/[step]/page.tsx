@@ -12,7 +12,7 @@ import { mulberry32 } from "@/lib/math/rng";
 import { orderByNeed } from "@/lib/practice-order";
 import { skillDue } from "@/lib/mastery";
 import { SpellChain } from "@/lib/models/SpellChain";
-import { ROTATE_WIDTH, newChain, type ChainState } from "@/lib/spell-chain";
+import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
 import { getProfile } from "@/lib/profile";
 import { scaffoldFor } from "@/lib/reading";
 import { WordList, toClient } from "@/lib/models/WordList";
@@ -69,16 +69,7 @@ export default async function StepPage({
       if (!chosen.includes(w.word)) continue;
       senses[w.word] = { clue: w.clue, arabic: w.arabic };
       const row = rows.find((r) => r.word === w.word);
-      chains[w.word] = row
-        ? {
-            word: w.word,
-            current: Number(row.current) || 0,
-            best: Number(row.best) || 0,
-            reps: Number(row.reps) || 0,
-            attempts: Number(row.attempts) || 0,
-            graduatedAt: row.graduatedAt ? new Date(row.graduatedAt).toISOString() : null,
-          }
-        : newChain(w.word);
+      chains[w.word] = fromRow(w.word, row);
     }
     return (
       <ChainRunner

@@ -26,6 +26,10 @@ const SpellChainSchema = new Schema(
     lastAt: { type: Date, default: null },
     /** Stamped the first time the chain reached ten. Never restamped. */
     graduatedAt: { type: Date, default: null },
+    /** Passed re-checks in a row since the chain last reached ten. */
+    checks: { type: Number, default: 0 },
+    /** When the next re-check falls. Null until the chain first reaches ten. */
+    dueAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

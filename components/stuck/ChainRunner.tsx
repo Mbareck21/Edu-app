@@ -10,6 +10,7 @@ import { hintFor } from "@/lib/number-words";
 import { sfx } from "@/lib/sfx";
 import {
   CHAIN_TARGET,
+  isFinished,
   rotate,
   rungFor,
   type ChainState,
@@ -186,7 +187,10 @@ export default function ChainRunner({
 
   if (done) {
     const best = words.map((w) => state[w]?.current ?? 0);
-    const wonNow = words.filter((w) => (state[w]?.current ?? 0) >= CHAIN_TARGET);
+    const wonNow = words.filter((w) => {
+      const c = state[w];
+      return Boolean(c) && (state[w]?.current ?? 0) >= CHAIN_TARGET;
+    });
     return (
       <LessonComplete
         title={wonNow.length > 0 ? "You finished a word!" : "Writing done."}
@@ -219,7 +223,11 @@ export default function ChainRunner({
       {/* The counter he asked for: how many more in a row, never a percentage. */}
       <Card color="blue" variant="soft">
         <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-blue-dark)" }}>
-          {remainingNow === 0 ? "Done" : `${remainingNow} more in a row`}
+          {chain && isFinished(chain)
+            ? "Check it — one write, no help"
+            : remainingNow === 0
+              ? "Done"
+              : `${remainingNow} more in a row`}
         </p>
         <div className="mt-2 flex gap-1.5" aria-hidden>
           {Array.from({ length: CHAIN_TARGET }, (_, i) => (

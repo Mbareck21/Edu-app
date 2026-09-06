@@ -6,6 +6,7 @@ import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
 import { scheduleSkill } from "@/lib/mastery";
 import { MathProgress, RECENT_PCTS, nextLevel } from "@/lib/models/MathProgress";
+import { sessionPct } from "@/lib/session-score";
 import {
   PROFILE_KEY,
   Profile,
@@ -29,6 +30,7 @@ const Body = z.object({
   fastCount: z.number().int().min(0).max(500),
   ms: z.number().int().min(0).max(6 * 60 * 60 * 1000),
   perfect: z.boolean(),
+  timed: z.boolean().optional(),
   listId: z.string().min(1).max(64).optional(),
   step: z.enum(STEP_IDS).optional(),
   mathSkill: z.string().min(1).max(40).optional(),
@@ -55,9 +57,9 @@ const Body = z.object({
 
 type ParsedBody = z.infer<typeof Body>;
 
+/** The one scoring rule — see lib/session-score.ts for why timed differs. */
 function pctOf(body: ParsedBody): number {
-  if (body.answered <= 0) return 0;
-  return Math.round((body.correct / body.answered) * 100);
+  return sessionPct(body);
 }
 
 type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];

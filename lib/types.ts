@@ -117,6 +117,11 @@ export type SessionResult = {
   correct: number;
   /** Answers given in under 3s. */
   fastCount: number;
+  /**
+   * "As many as you can" against a clock, not a fixed set. Scored against a
+   * floor (lib/session-score.ts) so one answer in a minute is not 100%.
+   */
+  timed?: boolean;
   /** Time on task, ms. */
   ms: number;
   perfect: boolean;

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { connectDB } from "@/lib/db";
 import { SpellChain } from "@/lib/models/SpellChain";
-import { applyWrite, newChain, rungFor, type ChainState } from "@/lib/spell-chain";
+import { applyWrite, fromRow, rungFor } from "@/lib/spell-chain";
 
 export const runtime = "nodejs";
 
@@ -14,25 +14,6 @@ const Body = z.object({
   /** True when the previous attempt on this word was a miss. */
   afterMiss: z.boolean().default(false),
 });
-
-function toState(doc: {
-  word: string;
-  current?: number;
-  best?: number;
-  reps?: number;
-  attempts?: number;
-  graduatedAt?: Date | null;
-} | null, word: string): ChainState {
-  if (!doc) return newChain(word);
-  return {
-    word: doc.word,
-    current: Number(doc.current) || 0,
-    best: Number(doc.best) || 0,
-    reps: Number(doc.reps) || 0,
-    attempts: Number(doc.attempts) || 0,
-    graduatedAt: doc.graduatedAt ? new Date(doc.graduatedAt).toISOString() : null,
-  };
-}
 
 /**
  * Grade one write and return the new count.
@@ -56,7 +37,7 @@ export async function POST(req: Request) {
   const word = parsed.data.word.trim().toLowerCase();
 
   await connectDB();
-  const before = toState(await SpellChain.findOne({ word }).lean(), word);
+  const before = fromRow(word, await SpellChain.findOne({ word }).lean());
   const now = new Date();
   const step = applyWrite(before, parsed.data.typed, now.toISOString());
   const after = step.state;
@@ -71,6 +52,8 @@ export async function POST(req: Request) {
         reps: after.reps,
         attempts: after.attempts,
         lastAt: now,
+        checks: after.checks,
+        dueAt: after.dueAt ? new Date(after.dueAt) : null,
         ...(after.graduatedAt && !before.graduatedAt
           ? { graduatedAt: new Date(after.graduatedAt) }
           : {}),

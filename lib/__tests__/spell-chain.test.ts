@@ -5,6 +5,9 @@ import {
   CHAIN_TARGET,
   ROTATE_WIDTH,
   applyWrite,
+  checkDue,
+  fromRow,
+  isFinished,
   isGraduated,
   newChain,
   remaining,
@@ -141,4 +144,79 @@ test("a sitting rotates between words instead of hammering one", () => {
 
 test("an empty rotation does not crash the sitting", () => {
   assert.equal(rotate([], 3), "");
+});
+
+// ── Finished is not forever ───────────────────────────────────────────────
+//
+// Ten in a row proves he can spell it today. Every other skill in this app
+// comes back on a 1-3-7-16-35-90 day ladder; a chain that graduated for good
+// was the fake reward this app keeps removing, and it was built here.
+
+const DAY = 24 * 60 * 60 * 1000;
+const at = (offsetDays: number) => new Date(Date.parse(NOW) + offsetDays * DAY).toISOString();
+
+function graduated(word = "fifty"): ReturnType<typeof newChain> {
+  let s = newChain(word);
+  for (let i = 0; i < CHAIN_TARGET; i++) s = applyWrite(s, word, NOW).state;
+  return s;
+}
+
+test("reaching ten schedules the first re-check for tomorrow", () => {
+  const s = graduated();
+  assert.ok(isFinished(s));
+  assert.equal(s.checks, 0);
+  assert.equal(s.dueAt, at(1));
+  assert.equal(checkDue(s, NOW), false, "not due the moment he finishes");
+  assert.equal(checkDue(s, at(1)), true);
+});
+
+test("a re-check is blind: nothing on screen but the meaning", () => {
+  assert.equal(rungFor(graduated(), false), "blind");
+});
+
+test("passing a re-check pushes the next one further out", () => {
+  let s = graduated();
+  s = applyWrite(s, "fifty", at(1)).state;   // day 1 check, pass
+  assert.equal(s.checks, 1);
+  assert.equal(s.dueAt, at(1 + 3), "3 days after the first pass");
+  assert.ok(isFinished(s), "still finished");
+  s = applyWrite(s, "fifty", at(4)).state;   // day 4 check, pass
+  assert.equal(s.checks, 2);
+  assert.equal(s.dueAt, at(4 + 7));
+});
+
+test("missing a re-check makes it a working word again, at zero", () => {
+  let s = graduated();
+  s = applyWrite(s, "fefte", at(1)).state;
+  assert.equal(s.current, 0);
+  assert.equal(s.checks, 0);
+  assert.equal(s.dueAt, null);
+  assert.ok(!isFinished(s));
+  assert.ok(isGraduated(s), "he did do it once; that record stays");
+  assert.equal(remaining(s), CHAIN_TARGET, "and the whole ten is owed again");
+});
+
+test("a re-check pass does not bump the chain past ten or move best", () => {
+  const s = applyWrite(graduated(), "fifty", at(1)).state;
+  assert.equal(s.current, CHAIN_TARGET);
+  assert.equal(s.best, CHAIN_TARGET);
+});
+
+test("a row finished before re-checks existed is scheduled, not stranded", () => {
+  // Seventeen of his real words were in this state: ten in a row, graduated,
+  // and no dueAt because the field did not exist yet. Left alone they would
+  // never come due. They are scheduled from the day he finished instead.
+  const s = fromRow("fifty", { current: 10, best: 10, reps: 10, attempts: 10, graduatedAt: NOW });
+  assert.equal(s.checks, 0);
+  assert.ok(isFinished(s));
+  assert.equal(s.dueAt, at(1), "first re-check a day after he finished");
+  assert.equal(checkDue(s, NOW), false);
+  assert.equal(checkDue(s, at(1)), true);
+  // A row that already carries a dueAt keeps it.
+  const kept = fromRow("fifty", { current: 10, graduatedAt: NOW, dueAt: at(7), checks: 2 });
+  assert.equal(kept.dueAt, at(7));
+  assert.equal(kept.checks, 2);
+  // An unfinished old row needs no schedule.
+  assert.equal(fromRow("x", { current: 3, best: 3 }).dueAt, null);
+  assert.deepEqual(fromRow("x", null), newChain("x"));
 });

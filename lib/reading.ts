@@ -504,3 +504,47 @@ export function wpmNormForDate(date: Date = new Date()): number {
   if (m === 11 || m <= 1) return WPM_NORMS_GRADE4.winter; // Dec-Feb
   return WPM_NORMS_GRADE4.spring;
 }
+
+// ── Multiple choice sanity ────────────────────────────────────────────────
+
+export type McqCheck = {
+  /** De-duplicated options, original order. */
+  options: string[];
+  /** Index of the answer within `options`, or -1 when this must not be an MCQ. */
+  answerIndex: number;
+};
+
+/**
+ * Keep an AI-written multiple choice only when exactly one option is right.
+ *
+ * Two ways a model hands over a question with two right answers: the same
+ * option twice with different capitalisation, or a distractor that is also in
+ * its own "acceptable" list. Either one marks a correct pick wrong. When that
+ * happens the question falls back to open text, which is scored against the
+ * whole acceptable list and so cannot punish a right answer.
+ */
+export function checkMcq(
+  options: readonly string[],
+  answerIndex: number,
+  acceptable: readonly string[]
+): McqCheck {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  // Where each distinct option landed, so an answer index that points at a
+  // duplicate still finds the copy that was kept.
+  const at = new Map<string, number>();
+  const kept: string[] = [];
+  let answer = -1;
+  options.forEach((o, i) => {
+    const n = norm(o);
+    if (!n) return;
+    if (!at.has(n)) {
+      at.set(n, kept.length);
+      kept.push(o.trim());
+    }
+    if (i === answerIndex) answer = at.get(n) ?? -1;
+  });
+  if (answer < 0 || kept.length < 2) return { options: kept, answerIndex: -1 };
+  const ok = new Set(acceptable.map(norm));
+  const secondRight = kept.some((o, i) => i !== answer && ok.has(norm(o)));
+  return { options: kept, answerIndex: secondRight ? -1 : answer };
+}

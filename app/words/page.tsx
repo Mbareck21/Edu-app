@@ -4,7 +4,7 @@ import BottomNav from "@/components/ui/BottomNav";
 import StuckBoard from "@/components/stuck/StuckBoard";
 import { SpellChain } from "@/lib/models/SpellChain";
 import { connectDB } from "@/lib/db";
-import { newChain, type ChainState } from "@/lib/spell-chain";
+import { fromRow, type ChainState } from "@/lib/spell-chain";
 import { getPool } from "@/lib/word-source";
 
 export const dynamic = "force-dynamic";
@@ -27,16 +27,7 @@ export default async function WordsPage() {
   const chains: Record<string, ChainState> = {};
   for (const word of words) {
     const row = rows.find((r) => r.word === word);
-    chains[word] = row
-      ? {
-          word,
-          current: Number(row.current) || 0,
-          best: Number(row.best) || 0,
-          reps: Number(row.reps) || 0,
-          attempts: Number(row.attempts) || 0,
-          graduatedAt: row.graduatedAt ? new Date(row.graduatedAt).toISOString() : null,
-        }
-      : newChain(word);
+    chains[word] = fromRow(word, row);
   }
 
   return (

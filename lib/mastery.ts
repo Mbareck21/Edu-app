@@ -11,18 +11,15 @@
 // that clause was really buying is now enforced objectively in scheduleSkill.
 
 import { SKILL_IDS, type ClientWord, type SkillId, type SkillState } from "@/lib/models/WordList";
+import { MS_PER_DAY, skillGapDays } from "@/lib/spacing";
 
 export const KNOWN_STREAK = 3;
 export const MASTERED_STREAK = 4;
 /** Days to the next review, indexed by streak (see docs/pedagogy.md). */
-export const SKILL_LADDER_DAYS = [1, 3, 7, 16, 35, 90] as const;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/** Gap in days after `streak` right answers in a row. */
-export function skillGapDays(streak: number): number {
-  const i = Math.max(1, Math.floor(streak)) - 1;
-  return SKILL_LADDER_DAYS[Math.min(i, SKILL_LADDER_DAYS.length - 1)];
-}
+// The ladder lives in lib/spacing.ts, which imports nothing, so pure modules
+// that run in the browser can share it without dragging the model along.
+// Re-exported here so existing callers and tests keep working.
+export { SKILL_LADDER_DAYS, skillGapDays } from "@/lib/spacing";
 
 export type Knowledge = "new" | "learning" | "known" | "mastered";
 

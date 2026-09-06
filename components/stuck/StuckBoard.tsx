@@ -7,7 +7,14 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ChainRunner from "@/components/stuck/ChainRunner";
 import type { WordSense } from "@/components/stuck/ChainRunner";
-import { CHAIN_TARGET, ROTATE_WIDTH, type ChainState } from "@/lib/spell-chain";
+import {
+  CHAIN_TARGET,
+  ROTATE_WIDTH,
+  checkDue,
+  isFinished,
+  newChain,
+  type ChainState,
+} from "@/lib/spell-chain";
 import type { ClientWordList } from "@/lib/models/WordList";
 
 export type StuckBoardProps = {
@@ -33,8 +40,16 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
   const [note, setNote] = useState<string | null>(null);
   const [running, setRunning] = useState<string[] | null>(null);
 
-  const working = words.filter((w) => (state[w]?.current ?? 0) < CHAIN_TARGET);
-  const finished = words.filter((w) => (state[w]?.current ?? 0) >= CHAIN_TARGET);
+  // "Finished" is not forever. A word that hit ten comes back for one blind
+  // write on the spacing ladder; when that falls due it is a working word
+  // again until he passes it, and a miss puts it back to zero.
+  const nowIso = new Date().toISOString();
+  const needs = (w: string) => {
+    const c = state[w];
+    return !c || !isFinished(c) || checkDue(c, nowIso);
+  };
+  const working = words.filter(needs);
+  const finished = words.filter((w) => !needs(w));
 
   async function add() {
     if (!text.trim() || busy) return;
@@ -59,7 +74,7 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
         const out = { ...s };
         for (const w of next) {
           if (!out[w]) {
-            out[w] = { word: w, current: 0, best: 0, reps: 0, attempts: 0, graduatedAt: null };
+            out[w] = newChain(w);
           }
         }
         return out;
@@ -169,8 +184,9 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
                         </p>
                       ) : null}
                       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                        {done} of {CHAIN_TARGET} in a row
-                        {c && c.best > done ? ` · best ${c.best}` : ""}
+                        {c && checkDue(c, nowIso)
+                          ? "Check it again — one write"
+                          : `${done} of ${CHAIN_TARGET} in a row${c && c.best > done ? ` · best ${c.best}` : ""}`}
                       </p>
                     </div>
                     <button

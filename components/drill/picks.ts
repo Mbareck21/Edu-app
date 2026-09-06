@@ -6,7 +6,7 @@
  * server-only — build the items in the page and pass them to the runner.
  */
 
-import { dueSkills, skillDue } from "@/lib/mastery";
+import { KNOWN_STREAK, dueSkills, skillDue } from "@/lib/mastery";
 import type { Rng } from "@/lib/math/types";
 import { orderByNeed } from "@/lib/practice-order";
 import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList";
@@ -43,29 +43,50 @@ export function isDue(word: SkillsOnly, now: Date): boolean {
 }
 
 export type SourceCounts = {
+  /** Words still to learn, across every list. */
   all: number;
+  /** Every word, learned or not. */
+  total: number;
   weak: number;
   due: number;
-  lists: { listId: string; name: string; count: number }[];
+  /** Sorted so the lists with the most left come first and finished ones sink. */
+  lists: { listId: string; name: string; total: number; toGo: number }[];
 };
+
+/**
+ * A word he has actually got: produced it at least once and holds a streak of
+ * KNOWN_STREAK on every skill. Mirrors the "known" rule in lib/mastery.ts's
+ * wordKnowledge, on the skills alone, which is all a drill list carries.
+ */
+export function isSettled(word: SkillsOnly): boolean {
+  const produced = word.skills.spell.correct >= 1 || word.skills.use.correct >= 1;
+  return produced && SKILL_IDS.every((id) => word.skills[id].streak >= KNOWN_STREAK);
+}
 
 /** The numbers on the source chips. */
 export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
+  // The chips used to show plain totals, so a list he had mastered looked
+  // exactly like one he had never opened. They report what is LEFT now.
   let all = 0;
+  let total = 0;
   let weak = 0;
   let due = 0;
-  for (const list of lists) {
-    all += list.words.length;
-    for (const word of list.words) {
+  const perList = lists.map((l) => {
+    const toGo = l.words.filter((w) => !isSettled(w)).length;
+    all += toGo;
+    total += l.words.length;
+    for (const word of l.words) {
       if (isWeak(word)) weak++;
       if (isDue(word, now)) due++;
     }
-  }
+    return { listId: l.listId, name: l.name, total: l.words.length, toGo };
+  });
   return {
     all,
+    total,
     weak,
     due,
-    lists: lists.map((l) => ({ listId: l.listId, name: l.name, count: l.words.length })),
+    lists: perList.sort((a, b) => b.toGo - a.toGo),
   };
 }
 

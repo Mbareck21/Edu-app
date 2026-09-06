@@ -13,7 +13,7 @@ import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/compon
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { SpellChain } from "@/lib/models/SpellChain";
-import { ROTATE_WIDTH, newChain, type ChainState } from "@/lib/spell-chain";
+import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
 import { connectDB } from "@/lib/db";
 import { getPractice } from "@/lib/word-source";
 
@@ -88,16 +88,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
     }
     for (const word of chosen) {
       const row = rows.find((r) => r.word === word);
-      chains[word] = row
-        ? {
-            word,
-            current: Number(row.current) || 0,
-            best: Number(row.best) || 0,
-            reps: Number(row.reps) || 0,
-            attempts: Number(row.attempts) || 0,
-            graduatedAt: row.graduatedAt ? new Date(row.graduatedAt).toISOString() : null,
-          }
-        : newChain(word);
+      chains[word] = fromRow(word, row);
       if (!senses[word]) senses[word] = { clue: "", arabic: "" };
     }
     return (

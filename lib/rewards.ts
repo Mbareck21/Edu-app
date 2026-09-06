@@ -13,6 +13,7 @@ import type {
 } from "@/lib/types";
 import { STEP_PASS_PCT, stepById } from "@/lib/types";
 import type { IconName } from "@/components/ui/Icon";
+import { sessionPct, sessionPerfect } from "@/lib/session-score";
 
 export const XP = {
   correct: 10,
@@ -282,7 +283,9 @@ export function applySession(
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const ms = Math.max(0, Math.floor(result.ms) || 0);
-  const perfect = result.perfect && answered > 0 && correct === answered;
+  // The client's flag is a claim; the rule decides. A timed run has to clear
+  // the floor before it is perfect — see lib/session-score.ts.
+  const perfect = result.perfect && sessionPerfect({ answered, correct, timed: result.timed });
 
   // Streak: a new day extends it, a gap resets it to 1.
   const last = profile.streak.lastActiveDay;
@@ -313,7 +316,7 @@ export function applySession(
     at: now.at.toISOString(),
     kind: result.kind,
     ref: result.ref,
-    pct: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+    pct: sessionPct({ answered, correct, timed: result.timed }),
     xp: xpGained,
     ms,
   };

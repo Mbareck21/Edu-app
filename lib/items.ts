@@ -363,6 +363,59 @@ function otherWords(target: string, pool: ClientWord[]): ClientWord[] {
  * Three wrong words for a 4-option question. Near misses first: same first
  * letter, then the same prefix, then anything else on the list, then filler.
  */
+/** Words that carry no meaning for telling two clues apart. */
+const CLUE_STOP = new Set([
+  "a", "an", "the", "to", "of", "in", "on", "or", "and", "is", "it", "its", "as",
+  "by", "for", "with", "that", "this", "you", "your", "we", "he", "she", "they",
+  "like", "one", "each", "way", "when", "where", "what", "how", "so", "up", "at",
+  "from", "into", "than", "then", "some", "more", "very", "not", "no", "all",
+  "something", "someone", "number", "numbers", "word", "words", "thing", "things",
+]);
+
+/** "plants" and "plant" are one idea; strip the plural before comparing. */
+function stem(t: string): string {
+  if (t.length > 4 && t.endsWith("es")) return t.slice(0, -2);
+  if (t.length > 3 && t.endsWith("s")) return t.slice(0, -1);
+  return t;
+}
+
+function clueTokens(clue: string): Set<string> {
+  return new Set(
+    clue
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2 && !CLUE_STOP.has(t))
+      .map(stem)
+  );
+}
+
+/** Content words two clues share. */
+const CLUE_OVERLAP = 3;
+
+/**
+ * Would this word be a SECOND right answer to the target's clue?
+ *
+ * The one he remembers: "Which word means this?" with the clue for "value",
+ * and "place value" sitting among the options — a perfectly good answer that
+ * was marked wrong. Two cheap tests catch the real cases:
+ *   - one word's tokens sit inside the other's (value / place value);
+ *   - the two clues share several content words (compost / fertilizer both
+ *     talk about food and soil and plants).
+ * A distractor is meant to be wrong. If it might be right, it is not one.
+ */
+export function tooClose(target: ClientWord, candidate: ClientWord): boolean {
+  const a = target.word.toLowerCase().split(/\s+/);
+  const b = candidate.word.toLowerCase().split(/\s+/);
+  const contained = a.every((t) => b.includes(t)) || b.every((t) => a.includes(t));
+  if (contained) return true;
+  const ta = clueTokens(target.clue || "");
+  const tb = clueTokens(candidate.clue || "");
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return shared >= CLUE_OVERLAP;
+}
+
 export function wordDistractors(
   target: string,
   pool: ClientWord[],
@@ -370,7 +423,11 @@ export function wordDistractors(
   count = 3
 ): string[] {
   const t = target.toLowerCase();
-  const others = otherWords(target, pool).map((w) => w.word.toLowerCase());
+  const targetWord = pool.find((w) => w.word.toLowerCase() === t);
+  // Never offer a word that could also be right. See tooClose.
+  const others = otherWords(target, pool)
+    .filter((w) => !targetWord || !tooClose(targetWord, w))
+    .map((w) => w.word.toLowerCase());
   const parts = latinPartsOf(t);
   const prefix = parts.length === 2 && parts[0].endsWith("-") ? parts[0].slice(0, -1) : "";
 
