@@ -22,6 +22,8 @@ import {
   cleanRounds,
   toClientMathProgress,
 } from "@/lib/models/MathProgress";
+import { TimesFact } from "@/lib/models/TimesFact";
+import { allFactKeys, factFromRow, isKnown } from "@/lib/tables";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +102,9 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
 
 export default async function MathPage() {
   await connectDB();
-  const docs = await MathProgress.find().lean();
+  const [docs, factRows] = await Promise.all([MathProgress.find().lean(), TimesFact.find().lean()]);
+  const tablesKnown = factRows.filter((r) => isKnown(factFromRow(r.key, r))).length;
+  const tablesTotal = allFactKeys().length;
   const stats = new Map<string, Stat>();
   for (const doc of docs) {
     const p = toClientMathProgress(doc);
@@ -154,6 +158,28 @@ export default async function MathPage() {
       {unitSkills.map((skill) => (
         <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} school />
       ))}
+
+      {/* Times tables: a section of its own, because it is a grid to fill rather
+          than a skill with a level, and because his father asked for it by name. */}
+      <Card className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-display text-lg font-bold">Times tables</p>
+            <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+              {tablesKnown === 0
+                ? "Two to nine. Light up the grid."
+                : `${tablesKnown} of ${tablesTotal} facts lit`}
+            </p>
+          </div>
+          <Link
+            href="/math/tables"
+            className={buttonClass({ color: "purple", size: "md" })}
+            style={buttonStyle({ color: "purple" })}
+          >
+            {tablesKnown === 0 ? "Start" : "Go on"}
+          </Link>
+        </div>
+      </Card>
 
       <h2 className="mt-6 mb-1 font-display text-lg font-bold">All skills</h2>
       {MATH_UNITS.map((u) => {

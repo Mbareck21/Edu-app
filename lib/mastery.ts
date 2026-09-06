@@ -11,10 +11,9 @@
 // that clause was really buying is now enforced objectively in scheduleSkill.
 
 import { SKILL_IDS, type ClientWord, type SkillId, type SkillState } from "@/lib/models/WordList";
-import { MS_PER_DAY, skillGapDays } from "@/lib/spacing";
+import { KNOWN_STREAK, MASTERED_STREAK, MS_PER_DAY, skillGapDays } from "@/lib/spacing";
 
-export const KNOWN_STREAK = 3;
-export const MASTERED_STREAK = 4;
+export { KNOWN_STREAK, MASTERED_STREAK } from "@/lib/spacing";
 /** Days to the next review, indexed by streak (see docs/pedagogy.md). */
 // The ladder lives in lib/spacing.ts, which imports nothing, so pure modules
 // that run in the browser can share it without dragging the model along.

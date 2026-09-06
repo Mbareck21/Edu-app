@@ -18,6 +18,11 @@ export const SKILL_LADDER_DAYS = [1, 3, 7, 16, 35, 90] as const;
 
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** Right answers in a row, each on or after its due date, before a thing is "known". */
+export const KNOWN_STREAK = 3;
+/** And before it is "mastered". */
+export const MASTERED_STREAK = 4;
+
 /** Gap in days after `streak` right answers in a row. */
 export function skillGapDays(streak: number): number {
   const i = Math.max(1, Math.floor(streak)) - 1;
