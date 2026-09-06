@@ -378,3 +378,12 @@ h3,
 .print-only {
   display: none;
 }
+
+/* Pull-to-refresh off. He swipes down at the top of a page meaning to scroll,
+   the browser reloads it, and the lesson he was in resets to the start.
+   overscroll-behavior on the scrolling root is what Chrome and Samsung
+   Internet honour; it leaves normal scrolling exactly as it was. */
+html,
+body {
+  overscroll-behavior-y: none;
+}

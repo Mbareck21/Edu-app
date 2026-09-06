@@ -18,6 +18,8 @@ import { mulberry32 } from "@/lib/math/rng";
 import { insertRepeat, repeatsFor, SESSION_REPEAT_CAP } from "@/lib/repetition";
 import type { Rng } from "@/lib/math/types";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { clearProgress, saveProgress } from "@/lib/resume";
+import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained, type GainedBadge } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
@@ -65,7 +67,38 @@ export type ItemRunnerProps = {
   report?: boolean;
   /** Replaces "Go back" on the empty screen. */
   emptyAction?: { label: string; onClick: () => void };
+  /**
+   * Storage key for resuming this exact run after a reload. Pages build it
+   * from the route and the run seed, so "Again" is a fresh start. Without one
+   * the run does not resume.
+   */
+  resumeKey?: string;
 };
+
+/** Everything a reload needs to put him back mid-run. */
+type Saved = {
+  queueIds: string[];
+  attempts: Attempt[];
+  answeredIds: string[];
+  streak: number;
+  round: number;
+  plans: [string, { left: number; index: number }][];
+  repeatsScheduled: number;
+};
+
+function isSaved(v: unknown): v is Saved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Partial<Saved>;
+  return (
+    Array.isArray(o.queueIds) &&
+    Array.isArray(o.attempts) &&
+    Array.isArray(o.answeredIds) &&
+    typeof o.streak === "number" &&
+    typeof o.round === "number" &&
+    Array.isArray(o.plans) &&
+    typeof o.repeatsScheduled === "number"
+  );
+}
 
 type Attempt = {
   word?: string;
@@ -133,7 +166,18 @@ function payloads(post: RunnerPost, all: Attempt[], ms: number): SessionResult[]
   ];
 }
 
-export default function ItemRunner({
+/**
+ * Reads any saved progress for this run and mounts the runner on it. The key
+ * flips once the saved value arrives after hydration, so the inner component
+ * remounts with it instead of setting state inside an effect.
+ */
+export default function ItemRunner(props: ItemRunnerProps) {
+  const saved = useSavedRun(props.resumeKey ?? "", isSaved);
+  const initial = props.resumeKey ? saved : null;
+  return <ItemRunnerInner key={initial ? "resumed" : "fresh"} {...props} initial={initial} />;
+}
+
+function ItemRunnerInner({
   items,
   post,
   exitHref,
@@ -150,19 +194,27 @@ export default function ItemRunner({
   counter = false,
   report = false,
   emptyAction,
-}: ItemRunnerProps) {
-  const [queue, setQueue] = useState<LessonItem[]>(items);
+  resumeKey,
+  initial,
+}: ItemRunnerProps & { initial: Saved | null }) {
+  const [queue, setQueue] = useState<LessonItem[]>(() => {
+    if (!initial) return items;
+    // The same seed rebuilt the same items; put them back in the saved order.
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const restored = initial.queueIds.map((id) => byId.get(id)).filter((i): i is LessonItem => Boolean(i));
+    return restored.length > 0 ? restored : items;
+  });
   const [chosen, setChosen] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [almost, setAlmost] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [streak, setStreak] = useState(initial?.streak ?? 0);
   /** Bumped every time the queue moves, so a returning item starts fresh. */
-  const [round, setRound] = useState(0);
+  const [round, setRound] = useState(initial?.round ?? 0);
 
-  const answeredIds = useRef<Set<string>>(new Set());
-  const attempts = useRef<Attempt[]>([]);
+  const answeredIds = useRef<Set<string>>(new Set(initial?.answeredIds ?? []));
+  const attempts = useRef<Attempt[]>(initial ? [...initial.attempts] : []);
   const startedAt = useRef(0);
   // Time on task, not time on the clock — see lib/time-on-task.ts.
   const watch = useRef<Stopwatch | null>(null);
@@ -171,8 +223,10 @@ export default function ItemRunner({
   const posted = useRef(false);
   // Returns still owed per item id. A ref, not state: repeats must never touch
   // the score, and the plan only changes inside advance() anyway.
-  const repeatPlans = useRef<Map<string, { left: number; index: number }>>(new Map());
-  const repeatsScheduled = useRef(0);
+  const repeatPlans = useRef<Map<string, { left: number; index: number }>>(
+    new Map(initial?.plans ?? [])
+  );
+  const repeatsScheduled = useRef(initial?.repeatsScheduled ?? 0);
 
   const total = items.length;
   const remaining = new Set(queue.map((i) => i.id)).size;
@@ -212,6 +266,7 @@ export default function ItemRunner({
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
+    if (resumeKey) clearProgress(resumeKey);
     const ms = watch.current?.read() ?? 0;
     const all = attempts.current;
     const answered = all.length;
@@ -263,7 +318,7 @@ export default function ItemRunner({
         words: report ? firstTryWords(all) : [],
       });
     })();
-  }, [done, chest, post, report]);
+  }, [done, chest, post, report, resumeKey]);
 
   function onAnswer(given: string) {
     if (!current || feedback || current.kind === "learn-card") return;
@@ -344,6 +399,18 @@ export default function ItemRunner({
     setRound((r) => r + 1);
     watch.current?.mark();
     itemStartedAt.current = Date.now();
+    // Where he is, so a reload lands here and not on the first card.
+    if (resumeKey) {
+      saveProgress(resumeKey, {
+        queueIds: next.map((i) => i.id),
+        attempts: attempts.current,
+        answeredIds: [...answeredIds.current],
+        streak,
+        round: round + 1,
+        plans: [...repeatPlans.current.entries()],
+        repeatsScheduled: repeatsScheduled.current,
+      });
+    }
   }
 
   if (items.length === 0) {

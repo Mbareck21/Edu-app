@@ -9,6 +9,8 @@ import LessonComplete from "@/components/ui/LessonComplete";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { mulberry32 } from "@/lib/math/rng";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
+import { useSavedRun } from "@/components/ui/useSavedRun";
 import { sfx } from "@/lib/sfx";
 import {
   structureSession,
@@ -57,7 +59,37 @@ function SignalText({
   return <p className="rounded-tile px-2 py-1 text-[19px] leading-[1.7]">{parts}</p>;
 }
 
-export default function StructureRunner({ seed }: StructureRunnerProps) {
+/**
+ * Where he was: which passage, which he has missed, and the seed that built
+ * the session — the page mints a new seed per request, so without it a
+ * reload would deal a different set of passages.
+ */
+type Saved = { seed: number; idx: number; missed: boolean[] };
+
+function isSaved(v: unknown): v is Saved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as { seed?: unknown; idx?: unknown; missed?: unknown };
+  return (
+    typeof o.seed === "number" &&
+    typeof o.idx === "number" &&
+    Array.isArray(o.missed) &&
+    o.missed.every((b) => typeof b === "boolean")
+  );
+}
+
+export default function StructureRunner(props: StructureRunnerProps) {
+  const key = resumeKey("structure", "lesson", "current");
+  const saved = useSavedRun(key, isSaved);
+  return <StructureRunnerInner key={saved ? "resumed" : "fresh"} {...props} saveKey={key} initial={saved} />;
+}
+
+function StructureRunnerInner({
+  seed: freshSeed,
+  saveKey,
+  initial,
+}: StructureRunnerProps & { saveKey: string; initial: Saved | null }) {
+  // A resumed run keeps the seed that dealt its passages.
+  const seed = initial ? initial.seed : freshSeed;
   // Same seed on the server and here, so the options never jump on hydration.
   // The seed changes every visit, so the passages and their order do too —
   // walking the five in declaration order taught him the positions, not the
@@ -67,10 +99,13 @@ export default function StructureRunner({ seed }: StructureRunnerProps) {
     [seed]
   );
 
-  const [phase, setPhase] = useState<Phase>("intro");
-  const [idx, setIdx] = useState(0);
+  // A saved run skips the intro: he has read it and was mid-lesson.
+  const [phase, setPhase] = useState<Phase>(initial ? "play" : "intro");
+  const [idx, setIdx] = useState(initial ? initial.idx : 0);
   /** Passages he missed on the first try. */
-  const [missed, setMissed] = useState<boolean[]>(() => rounds.map(() => false));
+  const [missed, setMissed] = useState<boolean[]>(() =>
+    initial && initial.missed.length === rounds.length ? initial.missed : rounds.map(() => false)
+  );
   const [solved, setSolved] = useState(false);
   /** His last wrong pick — drives the "see the difference" panel. */
   const [picked, setPicked] = useState<TextStructureId | null>(null);
@@ -96,7 +131,11 @@ export default function StructureRunner({ seed }: StructureRunnerProps) {
       sfx.correct();
     } else {
       setPicked(id);
-      setMissed((m) => m.map((v, i) => (i === idx ? true : v)));
+      setMissed((m) => {
+        const next = m.map((v, i) => (i === idx ? true : v));
+        saveProgress(saveKey, { seed, idx, missed: next });
+        return next;
+      });
       sfx.wrong();
       setShake(true);
       setTimeout(() => setShake(false), 420);
@@ -109,7 +148,9 @@ export default function StructureRunner({ seed }: StructureRunnerProps) {
       setIdx(idx + 1);
       setSolved(false);
       setPicked(null);
+      saveProgress(saveKey, { seed, idx: idx + 1, missed });
     } else {
+      clearProgress(saveKey);
       setElapsedMs(watch.current?.read() ?? 0);
       setPhase("done");
     }

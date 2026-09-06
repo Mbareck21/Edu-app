@@ -10,6 +10,7 @@ import {
   buildReviewSession,
 } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
+import { resumeKey } from "@/lib/resume";
 import { type ClientWordList } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +76,7 @@ export default async function TodayBeatPage({
         {...shared}
         items={items}
         post={{ ref: "quest:review" }}
+        resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
         accent="green"
         title={TITLE.review}
         subtitle="Everything that was due today."
@@ -99,6 +101,7 @@ export default async function TodayBeatPage({
         {...shared}
         items={items}
         post={{ ref: "quest:new", listId: unit?._id }}
+        resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
         accent="blue"
         title={TITLE["new-words"]}
         subtitle={unit?.name}
@@ -115,6 +118,7 @@ export default async function TodayBeatPage({
       {...shared}
       items={items}
       post={{ ref: "quest:production", listId: unit?._id }}
+      resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
       accent="purple"
       title={TITLE.production}
       subtitle={unit?.name}

@@ -10,6 +10,7 @@ import { todayKey } from "@/lib/day";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
 import { orderByNeed } from "@/lib/practice-order";
+import { resumeKey } from "@/lib/resume";
 import { skillDue } from "@/lib/mastery";
 import { SpellChain } from "@/lib/models/SpellChain";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
@@ -154,6 +155,7 @@ export default async function StepPage({
       key={runKey}
       items={items}
       post={{ ref: `${list._id}:${step}`, listId: list._id, step }}
+      resumeKey={resumeKey("items", `${list._id}:${step}`, runKey)}
       exitHref={pathHref}
       accent={info.accent}
       title={info.doneTitle}

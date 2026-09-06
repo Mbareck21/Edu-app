@@ -10,6 +10,8 @@ import RunnerHeader from "@/components/ui/RunnerHeader";
 import { clock } from "@/components/ui/time";
 import { buildSession, getSkill, gradeAnswer, type Level, type MathSkillId } from "@/lib/math";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
+import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
@@ -31,10 +33,52 @@ function freshRun(seed: number): Run {
   return { seed, queue: Array.from({ length: COUNT }, (_, i) => i) };
 }
 
-export default function MathSession({ skillId, level, seed }: MathSessionProps) {
+/**
+ * What a reload needs to put him back where he was. The seed is in here on
+ * purpose: the page mints a new one on every request, so a reload would
+ * otherwise rebuild a different set of questions under him. Resuming means
+ * the same questions, in the saved order.
+ */
+type Saved = { seed: number; queue: number[]; firstTry: Record<number, boolean> };
+
+function isSaved(v: unknown): v is Saved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as { seed?: unknown; queue?: unknown; firstTry?: unknown };
+  return (
+    typeof o.seed === "number" &&
+    Array.isArray(o.queue) &&
+    o.queue.every((n) => typeof n === "number") &&
+    typeof o.firstTry === "object" &&
+    o.firstTry !== null
+  );
+}
+
+/**
+ * Reads any saved progress for this seed and mounts the session on it. The
+ * key flips once the saved value arrives after hydration, so the inner
+ * component remounts with it rather than setting state in an effect.
+ */
+export default function MathSession(props: MathSessionProps) {
+  // Keyed on the skill and level, not the seed: the seed changes on reload.
+  const key = resumeKey("math", props.skillId, props.level);
+  const saved = useSavedRun(key, isSaved);
+  return (
+    <MathSessionInner key={saved ? "resumed" : "fresh"} {...props} saveKey={key} initial={saved} />
+  );
+}
+
+function MathSessionInner({
+  skillId,
+  level,
+  seed,
+  saveKey,
+  initial,
+}: MathSessionProps & { saveKey: string; initial: Saved | null }) {
   const skill = getSkill(skillId);
 
-  const [run, setRun] = useState<Run>(() => freshRun(seed));
+  const [run, setRun] = useState<Run>(() =>
+    initial ? { seed: initial.seed, queue: initial.queue } : freshRun(seed)
+  );
   const [input, setInput] = useState("");
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
@@ -46,7 +90,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   // Time on task, not time on the clock — see lib/time-on-task.ts.
   const watch = useRef<Stopwatch | null>(null);
   const postedRef = useRef(false);
-  const firstTryRef = useRef<Record<number, boolean>>({});
+  const firstTryRef = useRef<Record<number, boolean>>(initial ? { ...initial.firstTry } : {});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -77,6 +121,7 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
   useEffect(() => {
     if (!done || postedRef.current) return;
     postedRef.current = true;
+    clearProgress(saveKey);
     const ms = watch.current?.read() ?? 0;
     const correct = Object.values(firstTryRef.current).filter(Boolean).length;
     const result: SessionResult = {
@@ -99,14 +144,19 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
         correct,
       });
     });
-  }, [done, questions.length, skillId]);
+  }, [done, questions.length, skillId, saveKey]);
 
   const advance = useCallback(() => {
     watch.current?.mark();
     setInput("");
     setFlash(null);
-    setRun((prev) => ({ ...prev, queue: prev.queue.slice(1) }));
-  }, []);
+    setRun((prev) => {
+      const next = { ...prev, queue: prev.queue.slice(1) };
+      // Where he is, so a reload lands him here and not on question one.
+      saveProgress(saveKey, { seed: next.seed, queue: next.queue, firstTry: firstTryRef.current });
+      return next;
+    });
+  }, [saveKey]);
 
   const check = useCallback(() => {
     if (!question || !input || flash || feedback) return;
@@ -134,8 +184,13 @@ export default function MathSession({ skillId, level, seed }: MathSessionProps) 
     setFeedback(null);
     setInput("");
     setFlash(null);
-    setRun((prev) => ({ ...prev, queue: requeue(prev.queue) }));
-  }, []);
+    setRun((prev) => {
+      const next = { ...prev, queue: requeue(prev.queue) };
+      // A miss reorders the queue and marks a first try; a reload must keep both.
+      saveProgress(saveKey, { seed: next.seed, queue: next.queue, firstTry: firstTryRef.current });
+      return next;
+    });
+  }, [saveKey]);
 
   const playAgain = useCallback(() => {
     postedRef.current = false;

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees and plans live here, git-ignored; not ours to lint.
+    ".claude/**",
+    ".remember/**",
   ]),
 ]);
 

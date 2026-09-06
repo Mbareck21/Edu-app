@@ -14,6 +14,8 @@ import { clock } from "@/components/ui/time";
 import { buildSession, gradeAnswer, mixedSession, type Level, type MathSkillId } from "@/lib/math";
 import type { MathQuestion } from "@/lib/math/types";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
+import { useSavedRun } from "@/components/ui/useSavedRun";
 import { sessionPerfect } from "@/lib/session-score";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { XP, type Gained } from "@/lib/rewards";
@@ -63,7 +65,24 @@ function drawQuestions(
  * Math drill: a relaxed run of N questions, or as many as he can get in 60 or
  * 120 seconds. One session posts at the end either way.
  */
-export default function MathDrillRunner({
+/** What a reload needs to put a relaxed run back where it was. Timed runs do not resume: the clock ran. */
+type Saved = { queue: number[]; firstTry: Record<number, boolean> };
+
+function isSaved(v: unknown): v is Saved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as { queue?: unknown; firstTry?: unknown };
+  return Array.isArray(o.queue) && o.queue.every((n) => typeof n === "number") && typeof o.firstTry === "object" && o.firstTry !== null;
+}
+
+export default function MathDrillRunner(props: MathDrillRunnerProps) {
+  const key = resumeKey("drill-math", `${props.skill}:${props.mode}:${props.count}`, props.seed);
+  const timed = timedSeconds(props.mode) !== null;
+  const saved = useSavedRun(key, isSaved);
+  const initial = timed ? null : saved;
+  return <MathDrillRunnerInner key={initial ? "resumed" : "fresh"} {...props} saveKey={key} initial={initial} />;
+}
+
+function MathDrillRunnerInner({
   skill,
   skillName,
   level,
@@ -71,7 +90,9 @@ export default function MathDrillRunner({
   mode,
   seed,
   againHref,
-}: MathDrillRunnerProps) {
+  saveKey,
+  initial,
+}: MathDrillRunnerProps & { saveKey: string; initial: Saved | null }) {
   const router = useRouter();
   const limit = timedSeconds(mode);
   const timed = limit !== null;
@@ -79,7 +100,7 @@ export default function MathDrillRunner({
   const [batch, setBatch] = useState(0);
   const [at, setAt] = useState(0);
   const [queue, setQueue] = useState<number[]>(() =>
-    timed ? [] : Array.from({ length: count }, (_, i) => i)
+    timed ? [] : initial ? initial.queue : Array.from({ length: count }, (_, i) => i)
   );
   const [input, setInput] = useState("");
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
@@ -97,7 +118,7 @@ export default function MathDrillRunner({
   const askedAt = useRef(0);
   const posted = useRef(false);
   const fastRef = useRef(0);
-  const firstTry = useRef<Record<number, boolean>>({});
+  const firstTry = useRef<Record<number, boolean>>(initial ? { ...initial.firstTry } : {});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Timed rounds draw a fresh batch whenever one runs out.
@@ -132,6 +153,7 @@ export default function MathDrillRunner({
   useEffect(() => {
     if (!done || posted.current) return;
     posted.current = true;
+    clearProgress(saveKey);
     const ms = watch.current?.read() ?? 0;
     const answered = timed
       ? tally.answered
@@ -163,7 +185,7 @@ export default function MathDrillRunner({
         correct,
       });
     });
-  }, [done, timed, tally, questions.length, skill, mode]);
+  }, [done, timed, tally, questions.length, skill, mode, saveKey]);
 
   const nextTimed = useCallback(() => {
     setInput("");
@@ -210,22 +232,31 @@ export default function MathDrillRunner({
         setInput("");
         setFlash(null);
         askedAt.current = Date.now();
-        setQueue((q) => q.slice(1));
+        setQueue((q) => {
+          const next = q.slice(1);
+          saveProgress(saveKey, { queue: next, firstTry: firstTry.current });
+          return next;
+        });
       }, FLASH_MS);
       return;
     }
     setFlash("wrong");
     setShakeKey((k) => k + 1);
     setFeedback({ state: "wrong", title: `The answer is ${question.answer}`, line: question.how });
-  }, [feedback, flash, input, nextTimed, queue, question, timed]);
+  }, [feedback, flash, input, nextTimed, queue, question, saveKey, timed]);
 
   const afterWrong = useCallback(() => {
     setFeedback(null);
     setInput("");
     setFlash(null);
     askedAt.current = Date.now();
-    setQueue(requeue);
-  }, []);
+    setQueue((q) => {
+      const next = requeue(q);
+      // A miss reorders the queue and marks a first try; a reload must keep both.
+      saveProgress(saveKey, { queue: next, firstTry: firstTry.current });
+      return next;
+    });
+  }, [saveKey]);
 
   if (done) {
     if (!outcome) {
