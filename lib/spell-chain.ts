@@ -186,6 +186,19 @@ export function applyWrite(
   const correct = spellingKey(typed) === spellingKey(state.word);
   const attempts = state.attempts + 1;
 
+  if (isFinished(state) && !checkDue(state, nowIso)) {
+    // Finished and not yet due: extra practice, not a check. It must not move
+    // the ladder — six writes in one sitting would otherwise push a word out
+    // ninety days in an evening. A miss is still a miss.
+    if (!correct) {
+      return {
+        state: { ...state, current: 0, attempts, checks: 0, dueAt: null },
+        correct: false,
+      };
+    }
+    return { state: { ...state, reps: state.reps + 1, attempts }, correct: true };
+  }
+
   if (isFinished(state)) {
     // A re-check. One blind write decides it.
     if (!correct) {

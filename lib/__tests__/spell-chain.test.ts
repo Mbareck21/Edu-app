@@ -220,3 +220,28 @@ test("a row finished before re-checks existed is scheduled, not stranded", () =>
   assert.equal(fromRow("x", { current: 3, best: 3 }).dueAt, null);
   assert.deepEqual(fromRow("x", null), newChain("x"));
 });
+
+test("a check counts once, when due — extra writes do not climb the ladder", () => {
+  // Rotation can bring a finished word round several times in one sitting.
+  // Only the write that falls on or after dueAt is a check; the rest are
+  // practice and leave checks and dueAt exactly where they were.
+  let s = graduated();
+  const dueAfterFinish = s.dueAt;
+  s = applyWrite(s, "fifty", NOW).state;      // same evening: not due yet
+  s = applyWrite(s, "fifty", NOW).state;
+  assert.equal(s.checks, 0);
+  assert.equal(s.dueAt, dueAfterFinish, "practice did not move the schedule");
+  s = applyWrite(s, "fifty", at(1)).state;    // now due: this one is the check
+  assert.equal(s.checks, 1);
+  assert.equal(s.dueAt, at(1 + 3));
+  s = applyWrite(s, "fifty", at(1)).state;    // straight after: not due again
+  assert.equal(s.checks, 1, "a second write the same day is not a second check");
+  assert.equal(s.dueAt, at(1 + 3));
+});
+
+test("a miss on a finished word resets it even when no check was due", () => {
+  let s = graduated();
+  s = applyWrite(s, "fefte", NOW).state;
+  assert.equal(s.current, 0);
+  assert.ok(!isFinished(s));
+});

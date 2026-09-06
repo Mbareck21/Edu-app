@@ -50,6 +50,11 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
   };
   const working = words.filter(needs);
   const finished = words.filter((w) => !needs(w));
+  // Due checks first — each needs one write and then leaves the sitting —
+  // then the words still being learned, which rotate for the rest of it.
+  const checks = working.filter((w) => state[w] && checkDue(state[w], nowIso));
+  const learning = working.filter((w) => !checks.includes(w));
+  const sitting = [...checks, ...learning.slice(0, ROTATE_WIDTH)];
 
   async function add() {
     if (!text.trim() || busy) return;
@@ -149,14 +154,19 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
             fullWidth
             size="lg"
             color="green"
-            onClick={() => setRunning(working.slice(0, ROTATE_WIDTH))}
+            onClick={() => setRunning(sitting)}
           >
             Start writing
           </Button>
           <p className="mt-2 text-center text-sm" style={{ color: "var(--color-muted)" }}>
-            {working.length === 1
-              ? "One word to fix."
-              : `${Math.min(working.length, ROTATE_WIDTH)} words this time, taking turns.`}
+            {[
+              checks.length > 0 ? `${checks.length} to check` : "",
+              learning.length > 0
+                ? `${Math.min(learning.length, ROTATE_WIDTH)} to write, taking turns`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ") || "One word to fix."}
           </p>
         </div>
       ) : (

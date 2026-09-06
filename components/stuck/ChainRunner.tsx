@@ -10,6 +10,7 @@ import { hintFor } from "@/lib/number-words";
 import { sfx } from "@/lib/sfx";
 import {
   CHAIN_TARGET,
+  checkDue,
   isFinished,
   rotate,
   rungFor,
@@ -74,6 +75,15 @@ export default function ChainRunner({
   onDone,
 }: ChainRunnerProps) {
   const [state, setState] = useState<Record<string, ChainState>>(chains);
+  /**
+   * The words still in this sitting. A word leaves the moment it needs no
+   * more writing today — it passed its one re-check, or it just reached ten —
+   * so a due check gets exactly one write and the rest of the sitting goes to
+   * words that still need it. Rotation runs over whatever is left.
+   */
+  const [active, setActive] = useState<string[]>(words);
+  /** What happened this sitting, for the finish screen. State, not a ref: it is read during render. */
+  const [log, setLog] = useState<{ checked: string[]; finished: string[] }>({ checked: [], finished: [] });
   const [writeIndex, setWriteIndex] = useState(0);
   /** Advances only on a correct write, so a miss does not rotate away. */
   const [turn, setTurn] = useState(0);
@@ -102,8 +112,8 @@ export default function ChainRunner({
   }, []);
 
   const word = useMemo(
-    () => repairWord ?? rotate(words, turn),
-    [repairWord, words, turn]
+    () => repairWord ?? rotate(active, turn),
+    [repairWord, active, turn]
   );
   const chain = state[word];
   const remainingNow = chain ? Math.max(0, CHAIN_TARGET - chain.current) : CHAIN_TARGET;
@@ -134,13 +144,26 @@ export default function ChainRunner({
       const data = await res.json();
       if (!res.ok) return;
 
-      setState((s) => ({ ...s, [word]: data.state }));
+      const nowIso = new Date().toISOString();
+      const before = state[word];
+      const after: ChainState = data.state;
+      setState((s) => ({ ...s, [word]: after }));
+      let remaining = active;
       if (data.correct) {
         correctRef.current += 1;
         sfx.correct();
         setMissed(null);
         setAfterMiss(false);
         setRepairWord(null);
+        // Needs no more writing today: passed its check, or just hit ten.
+        if (isFinished(after) && !checkDue(after, nowIso)) {
+          const wasCheck = Boolean(before && isFinished(before));
+          setLog((l) =>
+            wasCheck ? { ...l, checked: [...l.checked, word] } : { ...l, finished: [...l.finished, word] }
+          );
+          remaining = active.filter((w) => w !== word);
+          setActive(remaining);
+        }
         setTurn((t) => t + 1);
       } else {
         sfx.wrong();
@@ -152,7 +175,7 @@ export default function ChainRunner({
       }
 
       const next = writeIndex + 1;
-      if (next >= SITTING_WRITES) {
+      if (next >= SITTING_WRITES || remaining.length === 0) {
         const ms = watch.current?.read() ?? 0;
         setElapsedMs(ms);
         setDone(true);
@@ -183,26 +206,29 @@ export default function ChainRunner({
     } finally {
       setBusy(false);
     }
-  }, [word, typed, afterMiss, busy, writeIndex, post]);
+  }, [word, typed, afterMiss, busy, writeIndex, post, active, state]);
 
   if (done) {
+    const { checked, finished } = log;
     const best = words.map((w) => state[w]?.current ?? 0);
-    const wonNow = words.filter((w) => {
-      const c = state[w];
-      return Boolean(c) && (state[w]?.current ?? 0) >= CHAIN_TARGET;
-    });
+    const parts: string[] = [];
+    if (finished.length > 0) parts.push(`${finished.join(", ")} — ten in a row.`);
+    if (checked.length > 0) parts.push(`Still got ${checked.join(", ")}.`);
+    const wonNow = finished.length > 0 || checked.length > 0;
     return (
       <LessonComplete
-        title={wonNow.length > 0 ? "You finished a word!" : "Writing done."}
+        title={
+          finished.length > 0 ? "You finished a word!" : checked.length > 0 ? "Still yours." : "Writing done."
+        }
         subtitle={
-          wonNow.length > 0
-            ? `${wonNow.join(", ")} — ten in a row.`
+          parts.length > 0
+            ? parts.join(" ")
             : `Your best run today: ${Math.max(0, ...best)} in a row.`
         }
         xp={0}
         ms={elapsedMs}
         accuracy={null}
-        perfect={wonNow.length > 0}
+        perfect={wonNow}
         primary={
           onDone
             ? { label: "Done", onClick: onDone }
