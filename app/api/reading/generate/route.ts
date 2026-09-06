@@ -27,6 +27,7 @@ import {
   type PassageKind,
   type QuestionSpec,
   type StoryCast,
+  pickArchived,
 } from "@/lib/reading";
 import { PROFILE_KEY, Profile, READING_SEEN_MAX } from "@/lib/models/Profile";
 import {
@@ -82,6 +83,14 @@ const ResponseShape = z.object({
 
 const MAX_STUDY_WORDS = 12;
 const MAX_HISTORY_ENTRIES = 5;
+/** Whole passages kept per list for the days the writer cannot be reached. */
+const ARCHIVE_MAX = 8;
+type Archived = { generatedAt?: Date | string | null } & Record<string, unknown>;
+
+function archiveOf(doc: { toObject(): { readingArchive?: unknown } }): Archived[] {
+  const raw = doc.toObject().readingArchive;
+  return Array.isArray(raw) ? (raw as Archived[]) : [];
+}
 
 type HistoryEntry = {
   title: string;
@@ -398,6 +407,20 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   }
 
   if (!reading) {
+    // The writer is down or the day's budget is spent. Before handing him an
+    // error, look for a passage from this list he has not seen for a week: an
+    // old one beats none, and the Groq free tier runs out on a busy day.
+    const archive = archiveOf(doc);
+    const old = pickArchived(archive, Date.now());
+    if (old) {
+      doc.set("currentReading", { ...old, generatedAt: new Date(), reused: true });
+      doc.set(
+        "readingArchive",
+        archive.filter((a) => a !== old)
+      );
+      await doc.save();
+      return NextResponse.json(toClient(doc.toObject()));
+    }
     return NextResponse.json(
       { error: lastErr || "could not generate reading" },
       { status: 502 }
@@ -465,6 +488,11 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   });
 
   const now = new Date();
+  // The passage being replaced goes on the archive, newest last, capped.
+  const previous = doc.toObject().currentReading as Archived | null | undefined;
+  if (previous && typeof previous.paragraph === "string" && previous.paragraph) {
+    doc.set("readingArchive", [...archiveOf(doc), previous].slice(-ARCHIVE_MAX));
+  }
   doc.set("currentReading", {
     title: reading.title,
     paragraph: passage,

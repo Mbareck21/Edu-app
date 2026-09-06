@@ -9,9 +9,14 @@ import ProgressRing from "@/components/ui/ProgressRing";
 import ProfileSettings from "@/components/ProfileSettings";
 import { lastSevenDays, todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
+import { buildDigest } from "@/lib/digest";
 import { countKnowledge } from "@/lib/mastery";
 import { toClientProfile } from "@/lib/models/Profile";
+import { SpellChain } from "@/lib/models/SpellChain";
+import { TimesFact } from "@/lib/models/TimesFact";
 import { WordList, toClient, type ClientWord } from "@/lib/models/WordList";
+import { fromRow } from "@/lib/spell-chain";
+import { allFactKeys, factFromRow } from "@/lib/tables";
 import { getProfile } from "@/lib/profile";
 import { BADGES } from "@/lib/rewards";
 
@@ -62,6 +67,18 @@ export default async function MePage() {
   const wordsKnown = counts.known + counts.mastered;
 
   const now = new Date();
+  const [factRows, chainRows] = await Promise.all([TimesFact.find().lean(), SpellChain.find().lean()]);
+  const digest = buildDigest({
+    activity: profile.activity,
+    words,
+    facts: factRows.map((r) => factFromRow(r.key, r)),
+    chains: chainRows.map((r) => fromRow(r.word, r)),
+    now,
+  });
+  const pctLine = (k: "reading" | "math" | "vocab") => {
+    const s = digest.byKind[k];
+    return s.sessions === 0 ? "—" : `${s.pct}% over ${s.sessions}`;
+  };
   const today = todayKey(now);
   const week = lastSevenDays(today);
   const activeDays = new Set(profile.activity.map((a) => todayKey(new Date(a.at))));
@@ -179,6 +196,37 @@ export default async function MePage() {
             );
           })}
         </div>
+      </Card>
+
+      {/* The parent's week: every section's numbers in one place. See lib/digest.ts. */}
+      <Card className="mt-3">
+        <h2 className="font-display text-lg font-bold">For the grown-ups</h2>
+        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+          The last seven days, and what comes due tomorrow.
+        </p>
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+          {(
+            [
+              ["Time on task", `${digest.minutes} min in ${digest.sessions} sessions`],
+              ["Reading", pctLine("reading")],
+              ["Math", pctLine("math")],
+              ["Words", pctLine("vocab")],
+              ["Words known this week", String(digest.wordsKnownThisWeek)],
+              ["Tables lit", `${digest.tablesLit} of ${allFactKeys().length}`],
+              [
+                "Due tomorrow",
+                `${digest.dueTomorrow.words} words · ${digest.dueTomorrow.facts} facts · ${digest.dueTomorrow.checks} spelling checks`,
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="contents">
+              <dt className="font-bold" style={{ color: "var(--color-muted)" }}>
+                {label}
+              </dt>
+              <dd className="font-display font-bold">{value}</dd>
+            </div>
+          ))}
+        </dl>
       </Card>
 
       {/* Badges */}

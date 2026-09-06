@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
@@ -30,14 +30,30 @@ type ConvState =
   | { kind: "streaming" }
   | { kind: "speaking"; messageIdx: number };
 
+/**
+ * What the browser can do and what he chose last time, read once on the
+ * client. A server snapshot of null keeps hydration honest; the first client
+ * render then fills it in. No state is set inside an effect for this.
+ */
+type Prefs = { mic: boolean; auto: boolean };
+let prefsCache: Prefs | null = null;
+const noSubscribe = () => () => {};
+function readPrefs(): Prefs {
+  if (!prefsCache) prefsCache = { mic: isRecordingSupported(), auto: readAutoPlayPref() };
+  return prefsCache;
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [autoPlay, setAutoPlay] = useState(true);
-  const [micAvailable, setMicAvailable] = useState(false);
+  const prefs = useSyncExternalStore(noSubscribe, readPrefs, () => null);
+  /** His toggle this visit; until he touches it, the saved preference. */
+  const [autoPlayChoice, setAutoPlayChoice] = useState<boolean | null>(null);
+  const autoPlay = autoPlayChoice ?? prefs?.auto ?? true;
+  const micAvailable = prefs?.mic ?? false;
 
   // Single-utterance flow state
   const [recording, setRecording] = useState(false);
@@ -59,12 +75,10 @@ export default function ChatPage() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const silentRecRef = useRef<SilentRecording | null>(null);
 
+  // The conversation loop reads the ref, so it follows the value.
   useEffect(() => {
-    setMicAvailable(isRecordingSupported());
-    const initial = readAutoPlayPref();
-    setAutoPlay(initial);
-    autoPlayRef.current = initial;
-  }, []);
+    autoPlayRef.current = autoPlay;
+  }, [autoPlay]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -91,7 +105,7 @@ export default function ChatPage() {
 
   function toggleAutoPlay() {
     const next = !autoPlay;
-    setAutoPlay(next);
+    setAutoPlayChoice(next);
     autoPlayRef.current = next;
     writeAutoPlayPref(next);
     if (!next) {

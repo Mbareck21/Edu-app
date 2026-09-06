@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { useSavedRun } from "@/components/ui/useSavedRun";
+import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import Link from "next/link";
 
 import Button, { buttonClass, buttonStyle } from "@/components/ui/Button";
@@ -73,13 +76,51 @@ function freshQ(n: number): QState[] {
   }));
 }
 
-export default function ReadingRunner({
+/**
+ * Where he was in a passage, for a reload. The passage itself is on the
+ * server (the list's currentReading), so only the position is kept, and it
+ * is only used when the passage on the server is still the one it was saved
+ * against — `at` is that passage's generatedAt.
+ */
+type ReadingSaved = { at: string; phase: Phase; mode: Mode; qStates: QState[]; qIdx: number };
+
+function isReadingSaved(v: unknown): v is ReadingSaved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Partial<ReadingSaved>;
+  return (
+    typeof o.at === "string" &&
+    (o.phase === "mode" || o.phase === "read" || o.phase === "questions" || o.phase === "done") &&
+    (o.mode === "listen" || o.mode === "alone" || o.mode === "echo") &&
+    Array.isArray(o.qStates) &&
+    o.qStates.every((q) => typeof q === "object" && q !== null && typeof q.done === "boolean") &&
+    typeof o.qIdx === "number"
+  );
+}
+
+export default function ReadingRunner(props: ReadingRunnerProps) {
+  const key = resumeKey("reading", props.list._id, "current");
+  const saved = useSavedRun(key, isReadingSaved);
+  const current = props.stale ? null : props.list.currentReading;
+  const initial = saved && current && saved.at === current.generatedAt ? saved : null;
+  return (
+    <ReadingRunnerInner
+      key={initial ? "resumed" : "fresh"}
+      {...props}
+      saveKey={key}
+      initial={initial}
+    />
+  );
+}
+
+function ReadingRunnerInner({
   list,
   scaffold = "none",
   stale = false,
   spare = null,
   onDone,
-}: ReadingRunnerProps) {
+  saveKey,
+  initial,
+}: ReadingRunnerProps & { saveKey: string; initial: ReadingSaved | null }) {
   const [reading, setReading] = useState<CurrentReading | null>(
     stale ? null : list.currentReading
   );
@@ -88,8 +129,11 @@ export default function ReadingRunner({
   // is spent — an old story is far better than an empty screen. Hiding it was
   // only ever meant to stop it being served as today's.
   const shelved = stale ? list.currentReading : null;
-  const [phase, setPhase] = useState<Phase>("mode");
-  const [mode, setMode] = useState<Mode>("listen");
+  // A finished passage never resumes as finished; he picks a mode again.
+  const [phase, setPhase] = useState<Phase>(
+    initial && initial.phase !== "done" ? initial.phase : "mode"
+  );
+  const [mode, setMode] = useState<Mode>(initial?.mode ?? "listen");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,8 +141,22 @@ export default function ReadingRunner({
     () => reading?.questions ?? [],
     [reading]
   );
-  const [qStates, setQStates] = useState<QState[]>(() => freshQ(questions.length));
-  const [qIdx, setQIdx] = useState(0);
+  const [qStates, setQStates] = useState<QState[]>(() =>
+    initial && initial.qStates.length === questions.length
+      ? initial.qStates
+      : freshQ(questions.length)
+  );
+  const [qIdx, setQIdx] = useState(initial ? Math.min(initial.qIdx, questions.length) : 0);
+
+  // Where he is, for a reload. Runs on every change of position; cleared
+  // when the passage is done so the next one starts clean.
+  useEffect(() => {
+    if (!reading || phase === "done") {
+      clearProgress(saveKey);
+      return;
+    }
+    saveProgress(saveKey, { at: reading.generatedAt, phase, mode, qStates, qIdx });
+  }, [reading, phase, mode, qStates, qIdx, saveKey]);
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
   const [shake, setShake] = useState(false);
@@ -557,6 +615,11 @@ export default function ReadingRunner({
             : `Grade 4 reading starts at ${GRADE4_LEXILE.min}L.`}
         </p>
         <h1 className="font-display text-3xl font-bold">{reading.title}</h1>
+        {reading.reused ? (
+          <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+            One you read a while ago. The writer is resting today.
+          </p>
+        ) : null}
         <p className="text-base" style={{ color: "var(--color-muted)" }}>
           How do you want to read it?
         </p>

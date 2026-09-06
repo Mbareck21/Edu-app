@@ -65,6 +65,8 @@ const CurrentReadingSchema = new Schema(
     // What the passage is about — the science unit or reading theme title.
     topic: { type: String, default: "" },
     generatedAt: { type: Date, default: Date.now },
+    // Served again from the archive because the writer was unavailable.
+    reused: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -217,6 +219,10 @@ const WordListSchema = new Schema(
     kind: { type: String, enum: ["unit", "pool"], default: "unit", index: true },
     readingLevel: { type: Number, default: 1, min: 1, max: 10 },
     currentReading: { type: CurrentReadingSchema, default: null },
+    // Whole passages he has finished with, newest last. When the writer is
+    // down or the day's budget is spent, one he has not seen for a week is
+    // served again instead of an error. See app/api/reading/generate.
+    readingArchive: { type: [CurrentReadingSchema], default: [] },
     readingHistory: { type: [ReadingHistoryEntrySchema], default: [] },
     readingStats: { type: ReadingStatsSchema, default: () => ({}) },
     pathProgress: { type: Map, of: PathStepSchema, default: () => ({}) },
@@ -288,6 +294,8 @@ export type CurrentReading = {
   passageKind: PassageKind;
   topic: string;
   generatedAt: string; // ISO
+  /** True when this is an archived passage served again. */
+  reused?: boolean;
 };
 
 export type ReadingTypeStats = { asked: number; firstTryCorrect: number };
@@ -535,6 +543,7 @@ export function toClient(doc: {
         generatedAt: doc.currentReading.generatedAt
           ? new Date(doc.currentReading.generatedAt).toISOString()
           : new Date().toISOString(),
+        reused: doc.currentReading.reused === true,
       } satisfies CurrentReading)
     : null;
 

@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import TablesRunner from "@/components/tables/TablesRunner";
+import TablesRunner, { isTablesSaved, type TablesSaved } from "@/components/tables/TablesRunner";
+import { useSavedRun } from "@/components/ui/useSavedRun";
+import { resumeKey } from "@/lib/resume";
 import {
   TABLES,
   TABLE_UP_TO,
@@ -42,8 +44,22 @@ type Run = { facts: Fact[]; label: string; sessionRef: string };
  * knows it fast. 7x8 and 8x7 are one fact, so both cells light together.
  * Filling the grid is the whole game.
  */
-export default function TablesBoard({ facts, seed }: TablesBoardProps) {
-  const [running, setRunning] = useState<Run | null>(null);
+const ROUND_KEY = resumeKey("tables", "round", "current");
+
+/**
+ * Reads whether a round was in progress when the page loaded and mounts the
+ * board once that is known — the same hydration-safe pattern the other
+ * runners use (see useSavedRun).
+ */
+export default function TablesBoard(props: TablesBoardProps) {
+  const saved = useSavedRun(ROUND_KEY, isTablesSaved);
+  return <TablesBoardInner key={saved ? "resumed" : "fresh"} {...props} saved={saved} />;
+}
+
+function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: TablesSaved | null }) {
+  const [running, setRunning] = useState<Run | null>(() =>
+    saved ? { facts: saved.facts, label: saved.label, sessionRef: saved.sessionRef } : null
+  );
   const rng = useMemo(() => mulberry(seed % 2147483647), [seed]);
   const nowIso = useMemo(() => new Date(seed).toISOString(), [seed]);
 
@@ -61,6 +77,8 @@ export default function TablesBoard({ facts, seed }: TablesBoardProps) {
           facts={running.facts}
           label={running.label}
           sessionRef={running.sessionRef}
+          saveKey={ROUND_KEY}
+          initial={saved}
           onDone={() => {
             setRunning(null);
             // The grid moved on the server; take the page again so it and the

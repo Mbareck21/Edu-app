@@ -80,13 +80,16 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
     // his saved drill settings still resolve.
     const top = orderWords(picked, now, rng).slice(0, ROTATE_WIDTH);
     const chosen = top.map((p) => p.word.word);
-    const rows = chosen.length > 0 ? await SpellChain.find({ word: { $in: chosen } }).lean() : [];
+    // Senses and chains for every picked word, not just the chosen few: a
+    // sitting that resumes after a reload keeps the words it started with.
+    const allWords = picked.map((p) => p.word.word);
+    const rows = allWords.length > 0 ? await SpellChain.find({ word: { $in: allWords } }).lean() : [];
     const senses: Record<string, { clue: string; arabic: string }> = {};
     const chains: Record<string, ChainState> = {};
-    for (const p of top) {
+    for (const p of picked) {
       senses[p.word.word] = { clue: p.word.clue, arabic: p.word.arabic };
     }
-    for (const word of chosen) {
+    for (const word of allWords) {
       const row = rows.find((r) => r.word === word);
       chains[word] = fromRow(word, row);
       if (!senses[word]) senses[word] = { clue: "", arabic: "" };

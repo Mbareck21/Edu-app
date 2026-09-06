@@ -63,11 +63,14 @@ export default async function StepPage({
     )
       .slice(0, ROTATE_WIDTH)
       .map((w) => w.word);
-    const rows = chosen.length > 0 ? await SpellChain.find({ word: { $in: chosen } }).lean() : [];
+    // Senses and chains for the whole list, not just the chosen few: a sitting
+    // that resumes after a reload keeps the words it started with, and those
+    // may not be the ones this visit would have picked.
+    const allWords = list.words.map((w) => w.word);
+    const rows = allWords.length > 0 ? await SpellChain.find({ word: { $in: allWords } }).lean() : [];
     const chains: Record<string, ChainState> = {};
     const senses: Record<string, { clue: string; arabic: string }> = {};
     for (const w of list.words) {
-      if (!chosen.includes(w.word)) continue;
       senses[w.word] = { clue: w.clue, arabic: w.arabic };
       const row = rows.find((r) => r.word === w.word);
       chains[w.word] = fromRow(w.word, row);

@@ -29,6 +29,7 @@ import {
   STORY_NAMES,
   STORY_SETTINGS,
 } from "@/lib/reading";
+import { pickArchived, REUSE_AFTER_MS } from "@/lib/reading";
 
 /** Tiny deterministic rng so the cast tests are not flaky. */
 function seeded(seed: number): () => number {
@@ -294,4 +295,19 @@ test("a multiple choice with two right options falls back to open text", () => {
   assert.equal(clean.options.length, 4);
   // Losing the answer to de-duplication, or ending with one option, is not an MCQ.
   assert.equal(checkMcq(["a", "a"], 1, ["a"]).answerIndex, -1);
+});
+
+test("pickArchived serves the oldest passage not seen for a week, or nothing", () => {
+  const now = Date.parse("2026-09-06T18:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const at = (daysAgo: number) => new Date(now - daysAgo * day).toISOString();
+  const archive = [
+    { title: "yesterday", generatedAt: at(1) },
+    { title: "ten days", generatedAt: at(10) },
+    { title: "thirty days", generatedAt: at(30) },
+  ];
+  assert.equal(pickArchived(archive, now)?.title, "thirty days");
+  assert.equal(pickArchived([archive[0]], now), null);
+  assert.equal(pickArchived([], now), null);
+  assert.equal(REUSE_AFTER_MS, 7 * day);
 });

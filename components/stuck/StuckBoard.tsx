@@ -5,7 +5,8 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
-import ChainRunner from "@/components/stuck/ChainRunner";
+import ChainRunner, { chainResumeKey, isChainSaved } from "@/components/stuck/ChainRunner";
+import { useSavedRun } from "@/components/ui/useSavedRun";
 import type { WordSense } from "@/components/stuck/ChainRunner";
 import {
   CHAIN_TARGET,
@@ -29,7 +30,19 @@ export type StuckBoardProps = {
  * is stuck — mid-homework, one hand on the worksheet. Hiding that behind the
  * Me tab would mean the word never gets typed at all.
  */
-export default function StuckBoard({ list, chains }: StuckBoardProps) {
+export default function StuckBoard(props: StuckBoardProps) {
+  // A sitting that was under way when the page reloaded comes straight back.
+  const saved = useSavedRun(chainResumeKey(undefined), isChainSaved);
+  return (
+    <StuckBoardInner key={saved ? "resumed" : "fresh"} {...props} resumed={saved?.words ?? null} />
+  );
+}
+
+function StuckBoardInner({
+  list,
+  chains,
+  resumed,
+}: StuckBoardProps & { resumed: string[] | null }) {
   const [words, setWords] = useState(list.words.map((w) => w.word));
   const [senses, setSenses] = useState<Record<string, WordSense>>(() =>
     Object.fromEntries(list.words.map((w) => [w.word, { clue: w.clue, arabic: w.arabic }]))
@@ -38,7 +51,7 @@ export default function StuckBoard({ list, chains }: StuckBoardProps) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [running, setRunning] = useState<string[] | null>(null);
+  const [running, setRunning] = useState<string[] | null>(resumed);
 
   // "Finished" is not forever. A word that hit ten comes back for one blind
   // write on the spacing ladder; when that falls due it is a working word

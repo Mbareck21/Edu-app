@@ -548,3 +548,21 @@ export function checkMcq(
   const secondRight = kept.some((o, i) => i !== answer && ok.has(norm(o)));
   return { options: kept, answerIndex: secondRight ? -1 : answer };
 }
+
+/** An archived passage is only served again once it is at least this old. */
+export const REUSE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The oldest archived passage he has not seen for a week, or null. Used when
+ * the writer cannot be reached: an old passage beats an error, but one from
+ * yesterday would just be yesterday's again.
+ */
+export function pickArchived<T extends { generatedAt?: Date | string | null }>(
+  archive: readonly T[],
+  now: number
+): T | null {
+  const at = (a: T) => (a.generatedAt ? new Date(a.generatedAt).getTime() : 0);
+  const ready = archive.filter((a) => at(a) <= now - REUSE_AFTER_MS);
+  ready.sort((a, b) => at(a) - at(b));
+  return ready[0] ?? null;
+}

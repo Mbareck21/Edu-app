@@ -15,7 +15,8 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (!global.__mongooseConn) {
     global.__mongooseConn = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
-      dbName: "eduapp",
+      // Dev points at eduapp-dev (see .env.local); production leaves this unset.
+      dbName: process.env.MONGODB_DB ?? "eduapp",
     });
   }
   return global.__mongooseConn;

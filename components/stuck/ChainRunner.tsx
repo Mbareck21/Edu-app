@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useSavedRun } from "@/components/ui/useSavedRun";
+import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
+
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
@@ -66,14 +69,70 @@ function chunkMask(word: string): string {
   return word.slice(0, keep) + "_".repeat(word.length - keep);
 }
 
-export default function ChainRunner({
+/**
+ * Where he was in a sitting, for a reload. The chain counts themselves are
+ * on the server after every write; this is the sitting — which words, whose
+ * turn, how many writes in — which the page would otherwise deal afresh.
+ */
+export type ChainSaved = {
+  words: string[];
+  active: string[];
+  turn: number;
+  writeIndex: number;
+  log: { checked: string[]; finished: string[] };
+  correct: number;
+};
+
+const strings = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((w) => typeof w === "string");
+
+export function isChainSaved(v: unknown): v is ChainSaved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Partial<ChainSaved>;
+  return (
+    strings(o.words) &&
+    strings(o.active) &&
+    typeof o.turn === "number" &&
+    typeof o.writeIndex === "number" &&
+    typeof o.log === "object" &&
+    o.log !== null &&
+    strings(o.log.checked) &&
+    strings(o.log.finished) &&
+    typeof o.correct === "number"
+  );
+}
+
+/** One key per place a sitting can start: the Words tab, or a step on a path. */
+export function chainResumeKey(ref: string | undefined): string {
+  return resumeKey("chain", ref ?? "words", "current");
+}
+
+export default function ChainRunner(props: ChainRunnerProps) {
+  const key = chainResumeKey(props.post?.ref);
+  const saved = useSavedRun(key, isChainSaved);
+  // A resumed sitting keeps its own words: the page picks a fresh set on
+  // every visit, and the saved position only means anything against these.
+  return (
+    <ChainRunnerInner
+      key={saved ? "resumed" : "fresh"}
+      {...props}
+      words={saved ? saved.words : props.words}
+      saveKey={key}
+      initial={saved}
+    />
+  );
+}
+
+function ChainRunnerInner({
   words,
   senses,
   chains,
   post,
   exit,
   onDone,
-}: ChainRunnerProps) {
+  saveKey,
+  initial,
+}: ChainRunnerProps & { saveKey: string; initial: ChainSaved | null }) {
   const [state, setState] = useState<Record<string, ChainState>>(chains);
   /**
    * The words still in this sitting. A word leaves the moment it needs no
@@ -81,12 +140,14 @@ export default function ChainRunner({
    * so a due check gets exactly one write and the rest of the sitting goes to
    * words that still need it. Rotation runs over whatever is left.
    */
-  const [active, setActive] = useState<string[]>(words);
+  const [active, setActive] = useState<string[]>(initial?.active ?? words);
   /** What happened this sitting, for the finish screen. State, not a ref: it is read during render. */
-  const [log, setLog] = useState<{ checked: string[]; finished: string[] }>({ checked: [], finished: [] });
-  const [writeIndex, setWriteIndex] = useState(0);
+  const [log, setLog] = useState<{ checked: string[]; finished: string[] }>(
+    initial?.log ?? { checked: [], finished: [] }
+  );
+  const [writeIndex, setWriteIndex] = useState(initial?.writeIndex ?? 0);
   /** Advances only on a correct write, so a miss does not rotate away. */
-  const [turn, setTurn] = useState(0);
+  const [turn, setTurn] = useState(initial?.turn ?? 0);
   /**
    * The word he just got wrong. He stays on it for one repair write with the
    * spelling in front of him, so he never leaves a wrong version as the last
@@ -105,8 +166,15 @@ export default function ChainRunner({
 
   const watch = useRef<Stopwatch | null>(null);
   const postedRef = useRef(false);
-  const correctRef = useRef(0);
+  const correctRef = useRef(initial?.correct ?? 0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Where he is, for a reload. Every write moves one of these; cleared when
+  // the sitting is done so the next one starts clean.
+  useEffect(() => {
+    if (done) clearProgress(saveKey);
+    else saveProgress(saveKey, { words, active, turn, writeIndex, log, correct: correctRef.current });
+  }, [done, words, active, turn, writeIndex, log, saveKey]);
   useEffect(() => {
     watch.current = startStopwatch();
   }, []);

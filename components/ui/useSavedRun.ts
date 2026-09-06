@@ -25,15 +25,25 @@ function subscribe(): () => void {
   return () => {};
 }
 
+function read<T>(key: string, isValid: (v: unknown) => v is T): T | null {
+  if (!cache.has(key)) cache.set(key, loadProgress(key, isValid));
+  const v = cache.get(key);
+  return isValid(v) ? v : null;
+}
+
 export function useSavedRun<T>(key: string, isValid: (v: unknown) => v is T): T | null {
   return useSyncExternalStore(
     subscribe,
+    () => read(key, isValid),
     () => {
-      if (!cache.has(key)) cache.set(key, loadProgress(key, isValid));
-      const v = cache.get(key);
-      return isValid(v) ? v : null;
-    },
-    () => null
+      // The hydrating render must return null to match the server, but the
+      // storage is read NOW, into the cache. Effects run child-first, and a
+      // runner that saves on mount would otherwise overwrite the snapshot
+      // before this hook got to look at it. On the server there is no
+      // window and loadProgress returns null, so priming costs nothing.
+      read(key, isValid);
+      return null;
+    }
   );
 }
 

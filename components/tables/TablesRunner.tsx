@@ -7,6 +7,7 @@ import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
 import LessonComplete from "@/components/ui/LessonComplete";
 import type { MathQuestion } from "@/lib/math";
 import { postSession, saveNote } from "@/lib/offline-queue";
+import { clearProgress, saveProgress } from "@/lib/resume";
 import type { Gained } from "@/lib/rewards";
 import { sessionPerfect } from "@/lib/session-score";
 import { sfx } from "@/lib/sfx";
@@ -21,8 +22,40 @@ export type TablesRunnerProps = {
   label: string;
   /** Activity ref for the posted session, e.g. "tables:7". Not a React ref. */
   sessionRef: string;
+  /** Where a reload writes its progress. See lib/resume.ts. */
+  saveKey: string;
+  /** A round he was in the middle of when the page reloaded. */
+  initial: TablesSaved | null;
   onDone?: () => void;
 };
+
+/**
+ * Everything a reload needs to put him back in the round: the round itself,
+ * because the board builds it on the client and would otherwise deal a new
+ * one, and where he was in it.
+ */
+export type TablesSaved = {
+  facts: Fact[];
+  label: string;
+  sessionRef: string;
+  queue: number[];
+  firstTry: Record<number, boolean>;
+};
+
+export function isTablesSaved(v: unknown): v is TablesSaved {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Partial<TablesSaved>;
+  return (
+    Array.isArray(o.facts) &&
+    o.facts.every((f) => typeof f?.a === "number" && typeof f?.b === "number" && typeof f?.key === "string") &&
+    typeof o.label === "string" &&
+    typeof o.sessionRef === "string" &&
+    Array.isArray(o.queue) &&
+    o.queue.every((n) => typeof n === "number") &&
+    typeof o.firstTry === "object" &&
+    o.firstTry !== null
+  );
+}
 
 type Outcome = {
   gained: Gained | null;
@@ -50,9 +83,16 @@ function toQuestion(f: Fact): MathQuestion {
  * in the same round, so nothing is left as a wrong answer. Every answer goes
  * to the server, which grades it and moves the grid.
  */
-export default function TablesRunner({ facts, label, sessionRef, onDone }: TablesRunnerProps) {
+export default function TablesRunner({
+  facts,
+  label,
+  sessionRef,
+  saveKey,
+  initial,
+  onDone,
+}: TablesRunnerProps) {
   const questions = useMemo(() => facts.map(toQuestion), [facts]);
-  const [queue, setQueue] = useState<number[]>(() => facts.map((_, i) => i));
+  const [queue, setQueue] = useState<number[]>(() => initial?.queue ?? facts.map((_, i) => i));
   const [input, setInput] = useState("");
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
@@ -62,7 +102,7 @@ export default function TablesRunner({ facts, label, sessionRef, onDone }: Table
 
   const watch = useRef<Stopwatch | null>(null);
   const askedAt = useRef<number>(0);
-  const firstTry = useRef<Record<number, boolean>>({});
+  const firstTry = useRef<Record<number, boolean>>(initial?.firstTry ?? {});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const posted = useRef(false);
 
@@ -75,6 +115,14 @@ export default function TablesRunner({ facts, label, sessionRef, onDone }: Table
   }, []);
 
   const done = queue.length === 0;
+
+  // Where he is, for a reload. The queue changes on every answer, right or
+  // wrong, so this runs after each one; cleared once the round is done.
+  useEffect(() => {
+    if (done) clearProgress(saveKey);
+    else saveProgress(saveKey, { facts, label, sessionRef, queue, firstTry: firstTry.current });
+  }, [done, facts, label, queue, saveKey, sessionRef]);
+
   const index = queue[0];
   const question = done ? undefined : questions[index];
   const fact = done ? undefined : facts[index];

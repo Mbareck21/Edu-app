@@ -216,11 +216,18 @@ export default function InteractiveWordSearch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragStart]);
 
-  function onCellPointerDown(r: number, c: number, e: React.PointerEvent<HTMLElement>) {
+  // One handler on the board, not one closure per cell: a closure made inside
+  // the render-time cell map that touches the drag refs reads as a ref
+  // access during render. The cell is found from its data attributes.
+  function onBoardPointerDown(e: React.PointerEvent<HTMLElement>) {
+    const el = e.target instanceof HTMLElement ? e.target.closest("[data-cell-r]") : null;
+    if (!(el instanceof HTMLElement)) return;
+    const r = Number(el.dataset.cellR);
+    const c = Number(el.dataset.cellC);
     // Release the implicit pointer capture so subsequent pointer events fire
     // wherever the finger is, not on this initial target.
     try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+      el.releasePointerCapture(e.pointerId);
     } catch {
       // ignore — not all browsers support / require this
     }
@@ -266,7 +273,7 @@ export default function InteractiveWordSearch({
 
       {/* The board gets its own scroll box so the page never slides sideways. */}
       <div className="g-scroll mt-2">
-        <div style={boardStyle} className="select-none">
+        <div style={boardStyle} className="select-none" onPointerDown={onBoardPointerDown}>
           {Array.from({ length: rows }).flatMap((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
               const key = `${r},${c}`;
@@ -276,7 +283,6 @@ export default function InteractiveWordSearch({
                   key={key}
                   data-cell-r={r}
                   data-cell-c={c}
-                  onPointerDown={(e) => onCellPointerDown(r, c, e)}
                   className="g-tile cursor-pointer touch-none text-[17px]"
                   style={{
                     background: "#fff",

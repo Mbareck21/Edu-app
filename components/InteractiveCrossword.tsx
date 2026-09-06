@@ -84,16 +84,31 @@ export default function InteractiveCrossword({
     router.refresh();
   }
 
-  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // The grid element; cells are found in it by their data-key. One handler
+  // set on the grid replaces a closure per cell: closures made inside the
+  // render-time cell map that touch refs read as ref access during render.
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  function inputAt(key: string): HTMLInputElement | null {
+    return gridRef.current?.querySelector<HTMLInputElement>(`input[data-key="${key}"]`) ?? null;
+  }
+  function cellOf(target: EventTarget): { r: number; c: number } | null {
+    if (!(target instanceof HTMLInputElement) || !target.dataset.key) return null;
+    const [r, c] = target.dataset.key.split(",").map(Number);
+    return { r, c };
+  }
   // Set just before a programmatic focus so the focus handler knows which way
   // the kid meant to go — used when jumping between clues.
   const forceOrientRef = useRef<Orientation | null>(null);
 
   // Refs to read latest values inside handlers without re-render churn.
+  // Mirrored after commit, not during render: effects run in order, so this
+  // one is current before the word-check effect further down reads it.
   const valuesRef = useRef(values);
-  valuesRef.current = values;
   const wordStatusRef = useRef(wordStatus);
-  wordStatusRef.current = wordStatus;
+  useEffect(() => {
+    valuesRef.current = values;
+    wordStatusRef.current = wordStatus;
+  }, [values, wordStatus]);
 
   const placedById = useMemo(() => {
     const m = new Map<number, CrosswordPlacement>();
@@ -133,7 +148,7 @@ export default function InteractiveCrossword({
     forceOrientRef.current = null;
     if (forced && (forced === "across" ? info.acrossId : info.downId) !== undefined) {
       setActive({ r, c, orient: forced });
-      inputRefs.current.get(`${r},${c}`)?.focus();
+      inputAt(`${r},${c}`)?.focus();
       return;
     }
 
@@ -182,7 +197,7 @@ export default function InteractiveCrossword({
     }
 
     setActive({ r, c, orient });
-    inputRefs.current.get(`${r},${c}`)?.focus();
+    inputAt(`${r},${c}`)?.focus();
   }
 
   /** Jump to a word from a clue tap or the arrows on the clue card. */
@@ -191,7 +206,7 @@ export default function InteractiveCrossword({
     const target = cells.find(({ key }) => !valuesRef.current[key]) ?? cells[0];
     forceOrientRef.current = p.orientation;
     setActive({ r: target.r, c: target.c, orient: p.orientation });
-    inputRefs.current.get(target.key)?.focus();
+    inputAt(target.key)?.focus();
     sfx.tap();
   }
 
@@ -203,7 +218,7 @@ export default function InteractiveCrossword({
     if (id === undefined || active.orient === o) return;
     forceOrientRef.current = o;
     setActive({ r: active.r, c: active.c, orient: o });
-    inputRefs.current.get(`${active.r},${active.c}`)?.focus();
+    inputAt(`${active.r},${active.c}`)?.focus();
     sfx.tap();
   }
 
@@ -231,7 +246,7 @@ export default function InteractiveCrossword({
     const guess = cells.map(({ key }) => valuesRef.current[key] || " ").join("").toUpperCase();
     if (guess === p.word.toUpperCase()) {
       setWordStatus((prev) => ({ ...prev, [p.id]: "correct" }));
-      const firstCell = inputRefs.current.get(cells[0].key);
+      const firstCell = inputAt(cells[0].key);
       sfx.correct();
       celebrate({ source: firstCell ?? undefined });
       // All-correct check. The ref is updated here too, so a second word
@@ -296,7 +311,7 @@ export default function InteractiveCrossword({
         const nextKey = `${r2},${c2}`;
         if (cellInfo[nextKey]) {
           setActive({ r: r2, c: c2, orient: word.orientation });
-          inputRefs.current.get(nextKey)?.focus();
+          inputAt(nextKey)?.focus();
         } else {
           // Walked off the word — validate (useEffect on values also re-checks).
           setTimeout(() => checkWord(word), 0);
@@ -305,7 +320,7 @@ export default function InteractiveCrossword({
     }
   }
 
-  function onCellKeyDown(r: number, c: number, e: React.KeyboardEvent<HTMLInputElement>) {
+  function onCellKeyDown(r: number, c: number, e: React.KeyboardEvent<HTMLElement>) {
     if (e.key === "Backspace") {
       const key = `${r},${c}`;
       if (!values[key]) {
@@ -325,7 +340,7 @@ export default function InteractiveCrossword({
           if (cellInfo[prevKey]) {
             e.preventDefault();
             setActive({ r: r2, c: c2, orient: word.orientation });
-            inputRefs.current.get(prevKey)?.focus();
+            inputAt(prevKey)?.focus();
           }
         }
       }
@@ -379,7 +394,26 @@ export default function InteractiveCrossword({
 
       {/* The grid gets its own scroll box so the page never slides sideways. */}
       <div className="g-scroll mt-2">
-        <div style={gridStyle}>
+        <div
+          ref={gridRef}
+          style={gridStyle}
+          onChange={(e) => {
+            const at = cellOf(e.target);
+            if (at && e.target instanceof HTMLInputElement) onCellInput(at.r, at.c, e.target.value);
+          }}
+          onKeyDown={(e) => {
+            const at = cellOf(e.target);
+            if (at) onCellKeyDown(at.r, at.c, e);
+          }}
+          onFocus={(e) => {
+            const at = cellOf(e.target);
+            if (at) selectCell(at.r, at.c);
+          }}
+          onClick={(e) => {
+            const at = cellOf(e.target);
+            if (at) selectCell(at.r, at.c);
+          }}
+        >
           {Array.from({ length: rows }).flatMap((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
               const key = `${r},${c}`;
@@ -437,15 +471,9 @@ export default function InteractiveCrossword({
                     </span>
                   )}
                   <input
-                    ref={(el) => {
-                      if (el) inputRefs.current.set(key, el);
-                      else inputRefs.current.delete(key);
-                    }}
+                    data-key={key}
                     value={values[key] || ""}
-                    onChange={(e) => onCellInput(r, c, e.target.value)}
-                    onKeyDown={(e) => onCellKeyDown(r, c, e)}
-                    onFocus={() => selectCell(r, c)}
-                    onClick={() => selectCell(r, c)}
+                    onChange={() => {}}
                     inputMode="text"
                     autoCapitalize="characters"
                     autoComplete="off"
