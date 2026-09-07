@@ -36,6 +36,9 @@ function mulberry(seed: number): () => number {
   };
 }
 
+/** A cell he has got right: purple, but clearly a step short of known. */
+const LIT_BG = "color-mix(in srgb, var(--color-purple) 38%, #fff)";
+
 type Run = { facts: Fact[]; label: string; sessionRef: string };
 
 /**
@@ -146,9 +149,9 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                               : c.known
                                 ? "var(--color-purple)"
                                 : c.lit
-                                  ? "var(--color-purple-soft)"
+                                  ? LIT_BG
                                   : "var(--color-line)",
-                            color: c.known ? "#fff" : c.lit ? "var(--color-purple)" : "var(--color-muted)",
+                            color: c.known || c.lit ? "#fff" : "var(--color-muted)",
                           }}
                         >
                           {c.lit ? c.value : ""}
@@ -226,7 +229,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                           : c.known
                             ? "var(--color-purple)"
                             : c.lit
-                              ? "var(--color-purple-soft)"
+                              ? LIT_BG
                               : "var(--color-line)",
                       }}
                     />
