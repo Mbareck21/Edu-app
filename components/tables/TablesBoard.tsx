@@ -14,6 +14,7 @@ import {
   buildTableRound,
   factKey,
   isKnown,
+  isLit,
   tableProgress,
   type Fact,
   type FactState,
@@ -64,6 +65,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
   const nowIso = useMemo(() => new Date(seed).toISOString(), [seed]);
 
   const progress = TABLES.map((t) => tableProgress(t, facts));
+  const lit = Object.values(facts).filter(isLit).length;
   const known = Object.values(facts).filter(isKnown).length;
   const total = new Set(
     TABLES.flatMap((t) => Array.from({ length: TABLE_UP_TO }, (_, i) => factKey(t, i + 1)))
@@ -92,9 +94,10 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
 
   const cell = (t: number, i: number) => {
     const f = facts[factKey(t, i + 1)];
-    const lit = f ? isKnown(f) : false;
-    const gold = lit && Boolean(f?.lastFast);
-    return { lit, gold, value: t * (i + 1) };
+    const lit = f ? isLit(f) : false;
+    const known = f ? isKnown(f) : false;
+    const gold = known && Boolean(f?.lastFast);
+    return { lit, known, gold, value: t * (i + 1) };
   };
 
   return (
@@ -103,7 +106,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
         <div className="flex items-baseline justify-between">
           <p className="font-display text-base font-bold">The grid</p>
           <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-            {known} of {total} lit
+            {lit} of {total} lit{known > 0 ? ` · ${known} known` : ""}
           </p>
         </div>
         <div className="mt-3 overflow-x-auto">
@@ -140,10 +143,12 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                           style={{
                             background: c.gold
                               ? "var(--color-gold)"
-                              : c.lit
+                              : c.known
                                 ? "var(--color-purple)"
-                                : "var(--color-line)",
-                            color: c.lit ? "#fff" : "var(--color-muted)",
+                                : c.lit
+                                  ? "var(--color-purple-soft)"
+                                  : "var(--color-line)",
+                            color: c.known ? "#fff" : c.lit ? "var(--color-purple)" : "var(--color-muted)",
                           }}
                         >
                           {c.lit ? c.value : ""}
@@ -157,7 +162,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           </table>
         </div>
         <p className="mt-2 text-xs" style={{ color: "var(--color-muted)" }}>
-          Purple: you know it. Gold: you know it fast. 7 x 8 and 8 x 7 light up together.
+          Light purple: you got it right. Purple: right on three different days. Gold: right and fast. 7 x 8 and 8 x 7 light up together.
         </p>
       </Card>
 
@@ -177,6 +182,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
       <div className="space-y-2">
         {progress.map((p) => {
           const done = p.known === p.total;
+          const allLit = p.lit === p.total;
           return (
             <Card key={p.table}>
               <div className="flex items-center justify-between gap-3">
@@ -187,7 +193,9 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                       ? p.fast === p.total
                         ? "All ten, all fast."
                         : `All ten known, ${p.fast} fast`
-                      : `${p.known} of ${p.total} known`}
+                      : allLit
+                        ? `All ten right · ${p.known} known`
+                        : `${p.lit} of ${p.total}${p.known > 0 ? ` · ${p.known} known` : ""}`}
                   </p>
                 </div>
                 <Button
@@ -202,7 +210,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                     })
                   }
                 >
-                  {done ? "Keep it" : p.known > 0 ? "Go on" : "Start"}
+                  {done ? "Keep it" : p.lit > 0 ? "Go on" : "Start"}
                 </Button>
               </div>
               <div className="mt-3 flex gap-1" aria-hidden>
@@ -215,9 +223,11 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                       style={{
                         background: c.gold
                           ? "var(--color-gold)"
-                          : c.lit
+                          : c.known
                             ? "var(--color-purple)"
-                            : "var(--color-line)",
+                            : c.lit
+                              ? "var(--color-purple-soft)"
+                              : "var(--color-line)",
                       }}
                     />
                   );

@@ -11,7 +11,7 @@ import { clearProgress, saveProgress } from "@/lib/resume";
 import type { Gained } from "@/lib/rewards";
 import { sessionPerfect } from "@/lib/session-score";
 import { sfx } from "@/lib/sfx";
-import { roundStars, type Fact, type FactState } from "@/lib/tables";
+import { isLit, roundStars, type Fact, type FactState } from "@/lib/tables";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { SessionResult } from "@/lib/types";
 
@@ -236,7 +236,7 @@ export default function TablesRunner({
   }
 
   const answeredSoFar = facts.length - queue.length;
-  const known = Object.values(states).filter((s) => s.streak >= 3).length;
+  const lit = Object.values(states).filter(isLit).length;
 
   return (
     <div className="safe-top min-h-dvh px-4 pb-8">
@@ -247,7 +247,7 @@ export default function TablesRunner({
             <span className="font-display font-bold">{label}</span>
             <span style={{ color: "var(--color-muted)" }}>
               {answeredSoFar} of {facts.length}
-              {known > 0 ? ` · ${known} lit` : ""}
+              {lit > 0 ? ` · ${lit} lit` : ""}
             </span>
           </div>
         }

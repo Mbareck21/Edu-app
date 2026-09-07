@@ -97,6 +97,12 @@ export function factFromRow(
   };
 }
 
+/** Right at least once, and not missed since. A cell lights the first time. */
+export function isLit(f: FactState): boolean {
+  return f.streak >= 1;
+}
+
+/** Right on KNOWN_STREAK separate days. The deeper shade; what "mastered" means. */
 export function isKnown(f: FactState): boolean {
   return f.streak >= KNOWN_STREAK;
 }
@@ -143,23 +149,28 @@ export function allFactKeys(): string[] {
 
 export type TableProgress = {
   table: number;
+  /** Right at least once: what the card counts, so a first round shows. */
+  lit: number;
   known: number;
   fast: number;
   total: number;
 };
 
-/** How far along one table is: its ten facts, how many known, how many fast. */
+/** How far along one table is: its ten facts, how many lit, known and fast. */
 export function tableProgress(table: number, facts: Record<string, FactState>): TableProgress {
+  let lit = 0;
   let known = 0;
   let fast = 0;
   for (let b = 1; b <= TABLE_UP_TO; b++) {
     const f = facts[factKey(table, b)];
-    if (f && isKnown(f)) {
+    if (!f || !isLit(f)) continue;
+    lit++;
+    if (isKnown(f)) {
       known++;
       if (f.lastFast) fast++;
     }
   }
-  return { table, known, fast, total: TABLE_UP_TO };
+  return { table, lit, known, fast, total: TABLE_UP_TO };
 }
 
 export type Fact = { a: number; b: number; key: string };

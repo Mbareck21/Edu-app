@@ -13,6 +13,7 @@ import {
   factFromRow,
   factKey,
   isKnown,
+  isLit,
   newFact,
   roundStars,
   tableProgress,
@@ -110,12 +111,12 @@ test("lightning draws from tables he has started, weakest first", () => {
   assert.ok(round.some((r) => r.a === 8 || r.b === 8));
 });
 
-test("progress on a table counts known and fast facts", () => {
+test("progress on a table counts lit, known and fast facts", () => {
   const facts: Record<string, ReturnType<typeof newFact>> = {};
   facts[factKey(4, 4)] = { ...newFact(4, 4), streak: 3, lastFast: true };
   facts[factKey(4, 7)] = { ...newFact(4, 7), streak: 3, lastFast: false };
   facts[factKey(4, 9)] = { ...newFact(4, 9), streak: 1 };
-  assert.deepEqual(tableProgress(4, facts), { table: 4, known: 2, fast: 1, total: 10 });
+  assert.deepEqual(tableProgress(4, facts), { table: 4, lit: 3, known: 2, fast: 1, total: 10 });
 });
 
 test("stars: all right for one, inside a minute for two, inside thirty seconds for three", () => {
@@ -132,4 +133,11 @@ test("factFromRow tolerates an empty or partial row", () => {
   assert.equal(f.streak, 2);
   assert.equal(f.lastFast, true);
   assert.equal(f.dueAt, null);
+});
+
+test("a cell lights on the first right answer and goes dark on a miss", () => {
+  const f = applyFactAnswer(newFact(6, 7), true, 2000, "2026-09-06T18:00:00.000Z");
+  assert.ok(isLit(f));
+  assert.ok(!isKnown(f));
+  assert.ok(!isLit(applyFactAnswer(f, false, 2000, "2026-09-07T18:00:00.000Z")));
 });
