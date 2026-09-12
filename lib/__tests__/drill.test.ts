@@ -16,6 +16,7 @@ import {
   modeSkill,
   pickWords,
   sourceCounts,
+  isDoneForNow,
   isSettled,
   type DrillList,
 } from "@/components/drill/picks";
@@ -238,4 +239,18 @@ test("same seed builds the same drill", () => {
     a.map((i) => `${i.kind}:${i.word}`),
     b.map((i) => `${i.kind}:${i.word}`)
   );
+});
+
+test("a word he got right today stops counting as to go, until tomorrow", () => {
+  const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+  const later = new Date(NOW.getTime() + DAY).toISOString();
+  const rightToday = word("today", { skills: skills({ recognize: { streak: 1, lastAt: earlier, dueAt: later } }) });
+  const missedToday = word("missed", { skills: skills({ recognize: { streak: 0, lastAt: earlier } }) });
+  const fresh = word("fresh");
+  assert.equal(isDoneForNow(rightToday, NOW), true);
+  assert.equal(isDoneForNow(missedToday, NOW), false);
+  assert.equal(isDoneForNow(fresh, NOW), false);
+  assert.equal(isDoneForNow(rightToday, new Date(NOW.getTime() + 2 * DAY)), false);
+  const counts = sourceCounts([{ listId: "l", name: "L", words: [rightToday, missedToday, fresh] }], NOW);
+  assert.equal(counts.lists[0].toGo, 2);
 });

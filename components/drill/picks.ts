@@ -6,6 +6,7 @@
  * server-only — build the items in the page and pass them to the runner.
  */
 
+import { todayKey } from "@/lib/day";
 import { KNOWN_STREAK, dueSkills, skillDue } from "@/lib/mastery";
 import type { Rng } from "@/lib/math/types";
 import { orderByNeed } from "@/lib/practice-order";
@@ -43,7 +44,7 @@ export function isDue(word: SkillsOnly, now: Date): boolean {
 }
 
 export type SourceCounts = {
-  /** Words still to learn, across every list. */
+  /** Words still to do today, across every list. See isDoneForNow. */
   all: number;
   /** Every word, learned or not. */
   total: number;
@@ -63,6 +64,25 @@ export function isSettled(word: SkillsOnly): boolean {
   return produced && SKILL_IDS.every((id) => word.skills[id].streak >= KNOWN_STREAK);
 }
 
+/**
+ * Nothing left to do on this word today: he got at least one of its skills
+ * right today and has not missed it since, or it is settled and not due.
+ *
+ * The chips used to count words not yet settled. Settling takes right answers
+ * a week apart, so a drill he had just finished moved nothing and the numbers
+ * looked broken. This moves the moment he gets a word right, the way a times
+ * table cell lights on the first right answer, and it comes back tomorrow
+ * until the word is truly settled.
+ */
+export function isDoneForNow(word: SkillsOnly, now: Date): boolean {
+  const today = todayKey(now);
+  const rightToday = SKILL_IDS.some((id) => {
+    const s = word.skills[id];
+    return s.streak >= 1 && s.lastAt !== null && todayKey(new Date(s.lastAt)) === today;
+  });
+  return rightToday || (isSettled(word) && !isDue(word, now));
+}
+
 /** The numbers on the source chips. */
 export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
   // The chips used to show plain totals, so a list he had mastered looked
@@ -72,7 +92,7 @@ export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
   let weak = 0;
   let due = 0;
   const perList = lists.map((l) => {
-    const toGo = l.words.filter((w) => !isSettled(w)).length;
+    const toGo = l.words.filter((w) => !isDoneForNow(w, now)).length;
     all += toGo;
     total += l.words.length;
     for (const word of l.words) {
