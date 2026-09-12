@@ -58,6 +58,27 @@ test("compost and fertilizer are not each other's distractors", () => {
   }
 });
 
+test("a word whose clue names the target is not its distractor, from any list", () => {
+  // The review pool holds "fair test" twice: one clue says "a test where you
+  // change only one thing", the other "an experiment that treats every part
+  // the same". Offered beside "experiment" for "The ____ uses three cups of
+  // water", both fit.
+  const [template] = packWords("growing-plants");
+  const entry = (word: string, clue: string): ClientWord => ({ ...template, word, clue });
+  const pool = [
+    entry("experiment", "A test you set up on purpose to answer a question."),
+    entry("fair test", "A test where you change only one thing, so you know what caused the change."),
+    entry("fair test", "An experiment that treats every part the same"),
+    entry("hypothesis", "Your best guess about what will happen, made before you test it."),
+    entry("conclusion", "What you decide the data shows, once the test is done."),
+  ];
+  assert.ok(tooClose(pool[0], pool[2]));
+  for (let seed = 1; seed <= 40; seed++) {
+    assert.ok(!wordDistractors("experiment", pool, mulberry32(seed)).includes("fair test"), `seed ${seed}`);
+    assert.ok(!wordDistractors("fair test", pool, mulberry32(seed)).includes("experiment"), `seed ${seed}`);
+  }
+});
+
 test("genuinely different words still serve as distractors", () => {
   const words = packWords("math-vocabulary");
   // Word form vs expanded form share the word "form" but describe different

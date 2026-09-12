@@ -424,7 +424,10 @@ const CLUE_OVERLAP = 3;
  * was marked wrong. Two cheap tests catch the real cases:
  *   - one word's tokens sit inside the other's (value / place value);
  *   - the two clues share several content words (compost / fertilizer both
- *     talk about food and soil and plants).
+ *     talk about food and soil and plants);
+ *   - one word's clue names the other word ("fair test: An experiment that
+ *     treats every part the same" offered beside "experiment" for "The ____
+ *     uses three cups of water", where both fit).
  * A distractor is meant to be wrong. If it might be right, it is not one.
  */
 export function tooClose(target: ClientWord, candidate: ClientWord): boolean {
@@ -434,6 +437,8 @@ export function tooClose(target: ClientWord, candidate: ClientWord): boolean {
   if (contained) return true;
   const ta = clueTokens(target.clue || "");
   const tb = clueTokens(candidate.clue || "");
+  const names = (clue: Set<string>, words: string[]) => words.every((w) => clue.has(stem(w)));
+  if (names(tb, a) || names(ta, b)) return true;
   let shared = 0;
   for (const t of ta) if (tb.has(t)) shared++;
   return shared >= CLUE_OVERLAP;
@@ -446,11 +451,18 @@ export function wordDistractors(
   count = 3
 ): string[] {
   const t = target.toLowerCase();
-  const targetWord = pool.find((w) => w.word.toLowerCase() === t);
-  // Never offer a word that could also be right. See tooClose.
+  // Never offer a word that could also be right. See tooClose. A review pool
+  // holds the same word from several lists with different clues, so a word
+  // is out if any of its entries is too close to any entry of the target.
+  const targets = pool.filter((w) => w.word.toLowerCase() === t);
+  const close = new Set(
+    otherWords(target, pool)
+      .filter((w) => targets.some((tw) => tooClose(tw, w)))
+      .map((w) => w.word.toLowerCase())
+  );
   const others = otherWords(target, pool)
-    .filter((w) => !targetWord || !tooClose(targetWord, w))
-    .map((w) => w.word.toLowerCase());
+    .map((w) => w.word.toLowerCase())
+    .filter((w) => !close.has(w));
   const parts = latinPartsOf(t);
   const prefix = parts.length === 2 && parts[0].endsWith("-") ? parts[0].slice(0, -1) : "";
 
