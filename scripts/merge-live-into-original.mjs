@@ -14,7 +14,8 @@
 //   node scripts/merge-live-into-original.mjs --apply    backs up, then writes
 //
 // --source-file <dump.json> reads the live side from an Extended JSON dump
-// (from the app's temporary /api/export) instead of MONGODB_URI_LIVE.
+// (taken from a temporary export route, since removed) instead of MONGODB_URI_LIVE.
+// Run once on 2026-09-12; backup eduapp-backup-20260912T2114.
 // --source-db / --target-db pick database names (default eduapp for both);
 // --source-uri-env / --target-uri-env pick which .env.local keys to read.
 // The source is only ever read.

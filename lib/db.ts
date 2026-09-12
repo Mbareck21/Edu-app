@@ -50,19 +50,3 @@ export async function connectDB(): Promise<typeof mongoose> {
   await checkIdentity(m ?? mongoose);
   return m ?? mongoose;
 }
-
-/**
- * TEMPORARY, for app/api/export only: the connection without the identity
- * check, so the wrong database can still be read out once the app has locked.
- * Removed with that route.
- */
-export async function connectDBUnchecked(): Promise<typeof mongoose> {
-  if (!MONGODB_URI) throw new Error("MONGODB_URI is not set.");
-  if (mongoose.connection.readyState !== 1 && !global.__mongooseConn) {
-    global.__mongooseConn = mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-      dbName: process.env.MONGODB_DB ?? "eduapp",
-    });
-  }
-  return mongoose.connection.readyState === 1 ? mongoose : ((await global.__mongooseConn) ?? mongoose);
-}
