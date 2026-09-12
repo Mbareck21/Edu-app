@@ -552,20 +552,20 @@ export function checkMcq(
 /** Whole passages kept per list for the days the writer cannot be reached. */
 export const ARCHIVE_MAX = 8;
 
-/** The list a passage's highlighted words go to, so review picks them up. */
-export const READING_WORDS_LIST = "Reading Words";
-
 export type GlossWord = { word: string; meaning: string; arabic: string };
 
 /**
- * The highlighted words of a passage that are on none of his lists yet,
- * ready to add: lower case, once each, letters only (the word-list rule), and
+ * The highlighted words of a passage that are not in Words to fix yet, ready
+ * to add. A word already on one of his lists brings that list's meaning and
+ * Arabic instead of the gloss's: those are the ones his father checked (the
+ * writer glossed "conclusion" as استنتاج; his list says خلاصة). Otherwise: lower case, once each, letters only (the word-list rule), and
  * the meaning with the word itself blanked out, because the meaning becomes
  * the clue for "which word means this?".
  */
 export function readingWordsToAdd(
   glosses: readonly GlossWord[],
-  known: ReadonlySet<string>
+  known: ReadonlySet<string>,
+  onLists: ReadonlyMap<string, { clue: string; arabic: string }> = new Map()
 ): { word: string; clue: string; arabic: string }[] {
   const out = new Map<string, { word: string; clue: string; arabic: string }>();
   for (const g of glosses) {
@@ -573,7 +573,12 @@ export function readingWordsToAdd(
     if (!/^[a-z][a-z\s-]*$/.test(word) || known.has(word) || out.has(word)) continue;
     // Letters, spaces and hyphens only, so the word is safe inside a pattern.
     const clue = g.meaning.replace(new RegExp(`\\b${word}\\w*`, "gi"), "___").trim();
-    out.set(word, { word, clue, arabic: g.arabic.trim() });
+    const listed = onLists.get(word);
+    out.set(word, {
+      word,
+      clue: listed?.clue.trim() || clue,
+      arabic: listed?.arabic.trim() || g.arabic.trim(),
+    });
   }
   return [...out.values()];
 }

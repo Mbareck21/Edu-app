@@ -19,6 +19,7 @@
  */
 
 import { connectDB } from "@/lib/db";
+import { SpellChain } from "@/lib/models/SpellChain";
 import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
 
 /** The one pool document's name. Also what the parent sees it called. */
@@ -66,4 +67,24 @@ export async function getPool(): Promise<ClientWordList> {
   ).lean();
   if (!doc) throw new Error("could not open the stuck-words pool");
   return toClient(doc);
+}
+
+/**
+ * Put new words into the pool, each with its spelling chain. The caller has
+ * already dropped words the pool holds. Used by the parent's add box and by a
+ * finished reading, so both land words the same way.
+ */
+export async function addPoolWords(
+  poolId: string,
+  words: readonly { word: string; clue: string; arabic: string }[]
+): Promise<void> {
+  if (words.length === 0) return;
+  await WordList.updateOne({ _id: poolId }, { $push: { words: { $each: words } } });
+  // A word he has been stuck on before keeps the chain it already had —
+  // re-adding it must not wipe a run he earned. $setOnInsert only.
+  await SpellChain.bulkWrite(
+    words.map(({ word }) => ({
+      updateOne: { filter: { word }, update: { $setOnInsert: { word } }, upsert: true },
+    }))
+  );
 }

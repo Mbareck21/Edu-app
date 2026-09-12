@@ -328,3 +328,12 @@ test("readingWordsToAdd keeps new glossed words once, with the word blanked from
     { word: "fair test", clue: "A test where only one thing changes.", arabic: "اختبار عادل" },
   ]);
 });
+
+test("readingWordsToAdd prefers the meaning and Arabic already on his lists", () => {
+  const out = readingWordsToAdd(
+    [{ word: "conclusion", meaning: "final idea", arabic: "استنتاج" }],
+    new Set(),
+    new Map([["conclusion", { clue: "What you decide the data shows.", arabic: "خلاصة" }]])
+  );
+  assert.deepEqual(out, [{ word: "conclusion", clue: "What you decide the data shows.", arabic: "خلاصة" }]);
+});

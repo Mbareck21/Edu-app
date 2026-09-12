@@ -3,8 +3,7 @@ import { z } from "zod";
 
 import { connectDB } from "@/lib/db";
 import { WordList, toClient } from "@/lib/models/WordList";
-import { SpellChain } from "@/lib/models/SpellChain";
-import { getPool } from "@/lib/word-source";
+import { addPoolWords, getPool } from "@/lib/word-source";
 import { parseWordEntry } from "@/lib/stuck-entry";
 import { fillArabic, fillClues } from "@/lib/fill-clues";
 
@@ -59,29 +58,10 @@ export async function POST(req: Request) {
     await WordList.updateOne({ _id: pool._id, "words.word": word }, { $set: patch });
   }
 
-  if (fresh.length > 0) {
-    await WordList.updateOne(
-      { _id: pool._id },
-      {
-        $push: {
-          words: {
-            $each: fresh.map((word) => ({
-              word,
-              clue: clues[word] ?? "",
-              arabic: arabic[word] ?? "",
-            })),
-          },
-        },
-      }
-    );
-    // A word he has been stuck on before keeps the chain it already had —
-    // re-adding it must not wipe a run he earned. $setOnInsert only.
-    await SpellChain.bulkWrite(
-      fresh.map((word) => ({
-        updateOne: { filter: { word }, update: { $setOnInsert: { word } }, upsert: true },
-      }))
-    );
-  }
+  await addPoolWords(
+    pool._id,
+    fresh.map((word) => ({ word, clue: clues[word] ?? "", arabic: arabic[word] ?? "" }))
+  );
 
   await connectDB();
   const after = await WordList.findById(pool._id).lean();
@@ -93,12 +73,3 @@ export async function POST(req: Request) {
   });
 }
 
-/** Remove one word from the pool. Its chain record is kept. */
-export async function DELETE(req: Request) {
-  const word = new URL(req.url).searchParams.get("word")?.trim().toLowerCase();
-  if (!word) return NextResponse.json({ error: "word required" }, { status: 400 });
-  const pool = await getPool();
-  await WordList.updateOne({ _id: pool._id }, { $pull: { words: { word } } });
-  const after = await WordList.findById(pool._id).lean();
-  return NextResponse.json({ list: after ? toClient(after) : pool });
-}

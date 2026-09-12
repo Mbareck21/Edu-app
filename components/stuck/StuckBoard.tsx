@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import Icon from "@/components/ui/Icon";
 import ChainRunner, { chainResumeKey, isChainSaved } from "@/components/stuck/ChainRunner";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import type { WordSense } from "@/components/stuck/ChainRunner";
@@ -109,11 +108,6 @@ function StuckBoardInner({
     }
   }
 
-  async function remove(word: string) {
-    setWords((w) => w.filter((x) => x !== word));
-    await fetch(`/api/stuck?word=${encodeURIComponent(word)}`, { method: "DELETE" });
-  }
-
   if (running) {
     return (
       <div className="-mx-4">
@@ -212,15 +206,6 @@ function StuckBoardInner({
                           : `${done} of ${CHAIN_TARGET} in a row${c && c.best > done ? ` · best ${c.best}` : ""}`}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${w}`}
-                      onClick={() => void remove(w)}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-                      style={{ color: "var(--color-muted)" }}
-                    >
-                      <Icon name="x" size={20} />
-                    </button>
                   </div>
                   <div className="mt-3 flex gap-1" aria-hidden>
                     {Array.from({ length: CHAIN_TARGET }, (_, i) => (

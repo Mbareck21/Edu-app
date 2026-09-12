@@ -3,12 +3,8 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
-import {
-  ARCHIVE_MAX,
-  READING_WORDS_LIST,
-  readingWordsToAdd,
-  type GlossWord,
-} from "@/lib/reading";
+import { ARCHIVE_MAX, readingWordsToAdd, type GlossWord } from "@/lib/reading";
+import { addPoolWords, getPool } from "@/lib/word-source";
 
 export const runtime = "nodejs";
 
@@ -114,23 +110,27 @@ export async function POST(req: Request) {
 
   await doc.save();
 
-  // The highlighted words he met go into review. Only words on none of his
-  // lists: a school word is already being reviewed where it lives.
+  // The highlighted words he met go into Words to fix, with their spelling
+  // chains, so the writing trainer and every word test pick them up. Words
+  // already there keep what they have.
   const glosses = Array.isArray(finished?.vocabGlosses) ? finished.vocabGlosses : [];
   if (glosses.length > 0) {
-    const lists = await WordList.find({}, { "words.word": 1 }).lean();
-    const known = new Set(lists.flatMap((l) => (l.words ?? []).map((w) => String(w.word))));
-    const fresh = readingWordsToAdd(glosses, known);
-    if (fresh.length > 0) {
-      await WordList.updateOne(
-        { name: READING_WORDS_LIST },
-        {
-          $setOnInsert: { kind: "unit", hiddenMessage: "" },
-          $push: { words: { $each: fresh } },
-        },
-        { upsert: true }
-      );
+    const pool = await getPool();
+    const lists = await WordList.find({ kind: { $ne: "pool" } }, { words: 1 }).lean();
+    const onLists = new Map<string, { clue: string; arabic: string }>();
+    for (const l of lists) {
+      for (const w of l.words ?? []) {
+        const clue = String(w.clue ?? "");
+        const arabic = String(w.arabic ?? "");
+        const had = onLists.get(String(w.word));
+        onLists.set(String(w.word), {
+          clue: had?.clue || clue,
+          arabic: had?.arabic || arabic,
+        });
+      }
     }
+    const fresh = readingWordsToAdd(glosses, new Set(pool.words.map((w) => w.word)), onLists);
+    await addPoolWords(pool._id, fresh);
   }
 
   const fresh = await WordList.findById(parsed.data.listId).lean();
