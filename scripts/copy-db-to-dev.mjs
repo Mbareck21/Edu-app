@@ -19,4 +19,12 @@ for (const { name } of await src.listCollections().toArray()) {
   if (docs.length) await dst.collection(name).insertMany(docs);
   console.log(`${name}: ${docs.length}`);
 }
+// Mark the copy as the copy. The live app refuses it and local runs accept
+// only it (lib/db.ts), so neither can ever write to the other's data.
+await dst.collection("meta").updateOne(
+  { _id: "identity" },
+  { $set: { value: "nour-quest-dev-copy", copiedAt: new Date() } },
+  { upsert: true }
+);
+console.log("marked eduapp-dev as the test copy");
 await client.close();

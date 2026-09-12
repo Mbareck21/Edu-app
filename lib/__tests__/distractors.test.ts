@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { tooClose, wordDistractors } from "@/lib/items";
+import { makeCloze, makePickSentence, tooClose, wordDistractors } from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
 import { packById } from "@/lib/word-packs";
 import type { ClientWord } from "@/lib/models/WordList";
@@ -79,4 +79,44 @@ test("every pack can still build a full card for every word", () => {
       }
     }
   }
+});
+
+test("a number word's blank shows its numeral, so only one number fits", () => {
+  const words = packWords("number-words").map((w) => ({
+    ...w,
+    examples: [`We need ${w.word} more minutes to finish.`],
+  }));
+  const seventy = by(words, "seventy");
+  for (let seed = 1; seed <= 20; seed++) {
+    const item = makeCloze(seventy, { words, listId: "n" }, mulberry32(seed));
+    assert.ok(item);
+    assert.equal(item.sentence, "We need ____ (70) more minutes to finish.");
+  }
+  const fiftyFive = makeCloze(by(words, "fifty-five"), { words, listId: "n" }, mulberry32(1));
+  assert.equal(fiftyFive?.sentence, "We need ____ (55) more minutes to finish.");
+});
+
+test("a number word never borrows another number's sentence as the wrong one", () => {
+  const numbers = packWords("number-words").map((w) => ({
+    ...w,
+    examples: [`I counted ${w.word} birds.`],
+  }));
+  // With only number words on the list there is no honest wrong sentence.
+  assert.equal(makePickSentence(by(numbers, "seventy"), { words: numbers, listId: "n" }, mulberry32(3)), null);
+  const mixed = [
+    ...numbers,
+    ...packWords("growing-plants").map((w, i) => ({ ...w, examples: [`The ${w.word} sat on shelf ${i}.`] })),
+  ];
+  for (let seed = 1; seed <= 20; seed++) {
+    const item = makePickSentence(by(mixed, "seventy"), { words: mixed, listId: "m" }, mulberry32(seed));
+    assert.ok(item);
+    const wrong = item.options.filter((o) => o !== item.answer);
+    for (const o of wrong) assert.ok(!/birds/.test(o), `number sentence used as wrong: ${o}`);
+  }
+});
+
+test("a word that is not a number keeps a plain blank", () => {
+  const words = packWords("growing-plants").map((w) => ({ ...w, examples: [`The ${w.word} was in the garden.`] }));
+  const item = makeCloze(by(words, "soil"), { words, listId: "g" }, mulberry32(1));
+  assert.equal(item?.sentence, "The ____ was in the garden.");
 });

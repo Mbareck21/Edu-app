@@ -9,7 +9,7 @@ declare global {
 }
 
 /**
- * The record that marks Nour's database: `meta` collection, `_id: "identity"`.
+ * The record that marks a database: `meta` collection, `_id: "identity"`.
  *
  * On 2026-09-07 a password rotation left Vercel's MONGODB_URI pointing at a
  * different, empty database. Nothing failed: the app made a new profile at
@@ -19,6 +19,18 @@ declare global {
  * copy made by scripts/copy-db-to-dev.mjs carries the record too.
  */
 export const DB_IDENTITY = "nour-quest-original";
+/**
+ * The test copy's mark. A second leak the same week: MONGODB_DB=eduapp-dev was
+ * copied into Vercel with the URI, so the live app ran on the test copy, which
+ * carried the same record and passed. Now each side accepts only its own:
+ * the live app only Nour's database, local runs only the copy.
+ */
+export const DEV_COPY_IDENTITY = "nour-quest-dev-copy";
+
+const IS_PRODUCTION = process.env.VERCEL_ENV === "production";
+const EXPECTED = IS_PRODUCTION ? DB_IDENTITY : DEV_COPY_IDENTITY;
+/** The live app always uses his database by name; MONGODB_DB is for local runs. */
+const DB_NAME = IS_PRODUCTION ? "eduapp" : (process.env.MONGODB_DB ?? "eduapp");
 
 async function checkIdentity(m: typeof mongoose): Promise<void> {
   if (global.__dbIdentityOk) return;
@@ -26,10 +38,11 @@ async function checkIdentity(m: typeof mongoose): Promise<void> {
   const doc = db
     ? await db.collection<{ _id: string; value?: string }>("meta").findOne({ _id: "identity" })
     : null;
-  if (doc?.value !== DB_IDENTITY) {
+  if (doc?.value !== EXPECTED) {
     throw new Error(
-      `Wrong database: "${db?.databaseName ?? "?"}" has no identity record. MONGODB_URI must point at ` +
-        `Nour's database. Refusing to run rather than start him again from zero.`
+      `Wrong database: "${db?.databaseName ?? "?"}" is marked "${doc?.value ?? "nothing"}", expected ` +
+        `"${EXPECTED}". ${IS_PRODUCTION ? "MONGODB_URI must point at Nour's database." : "Local runs use the test copy (scripts/copy-db-to-dev.mjs)."} ` +
+        `Refusing to run rather than read or write the wrong one.`
     );
   }
   global.__dbIdentityOk = true;
@@ -42,8 +55,7 @@ export async function connectDB(): Promise<typeof mongoose> {
   if (mongoose.connection.readyState !== 1 && !global.__mongooseConn) {
     global.__mongooseConn = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
-      // Dev points at eduapp-dev (see .env.local); production leaves this unset.
-      dbName: process.env.MONGODB_DB ?? "eduapp",
+      dbName: DB_NAME,
     });
   }
   const m = mongoose.connection.readyState === 1 ? mongoose : await global.__mongooseConn;

@@ -15,6 +15,7 @@ import { LATIN_PARTS } from "@/lib/curriculum";
 import { pick, randInt, shuffle } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
 import type { ClientWord, SkillId } from "@/lib/models/WordList";
+import { fromWords } from "@/lib/number-words";
 
 /** Which per-word schedule an answer feeds. Same ids as WordList skills. */
 export type ItemSkill = SkillId;
@@ -497,6 +498,19 @@ function blankOut(sentence: string, word: string): string {
   return sentence.replace(wordRegex(word), BLANK);
 }
 
+/**
+ * A number word fits any sentence that counts something. "We need ____ more
+ * minutes to finish" takes seventy, twenty and thirty alike, so a list of
+ * number words turned every blank into a question with three right answers
+ * and marked two of them wrong. The blank for a number word therefore shows
+ * its numeral, which is also exactly what the Number Words list practises:
+ * the word form of a number he can already read.
+ */
+function numeralOf(word: string): string | null {
+  const n = fromWords(word);
+  return n === null ? null : n.toLocaleString("en-US");
+}
+
 /* ------------------------------------------------------------------ *
  * Item generators — every one returns null when the word lacks the data
  * ------------------------------------------------------------------ */
@@ -625,7 +639,9 @@ export function makeCloze(word: ClientWord, pool: ItemPool, rng: Rng): ClozeItem
     ...baseFor(word, pool, "use", "use-cloze"),
     kind: "use-cloze",
     prompt: "Which word fits the blank?",
-    sentence: blankOut(sentence, word.word),
+    sentence: numeralOf(word.word)
+      ? blankOut(sentence, word.word).replace(BLANK, `${BLANK} (${numeralOf(word.word)})`)
+      : blankOut(sentence, word.word),
     options: fourOptions(word.word, wordDistractors(word.word, pool.words, rng), rng),
     answer: word.word,
     feedback: sentence,
@@ -641,8 +657,12 @@ export function makePickSentence(
   if (mine.length === 0) return null;
   // A wrong use = another word's sentence with our word dropped into its slot.
   const wrong: string[] = [];
+  const isNumber = numeralOf(word.word) !== null;
   for (const other of shuffle(rng, otherWords(word.word, pool.words))) {
     if (wrong.length >= 3) break;
+    // Another number's sentence with this number dropped in is still a right
+    // sentence ("I have seventy cats"), so it cannot be the wrong one.
+    if (isNumber && numeralOf(other.word) !== null) continue;
     const theirs = usableExamples(other);
     if (theirs.length === 0) continue;
     const swapped = theirs[0].replace(wordRegex(other.word), word.word);

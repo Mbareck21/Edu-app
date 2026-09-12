@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import BottomNav from "@/components/ui/BottomNav";
+import RefreshWhenStale from "@/components/ui/RefreshWhenStale";
+import { requestSeed } from "@/components/ui/time";
 
 export type AppShellProps = {
   children: ReactNode;
@@ -35,6 +37,7 @@ export default function AppShell({
       >
         {children}
       </main>
+      <RefreshWhenStale renderedAt={requestSeed()} />
       {nav ? <BottomNav /> : null}
     </>
   );
