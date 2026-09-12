@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 
-import { connectDB } from "@/lib/db";
+import { connectDBUnchecked } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const COLLECTIONS = ["profiles", "wordlists", "spellchains", "timesfacts", "mathprogresses"];
 
 export async function GET() {
-  await connectDB();
+  await connectDBUnchecked();
   const db = mongoose.connection.db;
   if (!db) return NextResponse.json({ error: "no database" }, { status: 500 });
   const out: Record<string, unknown[]> = {};
