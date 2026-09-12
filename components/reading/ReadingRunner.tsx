@@ -159,6 +159,12 @@ function ReadingRunnerInner({
   }, [reading, phase, mode, qStates, qIdx, saveKey]);
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
+  /**
+   * Answers already marked wrong on this question. Tapping Check again on the
+   * same words, or the same option twice, used to count as another miss, and
+   * the third one gave the answer away before he had changed anything.
+   */
+  const [tried, setTried] = useState<string[]>([]);
   const [shake, setShake] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
@@ -241,6 +247,7 @@ function ReadingRunnerInner({
     setEcho(null);
     setQStates(freshQ(next?.questions.length ?? 0));
     setQIdx(0);
+    setTried([]);
     setWpm(null);
     setTimerStart(null);
     savedRef.current = false;
@@ -346,11 +353,22 @@ function ReadingRunnerInner({
     setTimeout(() => setShake(false), 420);
   }
 
+  /** A repeat of an answer already marked wrong: shake, but no new miss. */
+  function alreadyTried(key: string): boolean {
+    if (!tried.includes(key)) return false;
+    setShake(true);
+    setTimeout(() => setShake(false), 420);
+    return true;
+  }
+
   function answerText() {
     const q = questions[qIdx];
     if (!q || !typed.trim()) return;
-    const judged = judgeAnswer(typed, q.acceptable);
+    const key = typed.trim().toLowerCase().replace(/\s+/g, " ");
+    if (alreadyTried(key)) return;
+    const judged = judgeAnswer(typed, q.acceptable, q.q);
     if (judged.verdict === "wrong") {
+      setTried((t) => [...t, key]);
       markWrong(qIdx);
       return;
     }
@@ -369,12 +387,13 @@ function ReadingRunnerInner({
 
   function answerPick(index: number) {
     const q = questions[qIdx];
-    if (!q) return;
+    if (!q || alreadyTried(`#${index}`)) return;
     setPicked(index);
     if (index === q.answerIndex) {
       patchQ(qIdx, { done: true });
       setFeedback({ state: "correct", title: "That's it.", line: q.options[index] });
     } else {
+      setTried((t) => [...t, `#${index}`]);
       markWrong(qIdx);
       setTimeout(() => setPicked(null), 420);
     }
@@ -390,6 +409,7 @@ function ReadingRunnerInner({
     setFeedback(null);
     setTyped("");
     setPicked(null);
+    setTried([]);
     if (qIdx + 1 < questions.length) {
       setQIdx(qIdx + 1);
     } else {
@@ -874,6 +894,27 @@ function ReadingRunnerInner({
           </div>
         ) : null}
 
+        {/* Above the answer box, not below it: on a phone the keyboard covers
+            whatever sits under the box, so a miss looked like nothing had
+            happened and he tapped Check again. */}
+        {!state.revealed && hintsShown > 0 ? (
+          <div
+            className="mt-4 rounded-tile px-3 py-3"
+            style={{ background: "var(--color-blue-soft)" }}
+          >
+            <p
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: "var(--color-blue-dark)" }}
+            >
+              Hint
+            </p>
+            {q.hints.slice(0, hintsShown).map((h, i) => (
+              <p key={i} className="mt-1 text-base">
+                {h}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {state.revealed ? (
           <div className="mt-4 space-y-3">
             <div
@@ -939,24 +980,6 @@ function ReadingRunnerInner({
           </form>
         )}
 
-        {!state.revealed && hintsShown > 0 ? (
-          <div
-            className="mt-4 rounded-tile px-3 py-3"
-            style={{ background: "var(--color-blue-soft)" }}
-          >
-            <p
-              className="text-xs font-bold uppercase tracking-wide"
-              style={{ color: "var(--color-blue-dark)" }}
-            >
-              Hint
-            </p>
-            {q.hints.slice(0, hintsShown).map((h, i) => (
-              <p key={i} className="mt-1 text-base">
-                {h}
-              </p>
-            ))}
-          </div>
-        ) : null}
       </Card>
 
       <FeedbackSheet feedback={feedback} onContinue={advance} />

@@ -74,3 +74,28 @@ test("the best of several acceptable answers is reported", () => {
   assert.equal(j.verdict, "correct");
   assert.equal(j.matched, "a big wave");
 });
+
+test("a yes/no question takes a plain yes or no", () => {
+  const acc = ["yes it matches", "yes it fits", "it matches"];
+  const q = "Does the later conclusion match the earlier observations?";
+  assert.equal(judgeAnswer("yes", acc, q).verdict, "correct");
+  assert.equal(judgeAnswer("Yes.", acc, q).verdict, "correct");
+  assert.equal(judgeAnswer("yeah it does", acc, q).verdict, "correct");
+  assert.equal(judgeAnswer("no", acc, q).verdict, "wrong");
+  assert.equal(judgeAnswer("no it does not", acc, q).verdict, "wrong");
+});
+
+test("a leading no is not a yes/no answer when the question is not yes/no", () => {
+  assert.equal(judgeAnswer("no", ["no money"], "What did he have left?").verdict, "wrong");
+});
+
+test("naming the thing without its describing word is close", () => {
+  const q = "What did Sam use to measure wind speed?";
+  assert.equal(judgeAnswer("a model", ["a small model"], q).verdict, "close");
+  assert.equal(judgeAnswer("small", ["a small model"], q).verdict, "wrong");
+});
+
+test("the thing named in the question does not answer it", () => {
+  assert.equal(judgeAnswer("car", ["red car"], "What color was the car?").verdict, "wrong");
+  assert.equal(judgeAnswer("happy", ["not happy"], "How did she feel?").verdict, "wrong");
+});

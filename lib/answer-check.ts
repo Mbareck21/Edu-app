@@ -153,10 +153,31 @@ type Candidate = {
   coverage: number;
 };
 
+/** A question that asks for a yes or a no: it opens with a helping verb. */
+const YES_NO_QUESTION = /^\s*(is|are|was|were|do|does|did|can|could|will|would|should|has|have|had)\b/i;
+
+const POLARITY: Record<string, "yes" | "no"> = {
+  yes: "yes", yeah: "yes", yep: "yes", yup: "yes",
+  no: "no", nope: "no", nah: "no",
+};
+
+const NEGATIONS = new Set(["no", "not", "never", "nothing", "none"]);
+
 const VERDICT_RANK: Record<AnswerVerdict, number> = { wrong: 0, close: 1, correct: 2 };
 
-function judgeAgainst(answerWords: string[], acceptable: string): Candidate {
+function judgeAgainst(answerWords: string[], acceptable: string, question: string): Candidate {
   const expected = contentWords(tokens(acceptable));
+  const questionWords = new Set(tokens(question).map(stem));
+
+  // "Does the ending fit?" is answered by "yes". The writer phrases the
+  // acceptable answers in full ("yes it fits"), and scoring content words
+  // marked a plain "yes" half right, so wrong. On a yes/no question his first
+  // word decides: the same yes or no is right, the opposite is wrong.
+  if (YES_NO_QUESTION.test(question) && POLARITY[expected[0] ?? ""]) {
+    const said = POLARITY[answerWords[0] ?? ""];
+    if (said === POLARITY[expected[0]]) return { verdict: "correct", coverage: 1 };
+    if (said) return { verdict: "wrong", coverage: 0 };
+  }
 
   // An answer like "he did" is nothing but stopwords, so content-word scoring
   // has nothing to score. Compare the whole normalised strings instead, still
@@ -185,6 +206,20 @@ function judgeAgainst(answerWords: string[], acceptable: string): Candidate {
   // was rough — close, which the caller still accepts.
   if (coverage === 1) return { verdict: loose === 0 ? "correct" : "close", coverage };
   if (coverage >= CLOSE_COVERAGE) return { verdict: "close", coverage };
+
+  // "a model" for "a small model": two content words where he named the thing
+  // and left off the describing word. Half the words, so wrong by coverage,
+  // but he found the answer. Not when the thing is already in the question
+  // ("What color was the car?" is not answered by "car"), and not when the
+  // first word flips the meaning ("not happy").
+  if (
+    expected.length === 2 &&
+    !NEGATIONS.has(expected[0]) &&
+    !questionWords.has(stem(expected[1])) &&
+    bestMatch(expected[1], given) !== "none"
+  ) {
+    return { verdict: "close", coverage };
+  }
   return { verdict: "wrong", coverage };
 }
 
@@ -193,13 +228,18 @@ function judgeAgainst(answerWords: string[], acceptable: string): Candidate {
  * best outcome. Order-blind and extra-word-blind: producing the expected
  * content words is what counts, however he arranged or padded them.
  */
-export function judgeAnswer(answer: string, acceptable: readonly string[]): AnswerJudgement {
+export function judgeAnswer(
+  answer: string,
+  acceptable: readonly string[],
+  /** The question asked. Lets a yes/no question take a plain yes. */
+  question = ""
+): AnswerJudgement {
   const answerWords = tokens(answer);
   if (answerWords.length === 0) return { verdict: "wrong", matched: "", coverage: 0 };
 
   let best: AnswerJudgement = { verdict: "wrong", matched: "", coverage: 0 };
   for (const acc of acceptable) {
-    const c = judgeAgainst(answerWords, acc);
+    const c = judgeAgainst(answerWords, acc, question);
     const better =
       VERDICT_RANK[c.verdict] > VERDICT_RANK[best.verdict] ||
       (VERDICT_RANK[c.verdict] === VERDICT_RANK[best.verdict] && c.coverage > best.coverage);

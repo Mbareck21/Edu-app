@@ -3,6 +3,12 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
+import {
+  ARCHIVE_MAX,
+  READING_WORDS_LIST,
+  readingWordsToAdd,
+  type GlossWord,
+} from "@/lib/reading";
 
 export const runtime = "nodejs";
 
@@ -90,9 +96,42 @@ export async function POST(req: Request) {
   // level the generator last used, so nothing bumps it here.
 
   // Clear the current reading — next Generate creates a fresh one.
+  // A finished passage goes on the archive before it is cleared. This is the
+  // passage most worth serving again on a day the writer is down, and clearing
+  // it without archiving meant only unfinished passages were ever kept.
+  const finished = doc.toObject().currentReading as
+    | ({ paragraph?: unknown; vocabGlosses?: GlossWord[] } & Record<string, unknown>)
+    | null
+    | undefined;
+  if (finished && typeof finished.paragraph === "string" && finished.paragraph) {
+    const archive = doc.toObject().readingArchive;
+    doc.set(
+      "readingArchive",
+      [...(Array.isArray(archive) ? archive : []), finished].slice(-ARCHIVE_MAX)
+    );
+  }
   doc.set("currentReading", null);
 
   await doc.save();
+
+  // The highlighted words he met go into review. Only words on none of his
+  // lists: a school word is already being reviewed where it lives.
+  const glosses = Array.isArray(finished?.vocabGlosses) ? finished.vocabGlosses : [];
+  if (glosses.length > 0) {
+    const lists = await WordList.find({}, { "words.word": 1 }).lean();
+    const known = new Set(lists.flatMap((l) => (l.words ?? []).map((w) => String(w.word))));
+    const fresh = readingWordsToAdd(glosses, known);
+    if (fresh.length > 0) {
+      await WordList.updateOne(
+        { name: READING_WORDS_LIST },
+        {
+          $setOnInsert: { kind: "unit", hiddenMessage: "" },
+          $push: { words: { $each: fresh } },
+        },
+        { upsert: true }
+      );
+    }
+  }
 
   const fresh = await WordList.findById(parsed.data.listId).lean();
   if (!fresh) {

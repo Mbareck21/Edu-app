@@ -27,6 +27,7 @@ import {
   type PassageKind,
   type QuestionSpec,
   type StoryCast,
+  ARCHIVE_MAX,
   pickArchived,
 } from "@/lib/reading";
 import { PROFILE_KEY, Profile, READING_SEEN_MAX } from "@/lib/models/Profile";
@@ -83,8 +84,6 @@ const ResponseShape = z.object({
 
 const MAX_STUDY_WORDS = 12;
 const MAX_HISTORY_ENTRIES = 5;
-/** Whole passages kept per list for the days the writer cannot be reached. */
-const ARCHIVE_MAX = 8;
 type Archived = { generatedAt?: Date | string | null } & Record<string, unknown>;
 
 function archiveOf(doc: { toObject(): { readingArchive?: unknown } }): Archived[] {

@@ -549,6 +549,35 @@ export function checkMcq(
   return { options: kept, answerIndex: secondRight ? -1 : answer };
 }
 
+/** Whole passages kept per list for the days the writer cannot be reached. */
+export const ARCHIVE_MAX = 8;
+
+/** The list a passage's highlighted words go to, so review picks them up. */
+export const READING_WORDS_LIST = "Reading Words";
+
+export type GlossWord = { word: string; meaning: string; arabic: string };
+
+/**
+ * The highlighted words of a passage that are on none of his lists yet,
+ * ready to add: lower case, once each, letters only (the word-list rule), and
+ * the meaning with the word itself blanked out, because the meaning becomes
+ * the clue for "which word means this?".
+ */
+export function readingWordsToAdd(
+  glosses: readonly GlossWord[],
+  known: ReadonlySet<string>
+): { word: string; clue: string; arabic: string }[] {
+  const out = new Map<string, { word: string; clue: string; arabic: string }>();
+  for (const g of glosses) {
+    const word = g.word.trim().toLowerCase();
+    if (!/^[a-z][a-z\s-]*$/.test(word) || known.has(word) || out.has(word)) continue;
+    // Letters, spaces and hyphens only, so the word is safe inside a pattern.
+    const clue = g.meaning.replace(new RegExp(`\\b${word}\\w*`, "gi"), "___").trim();
+    out.set(word, { word, clue, arabic: g.arabic.trim() });
+  }
+  return [...out.values()];
+}
+
 /** An archived passage is only served again once it is at least this old. */
 export const REUSE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 

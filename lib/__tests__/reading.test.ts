@@ -29,7 +29,7 @@ import {
   STORY_NAMES,
   STORY_SETTINGS,
 } from "@/lib/reading";
-import { pickArchived, REUSE_AFTER_MS } from "@/lib/reading";
+import { pickArchived, readingWordsToAdd, REUSE_AFTER_MS } from "@/lib/reading";
 
 /** Tiny deterministic rng so the cast tests are not flaky. */
 function seeded(seed: number): () => number {
@@ -310,4 +310,21 @@ test("pickArchived serves the oldest passage not seen for a week, or nothing", (
   assert.equal(pickArchived([archive[0]], now), null);
   assert.equal(pickArchived([], now), null);
   assert.equal(REUSE_AFTER_MS, 7 * day);
+});
+
+test("readingWordsToAdd keeps new glossed words once, with the word blanked from its clue", () => {
+  const out = readingWordsToAdd(
+    [
+      { word: "Variable", meaning: "A variable is the one thing you change.", arabic: "متغير" },
+      { word: "variable", meaning: "again", arabic: "" },
+      { word: "data", meaning: "Facts you collect.", arabic: "بيانات" },
+      { word: "fair test", meaning: "A test where only one thing changes.", arabic: "اختبار عادل" },
+      { word: "o'clock", meaning: "bad shape", arabic: "" },
+    ],
+    new Set(["data"])
+  );
+  assert.deepEqual(out, [
+    { word: "variable", clue: "A ___ is the one thing you change.", arabic: "متغير" },
+    { word: "fair test", clue: "A test where only one thing changes.", arabic: "اختبار عادل" },
+  ]);
 });
