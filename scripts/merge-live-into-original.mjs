@@ -128,7 +128,8 @@ function mergeProfile(orig, live) {
     stats,
     activity,
     reading,
-    recentSessionIds: [...new Set([...(orig.recentSessionIds ?? []), ...(live.recentSessionIds ?? [])])].slice(-100),
+    // Newest first, as reserveSession stores them, so the cap drops the oldest.
+    recentSessionIds: [...new Set([...(live.recentSessionIds ?? []), ...(orig.recentSessionIds ?? [])])].slice(0, 100),
     readingSeen: [...(orig.readingSeen ?? []), ...(live.readingSeen ?? [])].sort((a, b) => t(a.at) - t(b.at)).slice(-8),
   };
   return {
