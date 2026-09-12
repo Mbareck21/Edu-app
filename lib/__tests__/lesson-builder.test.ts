@@ -8,6 +8,7 @@ import {
   levenshtein,
   makeSpell,
   makeWrite,
+  recalledWord,
   usableExamples,
   type AnswerableItem,
   type LessonItem,
@@ -381,6 +382,60 @@ test("typed dictation names the word parts in its feedback", () => {
 test("cloze only uses example sentences that contain the word", () => {
   const w = word("climb", { examples: ["He can climb the tree.", "Nothing here.", ""] });
   assert.deepEqual(usableExamples(w), ["He can climb the tree."]);
+});
+
+test("a due recognize skill at streak 2+ is asked, and recorded, as recognize", () => {
+  const later = new Date(NOW.getTime() + 5 * DAY).toISOString();
+  const w = word("gather", {
+    srs: {
+      interval: 3,
+      dueAt: NOW.toISOString(),
+      lastReviewed: NOW.toISOString(),
+      reviewCount: 4,
+      easyCount: 4,
+      hardCount: 0,
+    },
+    skills: skills({
+      recognize: { correct: 2, streak: 2, dueAt: new Date(NOW.getTime() - DAY).toISOString() },
+      listen: { correct: 2, streak: 2, dueAt: later },
+      spell: { correct: 2, streak: 2, dueAt: later },
+      use: { correct: 2, streak: 2, dueAt: later },
+    }),
+  });
+  const items = buildReviewSession({
+    lists: [{ listId: "aaa", words: [w, seen("plant", 2, 5), seen("climb", 2, 5)] }],
+    now: NOW,
+    rng: mulberry32(3),
+  });
+  assert.equal(items.length, 1);
+  // Still the harder rung (the word in a sentence), but it feeds "recognize".
+  assert.equal(items[0].kind, "use-cloze");
+  assert.equal(items[0].skill, "recognize");
+
+  const match = buildLesson({
+    words: SEEN_LIST.map((s) => seen(s.word, 3)),
+    step: "match",
+    now: NOW,
+    rng: mulberry32(4),
+  });
+  assert.ok(match.some((i) => i.kind === "use-cloze"));
+  assert.equal(match.every((i) => i.skill === "recognize"), true);
+});
+
+test("remember box waits while a longer unfound word starts the same way", () => {
+  const unfound = ["twenty", "twenty-one", "twenty one", "cat"];
+  // "twenty" could still become "twenty-one" or "twenty one".
+  assert.equal(recalledWord("twenty", unfound, false), null);
+  assert.equal(recalledWord("Twenty ", unfound, false), null);
+  assert.equal(recalledWord("twenty-one", unfound, false), "twenty-one");
+  assert.equal(recalledWord("twenty one", unfound, false), "twenty one");
+  assert.equal(recalledWord("cat", unfound, false), "cat");
+  // Enter takes the exact match; nothing matching is nothing.
+  assert.equal(recalledWord("twenty", unfound, true), "twenty");
+  assert.equal(recalledWord("twen", unfound, true), null);
+  assert.equal(recalledWord("  ", unfound, true), null);
+  // Once the longer words are found, "twenty" goes in as he types it.
+  assert.equal(recalledWord("twenty", ["twenty", "cat"], false), "twenty");
 });
 
 test("a lesson with no words is empty, not broken", () => {

@@ -90,6 +90,33 @@ export function nextLevel(level: number, recentPcts: number[]): number {
 }
 
 /**
+ * Fold one round's score into the level window.
+ *
+ * `playedLevel` is the level the round was actually played at. A round from
+ * another level leaves the window alone: "Play again" after a promotion still
+ * runs the old level, and a Math Drill can be played at any level he picks,
+ * so easy level-1 rounds were promoting a level-2 skill to 3 and a hard
+ * level-3 drill could drop it. Undefined means an older queued session that
+ * never said, and counts as the stored level, as it always did.
+ */
+export function scoreRound(
+  level: number,
+  recentPcts: readonly number[],
+  pct: number,
+  playedLevel?: number
+): { level: number; recentPcts: number[] } {
+  if (playedLevel !== undefined && playedLevel !== level) {
+    return { level, recentPcts: [...recentPcts] };
+  }
+  const recent = [pct, ...recentPcts].slice(0, RECENT_PCTS);
+  const next = nextLevel(level, recent);
+  // Scores earned at the old level must not also justify the next promotion.
+  // Without this, three good level-1 sessions promoted to 2, and then the very
+  // next good session saw the same window again and jumped him straight to 3.
+  return { level: next, recentPcts: next !== level ? [] : recent };
+}
+
+/**
  * Clean rounds banked toward the next level, out of LEVEL_UP_RUN.
  *
  * The math page shows this so a long grind on one skill has a visible target:

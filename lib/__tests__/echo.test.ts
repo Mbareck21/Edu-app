@@ -68,16 +68,40 @@ test("silence is reported, never scored as a pass", () => {
 });
 
 test("spoken compound numbers match the written ones", () => {
-  assert.deepEqual(echoTokens("twenty one"), ["21"]);
-  assert.deepEqual(echoTokens("twenty-one"), ["21"]);
-  assert.deepEqual(echoTokens("fifty six rocks"), ["56", "rocks"]);
-  // A tens word on its own stays itself.
+  // Every form of a number breaks into the words it is spoken as.
+  assert.deepEqual(echoTokens("twenty one"), ["20", "1"]);
+  assert.deepEqual(echoTokens("twenty-one"), ["20", "1"]);
+  assert.deepEqual(echoTokens("21"), ["20", "1"]);
+  assert.deepEqual(echoTokens("fifty six rocks"), ["50", "6", "rocks"]);
+  assert.deepEqual(echoTokens("1,000 ants"), ["1", "thousand", "ants"]);
   assert.deepEqual(echoTokens("thirty"), ["30"]);
-  // Not every number pair is a compound: "one" after a noun is left alone.
   assert.deepEqual(echoTokens("chapter one"), ["chapter", "1"]);
   const s = compareEcho("Sam has 21 rocks.", "sam has twenty one rocks");
   assert.equal(s.matched, 4);
   assert.equal(s.pct, 1);
+});
+
+test("a number written as words on screen matches Whisper's digits", () => {
+  const spaced = compareEcho("Omar counted twenty five birds.", "Omar counted 25 birds.");
+  assert.equal(spaced.total, 5);
+  assert.equal(spaced.matched, 5);
+  assert.ok(spaced.pass);
+  const hyphen = compareEcho("Omar counted twenty-five birds.", "Omar counted 25 birds.");
+  assert.equal(hyphen.total, 4);
+  assert.equal(hyphen.matched, 4);
+  const digits = compareEcho("Omar counted 25 birds.", "omar counted twenty-five birds");
+  assert.equal(digits.matched, 4);
+  assert.equal(compareEcho("It took 1,000 steps.", "it took one thousand steps").pct, 1);
+});
+
+test("a number is only said when all of it is said", () => {
+  const s = compareEcho("Omar counted twenty-five birds.", "omar counted twenty six birds");
+  assert.deepEqual(
+    s.tokens.filter((t) => !t.said).map((t) => t.word),
+    ["twenty-five"]
+  );
+  // A look-alike word is not the number.
+  assert.ok(!compareEcho("five", "fire").tokens[0].said);
 });
 
 test("punctuation-only tokens are never marked wrong", () => {

@@ -22,7 +22,7 @@
  */
 
 import { spellingKey } from "@/lib/items";
-import { MS_PER_DAY, SKILL_LADDER_DAYS } from "@/lib/spacing";
+import { SKILL_LADDER_DAYS, dueAfterDays } from "@/lib/spacing";
 
 /** The parent's number. Fixed. */
 export const CHAIN_TARGET = 10;
@@ -124,7 +124,7 @@ export function checkDue(state: ChainState, nowIso: string): boolean {
 /** The next re-check, `checks` steps up the ladder from now. */
 function nextDue(checks: number, nowIso: string): string {
   const i = Math.min(Math.max(0, checks), SKILL_LADDER_DAYS.length - 1);
-  return new Date(new Date(nowIso).getTime() + SKILL_LADDER_DAYS[i] * MS_PER_DAY).toISOString();
+  return dueAfterDays(new Date(nowIso), SKILL_LADDER_DAYS[i]).toISOString();
 }
 
 /**

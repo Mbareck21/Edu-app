@@ -29,7 +29,7 @@ import {
   STORY_NAMES,
   STORY_SETTINGS,
 } from "@/lib/reading";
-import { pickArchived, readingWordsToAdd, REUSE_AFTER_MS } from "@/lib/reading";
+import { pickArchived, readingWordsToAdd, REUSE_AFTER_MS, withNames } from "@/lib/reading";
 
 /** Tiny deterministic rng so the cast tests are not flaky. */
 function seeded(seed: number): () => number {
@@ -336,4 +336,13 @@ test("readingWordsToAdd prefers the meaning and Arabic already on his lists", ()
     new Map([["conclusion", { clue: "What you decide the data shows.", arabic: "خلاصة" }]])
   );
   assert.deepEqual(out, [{ word: "conclusion", clue: "What you decide the data shows.", arabic: "خلاصة" }]);
+});
+
+test("answers shown to him keep the passage's names capitalised", () => {
+  const passage =
+    '"Look at the sunrise," Amina said. Coach Reed entered, humming. Coach Reed suggested they regroup. She picked a rose for Rose.';
+  assert.equal(withNames("coach reed", passage), "Coach Reed");
+  assert.equal(withNames("amina notices the light", passage), "Amina notices the light");
+  assert.equal(withNames("look at it", passage), "look at it", "a sentence opener is not a name");
+  assert.equal(withNames("a rose", passage), "a rose", "a word also used in lower case stays as typed");
 });

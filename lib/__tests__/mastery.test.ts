@@ -14,6 +14,7 @@ import {
 import { SKILL_IDS, type ClientWord, type SkillState } from "@/lib/models/WordList";
 import { applyReading, emptyProfile, nextReadingLevel } from "@/lib/rewards";
 import { STEPS, stepById, type ProfileState, type ReadingLog } from "@/lib/types";
+import { dueAfterDays } from "@/lib/spacing";
 
 const NOW = new Date("2026-08-19T10:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -62,7 +63,7 @@ test("right answers walk the 1/3/7/16/35/90 day ladder", () => {
     // Answer each one when it comes due, which is how the ladder is climbed.
     s = scheduleSkill(s, true, at);
     assert.equal(s.streak, i + 1);
-    assert.equal(new Date(s.dueAt).getTime(), at.getTime() + gaps[i] * DAY);
+    assert.equal(s.dueAt, dueAfterDays(at, gaps[i]).toISOString());
     at = new Date(at.getTime() + gaps[i] * DAY);
   }
   assert.equal(s.correct, gaps.length);
@@ -89,6 +90,18 @@ test("grinding the same word all afternoon does not walk the ladder", () => {
   assert.equal(s.streak, 2);
 });
 
+test("the next day counts at any time of day, not only after the same clock time", () => {
+  // Right on Monday at 6pm Chicago time, then right on Tuesday at 5pm. That is
+  // the next day's review, and it has to move the streak.
+  const monday6pm = new Date("2026-09-14T23:00:00.000Z");
+  const tuesday5pm = new Date("2026-09-15T22:00:00.000Z");
+  let s: SkillState = newSkillState(monday6pm);
+  s = scheduleSkill(s, true, monday6pm);
+  assert.equal(s.dueAt, "2026-09-15T05:00:00.000Z", "due from the start of Tuesday");
+  s = scheduleSkill(s, true, tuesday5pm);
+  assert.equal(s.streak, 2);
+});
+
 test("an early miss still resets the streak", () => {
   let s: SkillState = newSkillState(NOW);
   s = scheduleSkill(s, true, NOW);
@@ -100,7 +113,7 @@ test("the review gap stops growing at 90 days", () => {
   assert.equal(skillGapDays(6), 90);
   assert.equal(skillGapDays(12), 90);
   const s = scheduleSkill({ ...newSkillState(NOW), streak: 20 }, true, NOW);
-  assert.equal(new Date(s.dueAt).getTime(), NOW.getTime() + 90 * DAY);
+  assert.equal(s.dueAt, dueAfterDays(NOW, 90).toISOString());
 });
 
 test("a wrong answer resets the streak and makes the word due now", () => {

@@ -9,6 +9,7 @@ import {
   emptyProfile,
   levelFloor,
   levelFor,
+  shownStreak,
 } from "@/lib/rewards";
 import type { ProfileState, SessionResult } from "@/lib/types";
 
@@ -125,6 +126,31 @@ test("a missed day resets the streak but keeps the best", () => {
   const after = applySession(p, result(), now("2026-08-25")).profile;
   assert.equal(after.streak.current, 1);
   assert.equal(after.streak.best, 3);
+});
+
+test("shownStreak keeps a streak played today or yesterday, and shows 0 after a gap", () => {
+  const streak = { current: 5, best: 7, lastActiveDay: "2026-08-19" };
+  assert.equal(shownStreak(streak, "2026-08-19"), 5);
+  assert.equal(shownStreak(streak, "2026-08-20"), 5);
+  assert.equal(shownStreak(streak, "2026-08-21"), 0);
+  assert.equal(shownStreak({ current: 0, best: 0, lastActiveDay: "" }, "2026-08-19"), 0);
+  // Across a month border.
+  assert.equal(shownStreak({ ...streak, lastActiveDay: "2026-08-31" }, "2026-09-01"), 5);
+});
+
+test("shownStreak counts days in Chicago, not in UTC", () => {
+  const key = (iso: string) => todayKey(new Date(iso), "America/Chicago");
+  // 18:30 on Aug 19 in Chicago, already Aug 19 23:30 in UTC.
+  const streak = { current: 4, best: 4, lastActiveDay: key("2026-08-19T23:30:00.000Z") };
+  assert.equal(streak.lastActiveDay, "2026-08-19");
+  // 22:00 on Aug 20 in Chicago is Aug 21 in UTC: still yesterday for him.
+  assert.equal(shownStreak(streak, key("2026-08-21T03:00:00.000Z")), 4);
+  // 00:30 on Aug 21 in Chicago: he skipped Aug 20.
+  assert.equal(shownStreak(streak, key("2026-08-21T05:30:00.000Z")), 0);
+  // The night clocks spring forward (Mar 8) is still one day.
+  const spring = { ...streak, lastActiveDay: key("2026-03-08T04:30:00.000Z") };
+  assert.equal(spring.lastActiveDay, "2026-03-07");
+  assert.equal(shownStreak(spring, key("2026-03-09T04:30:00.000Z")), 4);
 });
 
 // ── today / goal ──────────────────────────────────────────────────────────

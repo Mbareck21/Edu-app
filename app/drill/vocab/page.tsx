@@ -100,7 +100,10 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
         words={chosen}
         senses={senses}
         chains={chains}
-        exit={{ label: "Again", href: againHref }}
+        resumeId="drill:write"
+        // A new seed each time, or a second "Again" lands on the same URL and
+        // key and the finish screen just stays.
+        exit={{ label: "Again", href: vocabHref({ source, mode, count, seed: seed + 1 }) }}
       />
     );
   }

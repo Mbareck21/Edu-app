@@ -64,6 +64,12 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
   const [running, setRunning] = useState<Run | null>(() =>
     saved ? { facts: saved.facts, label: saved.label, sessionRef: saved.sessionRef } : null
   );
+  // The round replaces the board, so a tap from low on the page would leave
+  // the question above the screen and only the keypad showing.
+  const start = (run: Run) => {
+    setRunning(run);
+    window.scrollTo(0, 0);
+  };
   const rng = useMemo(() => mulberry(seed % 2147483647), [seed]);
   const nowIso = useMemo(() => new Date(seed).toISOString(), [seed]);
 
@@ -175,7 +181,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           size="lg"
           color="gold"
           onClick={() =>
-            setRunning({ facts: lightning, label: "Lightning", sessionRef: "tables:lightning" })
+            start({ facts: lightning, label: "Lightning", sessionRef: "tables:lightning" })
           }
         >
           Lightning round: your ten weakest
@@ -206,7 +212,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                   color={done ? "green" : "purple"}
                   variant={done ? "secondary" : "primary"}
                   onClick={() =>
-                    setRunning({
+                    start({
                       facts: buildTableRound(p.table, facts, nowIso, rng),
                       label: `Table ${p.table}`,
                       sessionRef: `tables:${p.table}`,

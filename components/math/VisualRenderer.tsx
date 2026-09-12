@@ -26,7 +26,7 @@ export default function VisualRenderer({ visual, op }: VisualRendererProps) {
     case "placevalue":
       return <Frame><PlaceValue value={visual.value} place={visual.place} /></Frame>;
     case "rect":
-      return <Frame><RectShape w={visual.w} h={visual.h} label={visual.label} /></Frame>;
+      return <Frame><RectShape w={visual.w} h={visual.h} label={visual.label} unknown={visual.unknown} /></Frame>;
     case "table":
       return <Frame><DataTable rows={visual.rows} /></Frame>;
     case "bars":
@@ -147,17 +147,36 @@ function PlaceValue({ value, place }: { value: number; place: PlaceName }) {
 
 // -------------------------------------------------------------- rectangles
 
-function RectShape({ w, h, label }: { w: number; h: number; label: "area" | "perimeter" }) {
+function RectShape({
+  w,
+  h,
+  label,
+  unknown,
+}: {
+  w: number;
+  h: number;
+  label: "area" | "perimeter";
+  unknown?: "h";
+}) {
   const big = Math.max(w, h);
   const cell = 110 / big;
   const rw = Math.max(w * cell, 40);
   const rh = Math.max(h * cell, 30);
   const x = (200 - rw) / 2;
   const y = 22;
-  const grid = label === "area" && w <= 15 && h <= 15;
+  // When he is asked for the other side, a grid he can count and a printed
+  // side length would hand him the answer before he divides.
+  const grid = label === "area" && !unknown && w <= 15 && h <= 15;
+  const side = unknown === "h" ? "?" : h;
 
   return (
-    <svg viewBox={`0 0 200 ${rh + 60}`} width="100%" style={{ maxWidth: 260 }} role="img" aria-label={`Rectangle ${w} by ${h}`}>
+    <svg
+      viewBox={`0 0 200 ${rh + 60}`}
+      width="100%"
+      style={{ maxWidth: 260 }}
+      role="img"
+      aria-label={unknown === "h" ? `Rectangle ${w} by an unknown side` : `Rectangle ${w} by ${h}`}
+    >
       {grid
         ? Array.from({ length: w * h }, (_, i) => (
             <rect
@@ -177,7 +196,7 @@ function RectShape({ w, h, label }: { w: number; h: number; label: "area" | "per
         {w}
       </text>
       <text x={x + rw + 9} y={y + rh / 2 + 5} fontSize={15} fontWeight={700} fill={INK}>
-        {h}
+        {side}
       </text>
       <text x={100} y={rh + 50} textAnchor="middle" fontSize={12} fontWeight={700} fill={MUTED}>
         {label === "area" ? "Area = inside" : "Perimeter = all around"}

@@ -405,6 +405,13 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     reading = fallback;
   }
 
+  // The passage about to be replaced, if there is one: a stale one from an
+  // earlier day, or one he asked to swap. Both paths below archive it rather
+  // than overwrite it, since he may never have read it.
+  const previous = doc.toObject().currentReading as Archived | null | undefined;
+  const unfinished =
+    previous && typeof previous.paragraph === "string" && previous.paragraph ? previous : null;
+
   if (!reading) {
     // The writer is down or the day's budget is spent. Before handing him an
     // error, look for a passage from this list he has not seen for a week: an
@@ -412,11 +419,10 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     const archive = archiveOf(doc);
     const old = pickArchived(archive, Date.now());
     if (old) {
+      const kept = archive.filter((a) => a !== old);
+      if (unfinished) kept.push(unfinished);
       doc.set("currentReading", { ...old, generatedAt: new Date(), reused: true });
-      doc.set(
-        "readingArchive",
-        archive.filter((a) => a !== old)
-      );
+      doc.set("readingArchive", kept.slice(-ARCHIVE_MAX));
       await doc.save();
       return NextResponse.json(toClient(doc.toObject()));
     }
@@ -428,12 +434,20 @@ Your last answer was not valid JSON — it ran out of room before the closing br
 
   const passage = foldParagraphs(reading.paragraphs, MAX_PASSAGE_PARAGRAPHS).join("\n\n");
 
-  // Normalise the questions: MCQs must have a usable answerIndex, free-text
-  // must not carry stray options, and every question keeps exactly 2 hints.
+  // Normalise the questions: MCQs must have a usable answerIndex, and every
+  // question keeps exactly 2 hints.
+  //
+  // The plan decides each question's format and type only when the writer
+  // returned the planned number of questions. A reading accepted with fewer
+  // shifted every later slot, so a summary with options landed in a typing
+  // slot, lost its options, and he had to type a whole summary sentence. Then
+  // each question is taken as what the writer actually made.
+  const aligned = reading.questions.length === plan.length;
   const questions = reading.questions.map((q, i) => {
-    const spec = plan[i];
-    let wantsMcq = (spec?.format ?? q.format) === "mcq";
-    let options = wantsMcq ? q.options.filter((o) => o.trim()) : [];
+    const spec = aligned ? plan[i] : undefined;
+    let options = q.options.filter((o) => o.trim());
+    let wantsMcq = spec ? spec.format === "mcq" : options.length > 0;
+    if (!wantsMcq) options = [];
     let answerIndex = wantsMcq ? q.answerIndex : -1;
     if (wantsMcq && (answerIndex < 0 || answerIndex >= options.length)) {
       // Fall back to matching the model's own "acceptable" text.
@@ -488,9 +502,8 @@ Your last answer was not valid JSON — it ran out of room before the closing br
 
   const now = new Date();
   // The passage being replaced goes on the archive, newest last, capped.
-  const previous = doc.toObject().currentReading as Archived | null | undefined;
-  if (previous && typeof previous.paragraph === "string" && previous.paragraph) {
-    doc.set("readingArchive", [...archiveOf(doc), previous].slice(-ARCHIVE_MAX));
+  if (unfinished) {
+    doc.set("readingArchive", [...archiveOf(doc), unfinished].slice(-ARCHIVE_MAX));
   }
   doc.set("currentReading", {
     title: reading.title,

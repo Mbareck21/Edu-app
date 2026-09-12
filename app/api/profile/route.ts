@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { toClientProfile } from "@/lib/models/Profile";
-import { getProfile, saveProfile } from "@/lib/profile";
+import { getProfile, updateProfile } from "@/lib/profile";
 import { MAX_DAILY_GOAL, MIN_DAILY_GOAL } from "@/lib/rewards";
 
 export const runtime = "nodejs";
@@ -30,11 +30,13 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
   }
 
-  const profile = await getProfile();
-  const saved = await saveProfile({
-    ...profile,
-    name: parsed.data.name ?? profile.name,
-    dailyGoal: parsed.data.dailyGoal ?? profile.dailyGoal,
-  });
+  const { name, dailyGoal } = parsed.data;
+  const { saved } = await updateProfile((profile) => ({
+    profile: {
+      ...profile,
+      name: name ?? profile.name,
+      dailyGoal: dailyGoal ?? profile.dailyGoal,
+    },
+  }));
   return NextResponse.json(toClientProfile(saved));
 }

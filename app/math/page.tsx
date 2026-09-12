@@ -12,6 +12,7 @@ import {
   MATH_UNITS,
   currentLesson,
   currentUnit,
+  getSkill,
   skillsForUnit,
   type MathSkill,
 } from "@/lib/math";
@@ -23,7 +24,7 @@ import {
   toClientMathProgress,
 } from "@/lib/models/MathProgress";
 import { TimesFact } from "@/lib/models/TimesFact";
-import { allFactKeys, factFromRow, isKnown } from "@/lib/tables";
+import { allFactKeys, factFromRow, isLit } from "@/lib/tables";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,9 @@ export const metadata = { title: "Math" };
 
 type Stat = {
   level: number;
+  /** Any round at all, at any level. */
+  played: boolean;
+  /** Best recent score at this level; null right after the level moves. */
   best: number | null;
   /** Rounds at 90%+ in a row, out of LEVEL_UP_RUN. */
   clean: number;
@@ -75,12 +79,16 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
           <div className="mt-2 flex items-center gap-3">
             <Stars level={stat.level} />
             <span className="text-xs font-bold" style={{ color: "var(--color-muted)" }}>
-              {stat.best === null ? "Not played yet" : `Best ${stat.best}%`}
+              {!stat.played
+                ? "Not played yet"
+                : stat.best === null
+                  ? "No rounds at this level yet"
+                  : `Best ${stat.best}%`}
             </span>
           </div>
           {/* Repeating a skill is fine, but he should be able to see where the
               repeating leads. LEVEL_UP_RUN clean rounds move him up a level. */}
-          {stat.level < MAX_MATH_LEVEL && stat.best !== null ? (
+          {stat.level < MAX_MATH_LEVEL && stat.played ? (
             <p className="mt-1.5 text-xs font-bold" style={{ color: "var(--color-purple)" }}>
               {stat.clean >= LEVEL_UP_RUN
                 ? "Ready to move up."
@@ -103,27 +111,36 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
 export default async function MathPage() {
   await connectDB();
   const [docs, factRows] = await Promise.all([MathProgress.find().lean(), TimesFact.find().lean()]);
-  const tablesKnown = factRows.filter((r) => isKnown(factFromRow(r.key, r))).length;
+  // Lit, not known: the grid lights a cell on the first right answer, so this
+  // card said "Light up the grid" to a boy who had lit nearly all of it.
+  const tablesLit = factRows.filter((r) => isLit(factFromRow(r.key, r))).length;
   const tablesTotal = allFactKeys().length;
   const stats = new Map<string, Stat>();
   for (const doc of docs) {
     const p = toClientMathProgress(doc);
     stats.set(p.skill, {
       level: p.level,
+      // The window empties on every level change, so it cannot say whether he
+      // has played; right after moving up, the card claimed he never had.
+      played: p.attempts > 0,
       best: p.recentPcts.length > 0 ? Math.max(...p.recentPcts) : null,
       clean: cleanRounds(p.recentPcts),
     });
   }
-  const statFor = (id: string): Stat => stats.get(id) ?? { level: 1, best: null, clean: 0 };
+  const statFor = (id: string): Stat =>
+    stats.get(id) ?? { level: 1, played: false, best: null, clean: 0 };
 
   const today = todayKey();
   const unit = currentUnit(today);
   const lesson = currentLesson(today);
   // The lesson his class is on this week comes first, then the rest of the unit.
-  const unitSkills = [...skillsForUnit(unit.id)].sort((a, b) => {
-    const rank = (s: MathSkill) => (lesson.skills.includes(s.id) ? 0 : 1);
-    return rank(a) - rank(b);
-  });
+  // The lesson's skills are looked up directly: some live in another app unit
+  // (Multiples and Factors is taught in school unit 2), and only reordering
+  // the unit's list left them off this card entirely.
+  const unitSkills: MathSkill[] = [
+    ...lesson.skills.map(getSkill),
+    ...skillsForUnit(unit.id).filter((s) => !lesson.skills.includes(s.id)),
+  ];
 
   return (
     <AppShell>
@@ -166,9 +183,9 @@ export default async function MathPage() {
           <div className="min-w-0">
             <p className="font-display text-lg font-bold">Times tables</p>
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-              {tablesKnown === 0
+              {tablesLit === 0
                 ? "Two to nine. Light up the grid."
-                : `${tablesKnown} of ${tablesTotal} facts lit`}
+                : `${tablesLit} of ${tablesTotal} facts lit`}
             </p>
           </div>
           <Link
@@ -176,7 +193,7 @@ export default async function MathPage() {
             className={buttonClass({ color: "purple", size: "md" })}
             style={buttonStyle({ color: "purple" })}
           >
-            {tablesKnown === 0 ? "Start" : "Go on"}
+            {tablesLit === 0 ? "Start" : "Go on"}
           </Link>
         </div>
       </Card>

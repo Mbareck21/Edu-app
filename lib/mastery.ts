@@ -11,7 +11,7 @@
 // that clause was really buying is now enforced objectively in scheduleSkill.
 
 import { SKILL_IDS, type ClientWord, type SkillId, type SkillState } from "@/lib/models/WordList";
-import { KNOWN_STREAK, MASTERED_STREAK, MS_PER_DAY, skillGapDays } from "@/lib/spacing";
+import { KNOWN_STREAK, MASTERED_STREAK, dueAfterDays, skillGapDays } from "@/lib/spacing";
 
 export { KNOWN_STREAK, MASTERED_STREAK } from "@/lib/spacing";
 /** Days to the next review, indexed by streak (see docs/pedagogy.md). */
@@ -78,7 +78,7 @@ export function scheduleSkill(state: SkillState, correct: boolean, now: Date): S
     wrong: state.wrong,
     streak,
     lastAt: now.toISOString(),
-    dueAt: early ? state.dueAt : new Date(now.getTime() + days * MS_PER_DAY).toISOString(),
+    dueAt: early ? state.dueAt : dueAfterDays(now, days).toISOString(),
   };
 }
 

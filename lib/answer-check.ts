@@ -153,30 +153,81 @@ type Candidate = {
   coverage: number;
 };
 
-/** A question that asks for a yes or a no: it opens with a helping verb. */
-const YES_NO_QUESTION = /^\s*(is|are|was|were|do|does|did|can|could|will|would|should|has|have|had)\b/i;
+const HELPING_VERB_START = /^\s*(is|are|was|were|do|does|did|can|could|will|would|should|has|have|had)\b/i;
+
+/**
+ * A question that asks for a yes or a no: its question part opens with a
+ * helping verb. The writer often leads in with what the passage said ("The
+ * writer said the soil was dry. Does the flood fit that?") or a short phrase
+ * ("In the end, did he win?"), so the test runs on the last sentence, at the
+ * start of its first or last clause. "What does ..." and "Why did ..." still
+ * open with a question word, so they never count.
+ */
+function isYesNoQuestion(question: string): boolean {
+  const sentences = question.trim().split(/(?<=[.!?])\s+/);
+  const clauses = (sentences[sentences.length - 1] ?? "").split(/[,;:]/);
+  return [clauses[0], clauses[clauses.length - 1]].some((c) =>
+    HELPING_VERB_START.test(c ?? "")
+  );
+}
 
 const POLARITY: Record<string, "yes" | "no"> = {
   yes: "yes", yeah: "yes", yep: "yes", yup: "yes",
   no: "no", nope: "no", nah: "no",
 };
 
-const NEGATIONS = new Set(["no", "not", "never", "nothing", "none"]);
+const NEGATIONS = new Set(["no", "not", "never", "nothing", "none", "nobody", "nowhere", "cannot"]);
+
+/** "doesn't", and the same typed without its apostrophe, which he often does. */
+const CONTRACTED_NOT = /n't$|^(do|does|did|is|was|are|were|has|have|had|could|would|should|ca|wo)nt$/;
+
+/** True when the words say something is not so: "not happy", "it doesn't match". */
+function hasNegation(words: string[]): boolean {
+  return words.some((w) => NEGATIONS.has(w) || CONTRACTED_NOT.test(w));
+}
+
+/**
+ * Whether his answer and an accepted one disagree about whether it is so.
+ *
+ * The accepted answer's leading yes or no is set aside: it answers a yes/no
+ * question, which the polarity rule above has already dealt with, so "no, it
+ * was dry" and "it was dry" say the same thing. His own leading "no" or "nope"
+ * counts as saying no on any other kind of question.
+ */
+function contradicts(answer: string[], expected: string[], yesNo: boolean): boolean {
+  const said = POLARITY[answer[0] ?? ""];
+  const mine = hasNegation(said ? answer.slice(1) : answer) || (said === "no" && !yesNo);
+  const theirs = hasNegation(yesNo && POLARITY[expected[0] ?? ""] ? expected.slice(1) : expected);
+  return mine !== theirs;
+}
 
 const VERDICT_RANK: Record<AnswerVerdict, number> = { wrong: 0, close: 1, correct: 2 };
 
 function judgeAgainst(answerWords: string[], acceptable: string, question: string): Candidate {
-  const expected = contentWords(tokens(acceptable));
+  const accepted = tokens(acceptable);
+  const yesNo = isYesNoQuestion(question);
+  const lead = POLARITY[accepted[0] ?? ""];
+  // On a yes/no question the accepted "no, it was dry" is a no plus what is so.
+  // Scored whole, "it was dry" named half of it and was marked wrong.
+  const expected = contentWords(yesNo && lead && accepted.length > 1 ? accepted.slice(1) : accepted);
   const questionWords = new Set(tokens(question).map(stem));
 
   // "Does the ending fit?" is answered by "yes". The writer phrases the
   // acceptable answers in full ("yes it fits"), and scoring content words
   // marked a plain "yes" half right, so wrong. On a yes/no question his first
   // word decides: the same yes or no is right, the opposite is wrong.
-  if (YES_NO_QUESTION.test(question) && POLARITY[expected[0] ?? ""]) {
+  if (yesNo && lead) {
     const said = POLARITY[answerWords[0] ?? ""];
-    if (said === POLARITY[expected[0]]) return { verdict: "correct", coverage: 1 };
+    if (said === lead) return { verdict: "correct", coverage: 1 };
     if (said) return { verdict: "wrong", coverage: 0 };
+  }
+
+  // Content words score what he named, not whether he said it was so. "it
+  // doesn't match" names "match" and would pass against "it matches", and
+  // "not happy" would pass against "happy". An answer that says no where the
+  // accepted one says yes, or the other way round, means the opposite.
+  if (contradicts(answerWords, accepted, yesNo)) {
+    return { verdict: "wrong", coverage: 0 };
   }
 
   // An answer like "he did" is nothing but stopwords, so content-word scoring

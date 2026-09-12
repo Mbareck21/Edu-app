@@ -883,7 +883,7 @@ function genGeometry(level: Level, rng: Rng): MathQuestion {
   return {
     prompt: `The area is ${area}. One side is ${w}. Find the other side.`,
     answer: h,
-    visual: { kind: "rect", w, h, label: "area" },
+    visual: { kind: "rect", w, h, label: "area", unknown: "h" },
     how: `Area ÷ one side = other side: ${area} ÷ ${w} = ${h}`,
     op: "÷",
     a: area,
@@ -1173,7 +1173,9 @@ function genWordProblem(level: Level, rng: Rng): MathQuestion {
     }
     const bags = randInt(rng, 3, 9);
     const per = randInt(rng, 8, 20);
-    const lost = randInt(rng, 5, 30);
+    // Never lose more than he has: 3 bags of 8 is 24, and "loses 29" gave -5,
+    // which the number pad cannot type, so the round could never end.
+    const lost = randInt(rng, 5, Math.min(30, bags * per - 1));
     return {
       prompt: `${kid.name} has ${bags} bags of ${per} ${noun}. ${kid.they} loses ${lost}. How many left?`,
       answer: bags * per - lost,

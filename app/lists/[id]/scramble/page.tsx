@@ -43,7 +43,7 @@ export default async function ScramblePage({
     <GameFrame
       title="Word Scramble"
       listName={list.name}
-      backHref={`/words/${list._id}`}
+      backHref={`/me/lists/${list._id}`}
       color="green"
       icon="sparkles"
       printView={<PrintView listName={list.name} rows={rows} />}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import QuestionPad, { FLASH_MS, requeue } from "@/components/math/QuestionPad";
@@ -39,17 +40,18 @@ function freshRun(seed: number): Run {
  * otherwise rebuild a different set of questions under him. Resuming means
  * the same questions, in the saved order.
  */
-type Saved = { seed: number; queue: number[]; firstTry: Record<number, boolean> };
+type Saved = { seed: number; queue: number[]; firstTry: Record<number, boolean>; ms?: number };
 
 function isSaved(v: unknown): v is Saved {
   if (typeof v !== "object" || v === null) return false;
-  const o = v as { seed?: unknown; queue?: unknown; firstTry?: unknown };
+  const o = v as { seed?: unknown; queue?: unknown; firstTry?: unknown; ms?: unknown };
   return (
     typeof o.seed === "number" &&
     Array.isArray(o.queue) &&
     o.queue.every((n) => typeof n === "number") &&
     typeof o.firstTry === "object" &&
-    o.firstTry !== null
+    o.firstTry !== null &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
 }
 
@@ -75,6 +77,7 @@ function MathSessionInner({
   initial,
 }: MathSessionProps & { saveKey: string; initial: Saved | null }) {
   const skill = getSkill(skillId);
+  const router = useRouter();
 
   const [run, setRun] = useState<Run>(() =>
     initial ? { seed: initial.seed, queue: initial.queue } : freshRun(seed)
@@ -93,13 +96,14 @@ function MathSessionInner({
   const firstTryRef = useRef<Record<number, boolean>>(initial ? { ...initial.firstTry } : {});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const bankedMs = initial?.ms ?? 0;
   useEffect(() => {
     startRef.current = Date.now();
-    watch.current = startStopwatch();
+    watch.current = startStopwatch(Date.now, bankedMs);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+  }, [bankedMs]);
 
   const questions = useMemo(
     () => buildSession({ skillId, level, seed: run.seed, count: COUNT }),
@@ -134,6 +138,8 @@ function MathSessionInner({
       ms,
       perfect: correct === questions.length,
       mathSkill: skillId,
+      // The server only lets a round move the level it was played at.
+      mathLevel: level,
     };
     void postSession(result).then((res) => {
       setOutcome({
@@ -144,7 +150,7 @@ function MathSessionInner({
         correct,
       });
     });
-  }, [done, questions.length, skillId, saveKey]);
+  }, [done, questions.length, skillId, level, saveKey]);
 
   const advance = useCallback(() => {
     watch.current?.mark();
@@ -153,7 +159,12 @@ function MathSessionInner({
     setRun((prev) => {
       const next = { ...prev, queue: prev.queue.slice(1) };
       // Where he is, so a reload lands him here and not on question one.
-      saveProgress(saveKey, { seed: next.seed, queue: next.queue, firstTry: firstTryRef.current });
+      saveProgress(saveKey, {
+        seed: next.seed,
+        queue: next.queue,
+        firstTry: firstTryRef.current,
+        ms: watch.current?.read() ?? 0,
+      });
       return next;
     });
   }, [saveKey]);
@@ -187,7 +198,12 @@ function MathSessionInner({
     setRun((prev) => {
       const next = { ...prev, queue: requeue(prev.queue) };
       // A miss reorders the queue and marks a first try; a reload must keep both.
-      saveProgress(saveKey, { seed: next.seed, queue: next.queue, firstTry: firstTryRef.current });
+      saveProgress(saveKey, {
+        seed: next.seed,
+        queue: next.queue,
+        firstTry: firstTryRef.current,
+        ms: watch.current?.read() ?? 0,
+      });
       return next;
     });
   }, [saveKey]);
@@ -203,7 +219,10 @@ function MathSessionInner({
     setInput("");
     setElapsed(0);
     setRun(freshRun(Date.now()));
-  }, []);
+    // The round just posted may have moved his level. Take the page again so
+    // the next round is played, and counted, at the level he is on now.
+    router.refresh();
+  }, [router]);
 
   if (done) {
     if (!outcome) {

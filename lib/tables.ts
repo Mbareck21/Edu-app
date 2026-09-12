@@ -18,7 +18,7 @@
  * Pure: no clock, no storage, no React.
  */
 
-import { KNOWN_STREAK, MS_PER_DAY, skillGapDays } from "@/lib/spacing";
+import { KNOWN_STREAK, dueAfterDays, skillGapDays } from "@/lib/spacing";
 
 /** The tables he is learning. His father asked for two to nine. */
 export const TABLES: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9];
@@ -135,7 +135,7 @@ export function applyFactAnswer(
     correct: f.correct + 1,
     fast: f.fast + (fast ? 1 : 0),
     lastFast: fast,
-    dueAt: early ? f.dueAt : new Date(new Date(nowIso).getTime() + days * MS_PER_DAY).toISOString(),
+    dueAt: early ? f.dueAt : dueAfterDays(new Date(nowIso), days).toISOString(),
     lastAt: nowIso,
   };
 }
@@ -222,9 +222,13 @@ export function buildTableRound(
 }
 
 /**
- * A lightning round: the facts most in need across every table he has
- * started, so a strong table stops being asked and a weak one keeps coming
- * back. Empty until he has started something.
+ * A lightning round: the facts most in need among the ones he has actually
+ * answered, so a strong fact stops being asked and a weak one keeps coming
+ * back. Empty until he has answered something.
+ *
+ * Only answered facts, not every fact on a table he has touched: one round
+ * of the nines stores 2x9 up to 8x9, and counting those as "started" the
+ * twos to eights filled his "weakest" round with facts he had never seen.
  */
 export function buildLightningRound(
   facts: Record<string, FactState>,
@@ -232,20 +236,16 @@ export function buildLightningRound(
   rng: () => number,
   size = ROUND_SIZE
 ): Fact[] {
-  const started = new Set<number>();
-  for (const key of Object.keys(facts)) {
-    const [a, b] = key.split("x").map(Number);
-    if (TABLES.includes(a)) started.add(a);
-    if (TABLES.includes(b)) started.add(b);
-  }
   const seen = new Set<string>();
   const ranked: Ranked[] = [];
-  for (const t of [...started].sort((x, y) => x - y)) {
+  for (const t of TABLES) {
     for (let b = 1; b <= TABLE_UP_TO; b++) {
       const key = factKey(t, b);
       if (seen.has(key)) continue;
       seen.add(key);
-      ranked.push(rank(t, b, facts[key] ?? newFact(t, b), nowIso, rng));
+      const f = facts[key];
+      if (!f || f.correct + f.wrong === 0) continue;
+      ranked.push(rank(t, b, f, nowIso, rng));
     }
   }
   return order(ranked).slice(0, size);

@@ -25,6 +25,7 @@ import {
   countWords,
   lexileForLevel,
   splitParagraphs,
+  withNames,
   type Scaffold,
   wordsPerMinute,
   wpmNormForDate,
@@ -82,7 +83,15 @@ function freshQ(n: number): QState[] {
  * is only used when the passage on the server is still the one it was saved
  * against — `at` is that passage's generatedAt.
  */
-type ReadingSaved = { at: string; phase: Phase; mode: Mode; qStates: QState[]; qIdx: number };
+type ReadingSaved = {
+  at: string;
+  phase: Phase;
+  mode: Mode;
+  qStates: QState[];
+  qIdx: number;
+  /** Time on task banked before a reload. */
+  ms?: number;
+};
 
 function isReadingSaved(v: unknown): v is ReadingSaved {
   if (typeof v !== "object" || v === null) return false;
@@ -93,8 +102,21 @@ function isReadingSaved(v: unknown): v is ReadingSaved {
     (o.mode === "listen" || o.mode === "alone" || o.mode === "echo") &&
     Array.isArray(o.qStates) &&
     o.qStates.every((q) => typeof q === "object" && q !== null && typeof q.done === "boolean") &&
-    typeof o.qIdx === "number"
+    typeof o.qIdx === "number" &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
+}
+
+/**
+ * The question a resumed passage opens on. A right answer marks its question
+ * done at once, but the Continue sheet after it is not saved, so a reload in
+ * between came back to a locked question with no button: stuck on every visit.
+ * Skip past answered questions instead.
+ */
+function resumeQuestion(qStates: readonly QState[], qIdx: number): number {
+  let i = Math.max(0, qIdx);
+  while (i < qStates.length && qStates[i].done) i++;
+  return i;
 }
 
 export default function ReadingRunner(props: ReadingRunnerProps) {
@@ -129,24 +151,38 @@ function ReadingRunnerInner({
   // is spent — an old story is far better than an empty screen. Hiding it was
   // only ever meant to stop it being served as today's.
   const shelved = stale ? list.currentReading : null;
+  const questions: ReadingQuestion[] = useMemo(
+    () => reading?.questions ?? [],
+    [reading]
+  );
+  const resumedQStates =
+    initial && initial.qStates.length === questions.length ? initial.qStates : null;
+  const resumedIdx = initial && resumedQStates ? resumeQuestion(resumedQStates, initial.qIdx) : 0;
+  // Every question answered before the reload: all that was left was Continue.
+  const resumedAllDone =
+    initial?.phase === "questions" && questions.length > 0 && resumedIdx >= questions.length;
   // A finished passage never resumes as finished; he picks a mode again.
   const [phase, setPhase] = useState<Phase>(
-    initial && initial.phase !== "done" ? initial.phase : "mode"
+    resumedAllDone ? "done" : initial && initial.phase !== "done" ? initial.phase : "mode"
   );
   const [mode, setMode] = useState<Mode>(initial?.mode ?? "listen");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
   const [error, setError] = useState<string | null>(null);
 
-  const questions: ReadingQuestion[] = useMemo(
-    () => reading?.questions ?? [],
-    [reading]
+  const [qStates, setQStates] = useState<QState[]>(
+    () => resumedQStates ?? freshQ(questions.length)
   );
-  const [qStates, setQStates] = useState<QState[]>(() =>
-    initial && initial.qStates.length === questions.length
-      ? initial.qStates
-      : freshQ(questions.length)
-  );
-  const [qIdx, setQIdx] = useState(initial ? Math.min(initial.qIdx, questions.length) : 0);
+  const [qIdx, setQIdx] = useState(Math.min(resumedIdx, Math.max(0, questions.length - 1)));
+
+  // Time on task, not time on the clock. His longest logged reading was 2.5
+  // hours of an open tab — see lib/time-on-task.ts.
+  const watch = useRef<Stopwatch | null>(null);
+  // A resumed passage picks its clock up where the reload left it; a fresh
+  // one starts it when he picks a mode. Before the save below, which reads it.
+  const bankedMs = initial && initial.phase !== "mode" ? (initial.ms ?? 0) : null;
+  useEffect(() => {
+    if (bankedMs !== null) watch.current = startStopwatch(Date.now, bankedMs);
+  }, [bankedMs]);
 
   // Where he is, for a reload. Runs on every change of position; cleared
   // when the passage is done so the next one starts clean.
@@ -155,7 +191,14 @@ function ReadingRunnerInner({
       clearProgress(saveKey);
       return;
     }
-    saveProgress(saveKey, { at: reading.generatedAt, phase, mode, qStates, qIdx });
+    saveProgress(saveKey, {
+      at: reading.generatedAt,
+      phase,
+      mode,
+      qStates,
+      qIdx,
+      ms: watch.current?.read() ?? 0,
+    });
   }, [reading, phase, mode, qStates, qIdx, saveKey]);
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
@@ -193,13 +236,10 @@ function ReadingRunnerInner({
 
   // 0 until the kid picks a reading mode; the finish screen reads it back.
   const startedAtRef = useRef(0);
-  // Time on task, not time on the clock. His longest logged reading was 2.5
-  // hours of an open tab — see lib/time-on-task.ts.
-  const watch = useRef<Stopwatch | null>(null);
   const savedRef = useRef(false);
   const [gainedXp, setGainedXp] = useState(0);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(resumedAllDone ? (initial?.ms ?? 0) : 0);
 
   const paragraphs = useMemo(
     () => (reading ? splitParagraphs(reading.paragraph) : []),
@@ -378,10 +418,12 @@ function ReadingRunnerInner({
     setFeedback({
       state: "correct",
       title: judged.verdict === "correct" ? "That's it." : "Yes — that's the idea.",
-      line:
+      line: withNames(
         judged.verdict === "correct"
           ? q.acceptable[0]
           : `We would write it: ${judged.matched || q.acceptable[0]}`,
+        reading?.paragraph ?? ""
+      ),
     });
   }
 
@@ -967,7 +1009,7 @@ function ReadingRunnerInner({
             }}
           >
             <input
-              className="min-h-[52px] flex-1 rounded-tile border-2 px-3 text-base"
+              className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
               style={{ borderColor: "var(--color-line)", background: "#fff" }}
               placeholder="Type your answer"
               value={typed}

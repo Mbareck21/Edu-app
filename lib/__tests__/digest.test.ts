@@ -73,7 +73,7 @@ test("words known this week need known status and recent practice", () => {
 test("due tomorrow counts words, met facts and finished chains", () => {
   const dueWord = word("d", 2, 1, 0.5);
   const laterWord = word("e", 2, 1, 3);
-  const met: FactState = { ...newFact(7, 8), correct: 1, dueAt: iso(-0.5), lastAt: iso(1) };
+  const met: FactState = { ...newFact(7, 8), correct: 1, streak: 1, dueAt: iso(-0.5), lastAt: iso(1) };
   const never = newFact(6, 7);
   const known: FactState = { ...newFact(2, 3), streak: 3, correct: 3, dueAt: iso(-10) };
   const finished: ChainState = {
@@ -94,5 +94,6 @@ test("due tomorrow counts words, met facts and finished chains", () => {
   assert.equal(d.dueTomorrow.words, 1);
   assert.equal(d.dueTomorrow.facts, 1);
   assert.equal(d.dueTomorrow.checks, 1);
-  assert.equal(d.tablesLit, 1);
+  // Lit is right once, as on the grid: the met fact and the known one.
+  assert.equal(d.tablesLit, 2);
 });

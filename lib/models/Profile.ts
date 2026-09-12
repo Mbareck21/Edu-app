@@ -125,11 +125,14 @@ const ProfileSchema = new Schema(
     stats: { type: StatsSchema, default: () => ({}) },
     activity: { type: [ActivitySchema], default: [] },
     reading: { type: ReadingSchema, default: () => ({}) },
+    // Bumped by every updateProfile() write, which only lands on the value it
+    // read, so two overlapping saves cannot erase each other. Server-only.
+    rev: { type: Number, default: 0 },
     // Ids of sessions already applied, newest first, capped at RECENT_SESSION_IDS.
     // Server-only: never part of ClientProfile.
     recentSessionIds: { type: [String], default: [] },
     // Passages already written for him, oldest first, capped at
-    // READING_SEEN_MAX. Top-level on purpose: saveProfile() replaces the whole
+    // READING_SEEN_MAX. Top-level on purpose: updateProfile() replaces the whole
     // `reading` subdocument, so anything nested in there gets wiped on every
     // session save. Server-only: never part of ClientProfile.
     readingSeen: { type: [ReadingSeenSchema], default: [] },

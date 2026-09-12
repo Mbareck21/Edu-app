@@ -9,6 +9,8 @@
  * the server where it belongs.
  */
 
+import { addDays, startOfDay, todayKey } from "@/lib/day";
+
 /**
  * Days until the next review after N right answers in a row. Roughly the
  * classic 1-3-7 shape, stretched so a word settled six times is only checked
@@ -27,4 +29,16 @@ export const MASTERED_STREAK = 4;
 export function skillGapDays(streak: number): number {
   const i = Math.max(1, Math.floor(streak)) - 1;
   return SKILL_LADDER_DAYS[Math.min(i, SKILL_LADDER_DAYS.length - 1)];
+}
+
+/**
+ * When something answered right `now` next comes due: the start of his day
+ * `days` days later, not the same clock time. Due at the exact minute meant a
+ * word right on Monday at 6pm was still "early" on Tuesday at 5pm, so that
+ * answer did not count toward known, and about half his next-day reviews were
+ * thrown away whenever his practice time moved around. A second answer the
+ * same day is still early, which is the rule's whole point.
+ */
+export function dueAfterDays(now: Date, days: number): Date {
+  return startOfDay(addDays(todayKey(now), days));
 }

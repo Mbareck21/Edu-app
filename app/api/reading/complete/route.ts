@@ -43,6 +43,16 @@ export async function POST(req: Request) {
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
+  const finished = doc.toObject().currentReading as
+    | ({ paragraph?: unknown; vocabGlosses?: GlossWord[] } & Record<string, unknown>)
+    | null
+    | undefined;
+  // No passage open means this one was already completed: a repeat post from a
+  // page the back button served from cache, or a retry after a lost response.
+  // Counting it again would add a second session to his reading stats, so the
+  // repeat changes nothing and still reports success.
+  if (!finished) return NextResponse.json(toClient(doc.toObject()));
+
   const perQ = parsed.data.perQuestion;
   const firstTry = perQ.filter((q) => q.firstTryCorrect).length;
   const hintsUsed = perQ.reduce((sum, q) => sum + q.hintsUsed, 0);
@@ -95,11 +105,7 @@ export async function POST(req: Request) {
   // A finished passage goes on the archive before it is cleared. This is the
   // passage most worth serving again on a day the writer is down, and clearing
   // it without archiving meant only unfinished passages were ever kept.
-  const finished = doc.toObject().currentReading as
-    | ({ paragraph?: unknown; vocabGlosses?: GlossWord[] } & Record<string, unknown>)
-    | null
-    | undefined;
-  if (finished && typeof finished.paragraph === "string" && finished.paragraph) {
+  if (typeof finished.paragraph === "string" && finished.paragraph) {
     const archive = doc.toObject().readingArchive;
     doc.set(
       "readingArchive",
@@ -113,7 +119,7 @@ export async function POST(req: Request) {
   // The highlighted words he met go into Words to fix, with their spelling
   // chains, so the writing trainer and every word test pick them up. Words
   // already there keep what they have.
-  const glosses = Array.isArray(finished?.vocabGlosses) ? finished.vocabGlosses : [];
+  const glosses = Array.isArray(finished.vocabGlosses) ? finished.vocabGlosses : [];
   if (glosses.length > 0) {
     const pool = await getPool();
     const lists = await WordList.find({ kind: { $ne: "pool" } }, { words: 1 }).lean();

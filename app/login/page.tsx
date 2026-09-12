@@ -5,6 +5,25 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
+import { flushQueue } from "@/lib/offline-queue";
+
+/**
+ * Where to go after the PIN: a page on this site, or Home. `next` is whatever
+ * the address bar says, and `/login?next=https://…` would hand him to another
+ * site right after he typed the PIN — one free to show its own "Wrong PIN".
+ * Resolving it is the check: a string test misses `/\t/evil.example`, which the
+ * URL parser turns into `//evil.example`.
+ */
+function sameSitePath(next: string | null): string {
+  if (!next) return "/";
+  try {
+    const url = new URL(next, window.location.origin);
+    if (url.origin === window.location.origin) return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    // Not a URL at all.
+  }
+  return "/";
+}
 
 function LoginForm() {
   const [pin, setPin] = useState("");
@@ -12,7 +31,6 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/";
 
   return (
     <form
@@ -31,7 +49,10 @@ function LoginForm() {
             setError("Wrong PIN. Try again.");
             return;
           }
-          router.replace(next);
+          // Sessions that got a 401 while the cookie was gone are still on the
+          // phone. The cookie is back, so send them now.
+          void flushQueue();
+          router.replace(sameSitePath(params.get("next")));
           router.refresh();
         } finally {
           setBusy(false);

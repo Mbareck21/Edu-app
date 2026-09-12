@@ -2,6 +2,7 @@
 // Pure data only — no React, no Mongoose. Safe to import anywhere.
 
 import type { IconName } from "@/components/ui/Icon";
+import type { Level } from "@/lib/math";
 
 // ── Unit path steps ───────────────────────────────────────────────────────
 
@@ -130,6 +131,11 @@ export type SessionResult = {
   step?: StepId;
   /** When present the server also updates MathProgress for this skill. */
   mathSkill?: string;
+  /**
+   * The level the math round was played at. Only a round at the skill's
+   * stored level moves that level; missing counts as the stored level.
+   */
+  mathLevel?: Level;
   /** Per-word, per-skill answers. Applied to the list's words when listId is set. */
   wordResults?: WordResult[];
   /** A finished reading — moves the profile's reading level. */

@@ -66,12 +66,18 @@ function drawQuestions(
  * 120 seconds. One session posts at the end either way.
  */
 /** What a reload needs to put a relaxed run back where it was. Timed runs do not resume: the clock ran. */
-type Saved = { queue: number[]; firstTry: Record<number, boolean> };
+type Saved = { queue: number[]; firstTry: Record<number, boolean>; ms?: number };
 
 function isSaved(v: unknown): v is Saved {
   if (typeof v !== "object" || v === null) return false;
-  const o = v as { queue?: unknown; firstTry?: unknown };
-  return Array.isArray(o.queue) && o.queue.every((n) => typeof n === "number") && typeof o.firstTry === "object" && o.firstTry !== null;
+  const o = v as { queue?: unknown; firstTry?: unknown; ms?: unknown };
+  return (
+    Array.isArray(o.queue) &&
+    o.queue.every((n) => typeof n === "number") &&
+    typeof o.firstTry === "object" &&
+    o.firstTry !== null &&
+    (o.ms === undefined || typeof o.ms === "number")
+  );
 }
 
 export default function MathDrillRunner(props: MathDrillRunnerProps) {
@@ -129,14 +135,15 @@ function MathDrillRunnerInner({
   const question = timed ? questions[at] : questions[queue[0]];
   const done = timed ? over : queue.length === 0;
 
+  const bankedMs = initial?.ms ?? 0;
   useEffect(() => {
     startedAt.current = Date.now();
-    watch.current = startStopwatch();
+    watch.current = startStopwatch(Date.now, bankedMs);
     askedAt.current = Date.now();
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [bankedMs]);
 
   useEffect(() => {
     if (!timed || done) return;
@@ -173,7 +180,9 @@ function MathDrillRunnerInner({
       // server applies the same rule, so this is what he will be told.
       timed,
       perfect: sessionPerfect({ answered, correct, timed }),
-      ...(skill === "mixed" ? {} : { mathSkill: skill }),
+      // The level rides along so a drill at a hand-picked level cannot move
+      // the level his skill is on.
+      ...(skill === "mixed" ? {} : { mathSkill: skill, mathLevel: level }),
     };
     void postSession(result).then((res) => {
       setOutcome({
@@ -185,7 +194,7 @@ function MathDrillRunnerInner({
         correct,
       });
     });
-  }, [done, timed, tally, questions.length, skill, mode, saveKey]);
+  }, [done, timed, tally, questions.length, skill, level, mode, saveKey]);
 
   const nextTimed = useCallback(() => {
     setInput("");
@@ -234,7 +243,7 @@ function MathDrillRunnerInner({
         askedAt.current = Date.now();
         setQueue((q) => {
           const next = q.slice(1);
-          saveProgress(saveKey, { queue: next, firstTry: firstTry.current });
+          saveProgress(saveKey, { queue: next, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
           return next;
         });
       }, FLASH_MS);
@@ -253,7 +262,7 @@ function MathDrillRunnerInner({
     setQueue((q) => {
       const next = requeue(q);
       // A miss reorders the queue and marks a first try; a reload must keep both.
-      saveProgress(saveKey, { queue: next, firstTry: firstTry.current });
+      saveProgress(saveKey, { queue: next, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
       return next;
     });
   }, [saveKey]);

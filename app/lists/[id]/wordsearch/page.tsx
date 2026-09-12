@@ -35,7 +35,7 @@ export default async function WordSearchPage({
       <GameFrame
         title="Word Search"
         listName={list.name}
-        backHref={`/words/${list._id}`}
+        backHref={`/me/lists/${list._id}`}
         color="purple"
         icon="words"
         printView={
@@ -61,7 +61,7 @@ export default async function WordSearchPage({
     <GameFrame
       title="Word Search"
       listName={list.name}
-      backHref={`/words/${list._id}`}
+      backHref={`/me/lists/${list._id}`}
       color="purple"
       icon="words"
       printView={

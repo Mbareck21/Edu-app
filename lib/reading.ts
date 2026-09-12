@@ -406,6 +406,39 @@ export function scaffoldFor(recent: readonly { pct: number }[]): Scaffold {
 
 // ── Text helpers ──────────────────────────────────────────────────────────
 
+/**
+ * An answer to show him, with the passage's names capitalised as the passage
+ * has them. The writer returns answers in lower case, so the tidy phrasing he
+ * was told to read back said "We would write it: coach reed".
+ *
+ * A name is a capitalised word that does not start a sentence, plus a
+ * capitalised word right before one ("Coach Reed"). A word the passage also
+ * uses in lower case ("rose") is left alone.
+ */
+export function withNames(answer: string, passage: string): string {
+  const WORD = /[A-Za-z][A-Za-z'’-]*/g;
+  const isCapital = (w: string) => w[0] !== w[0].toLowerCase();
+  const names = new Map<string, string>();
+  const lower = new Set<string>();
+  const words = [...passage.matchAll(WORD)].map((m) => ({ text: m[0], at: m.index ?? 0 }));
+  words.forEach(({ text, at }, i) => {
+    if (!isCapital(text)) {
+      lower.add(text.toLowerCase());
+      return;
+    }
+    const before = passage.slice(0, at).replace(/["“”'‘’(\s]+$/, "");
+    if (before === "" || /[.!?:]$/.test(before)) return;
+    names.set(text.toLowerCase(), text);
+    const prev = words[i - 1];
+    const joined = prev && /^\s+$/.test(passage.slice(prev.at + prev.text.length, at));
+    if (prev && joined && isCapital(prev.text)) names.set(prev.text.toLowerCase(), prev.text);
+  });
+  return answer.replace(WORD, (w) => {
+    const name = names.get(w.toLowerCase());
+    return name && !lower.has(w.toLowerCase()) ? name : w;
+  });
+}
+
 export function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }

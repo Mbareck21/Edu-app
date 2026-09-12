@@ -11,7 +11,7 @@ import { wordKnowledge } from "@/lib/mastery";
 import type { ClientWord } from "@/lib/models/WordList";
 import { MS_PER_DAY } from "@/lib/spacing";
 import { checkDue, isFinished, type ChainState } from "@/lib/spell-chain";
-import { isDue, isKnown, type FactState } from "@/lib/tables";
+import { isDue, isLit, type FactState } from "@/lib/tables";
 import type { ActivityEntry, SessionKind } from "@/lib/types";
 
 export const WEEK_MS = 7 * MS_PER_DAY;
@@ -24,6 +24,7 @@ export type Digest = {
   byKind: Record<SessionKind, KindSummary>;
   /** Words at known or better whose last practice was this week. */
   wordsKnownThisWeek: number;
+  /** Right at least once, the same count the grid shows. */
   tablesLit: number;
   /** What falls due by this time tomorrow. */
   dueTomorrow: { words: number; facts: number; checks: number };
@@ -79,7 +80,7 @@ export function buildDigest({ activity, words, facts, chains, now }: DigestInput
     minutes,
     byKind,
     wordsKnownThisWeek,
-    tablesLit: facts.filter(isKnown).length,
+    tablesLit: facts.filter(isLit).length,
     dueTomorrow: { words: dueWords, facts: dueFacts, checks: dueChecks },
   };
 }

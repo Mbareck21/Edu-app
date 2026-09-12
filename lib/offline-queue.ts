@@ -1,6 +1,7 @@
 // Client-side session posting with a localStorage fallback.
-// Rule from the plan: a session is never lost. Post it, retry once, then
-// park it in localStorage and flush on the next load.
+// Rule from the plan: a session is never lost. It goes into localStorage before
+// the first send and leaves only once the server has answered for it, so the
+// app can be swiped away mid-save; the next load flushes whatever is left.
 
 import type { ClientProfile, SessionResult } from "@/lib/types";
 import type { Gained } from "@/lib/rewards";
@@ -8,14 +9,26 @@ import type { Gained } from "@/lib/rewards";
 export const QUEUE_KEY = "quest:queue";
 const ENDPOINT = "/api/sessions/complete";
 const MAX_QUEUE = 50;
+/**
+ * How long "Saving your work…" may wait. On one bar of signal a POST can hang
+ * for minutes, and the session is already on the phone, so stop and say so.
+ */
+const SEND_TIMEOUT_MS = 15_000;
 
 export type PostSessionOk = { saved: true; gained: Gained; profile: ClientProfile };
-/** Queued for a later flush, or dropped because the server rejected it outright. */
-export type PostSessionQueued = { saved: false; invalid?: boolean };
+/**
+ * Not saved on the server. Kept on the phone for a later flush, except
+ * `invalid`: the server rejected it outright and it was dropped. `signedOut`
+ * is kept too, but cannot go until someone types the PIN again.
+ */
+export type PostSessionQueued = { saved: false; invalid?: boolean; signedOut?: boolean };
 export type PostSessionResult = PostSessionOk | PostSessionQueued;
 
-/** "invalid" = the server said no and will say no again; retrying is pointless. */
-type SendOutcome = PostSessionOk | { saved: false; kind: "invalid" | "transient" };
+/**
+ * "invalid" = the server said no and will say no again; retrying is pointless.
+ * "signedOut" = the sign-in cookie is gone; the session is fine but has to wait.
+ */
+type SendOutcome = PostSessionOk | { saved: false; kind: "invalid" | "signedOut" | "transient" };
 
 function readQueue(): SessionResult[] {
   if (typeof window === "undefined") return [];
@@ -46,8 +59,13 @@ function enqueue(result: SessionResult): void {
   writeQueue([...readQueue(), result]);
 }
 
+function unqueue(sessionId: string): void {
+  writeQueue(readQueue().filter((i) => i.sessionId !== sessionId));
+}
+
 const TRANSIENT = { saved: false, kind: "transient" } as const;
 const INVALID = { saved: false, kind: "invalid" } as const;
+const SIGNED_OUT = { saved: false, kind: "signedOut" } as const;
 
 function newSessionId(): string {
   const uuid = globalThis.crypto?.randomUUID?.();
@@ -55,14 +73,19 @@ function newSessionId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-async function send(result: SessionResult): Promise<SendOutcome> {
+async function send(result: SessionResult, signal: AbortSignal): Promise<SendOutcome> {
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(result),
+      signal,
     });
-    // 4xx is the server refusing this payload — it will refuse it again.
+    // 401 comes from the proxy, not from judging the session: the 30-day cookie
+    // ran out or the secret changed. Counting it as a refusal threw away every
+    // queued lesson the moment the app opened on the sign-in page.
+    if (res.status === 401) return SIGNED_OUT;
+    // Any other 4xx is the server refusing this payload — it will refuse it again.
     if (res.status >= 400 && res.status < 500) return INVALID;
     if (!res.ok) return TRANSIENT;
     const data: unknown = await res.json();
@@ -71,45 +94,65 @@ async function send(result: SessionResult): Promise<SendOutcome> {
     if (!body.gained || !body.profile) return TRANSIENT;
     return { saved: true, gained: body.gained, profile: body.profile };
   } catch {
+    // Offline, or the timeout fired.
     return TRANSIENT;
   }
 }
 
 /**
- * POST one session. Retries once on a transient failure, then queues it.
- * A payload the server rejected is dropped, not retried and not queued.
+ * Ids postSession() is sending right now. A flush leaves these alone: the
+ * second copy would come back "already applied", and if that answer reached
+ * the runner it would show him +0 XP for the lesson.
+ */
+const sending = new Set<string>();
+
+/**
+ * POST one session. It is stored on the phone first, retried once on a
+ * transient failure, and stays stored unless the server took it or rejected it.
  */
 export async function postSession(result: SessionResult): Promise<PostSessionResult> {
-  // The retry and the queued copy must carry the same id so the server can
+  // The retry and the stored copy must carry the same id so the server can
   // tell a re-send from a second session.
-  const payload: SessionResult = result.sessionId
-    ? result
-    : { ...result, sessionId: newSessionId() };
+  const sessionId = result.sessionId ?? newSessionId();
+  const payload: SessionResult = { ...result, sessionId };
 
-  const first = await send(payload);
-  if (first.saved) return first;
-  if (first.kind === "invalid") return { saved: false, invalid: true };
-
-  const second = await send(payload);
-  if (second.saved) return second;
-  if (second.kind === "invalid") return { saved: false, invalid: true };
-
+  // Before the send, not after it fails: the runner has already cleared its
+  // resume data, so a hung POST and a swipe used to lose the whole lesson.
   enqueue(payload);
-  return { saved: false };
+  sending.add(sessionId);
+  try {
+    // One budget for the send and its retry: a hung network costs him 15
+    // seconds of "Saving…", not 30.
+    const signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
+    let outcome = await send(payload, signal);
+    if (!outcome.saved && outcome.kind === "transient") outcome = await send(payload, signal);
+
+    if (outcome.saved) {
+      unqueue(sessionId);
+      return outcome;
+    }
+    if (outcome.kind === "invalid") {
+      unqueue(sessionId);
+      return { saved: false, invalid: true };
+    }
+    return outcome.kind === "signedOut" ? { saved: false, signedOut: true } : { saved: false };
+  } finally {
+    sending.delete(sessionId);
+  }
 }
 
 /**
  * What to tell him about a session that did not reach the server.
  *
  * "invalid" is not "offline": the server refused the payload and will refuse
- * it again, so it is neither retried nor queued. Telling him it was saved on
- * the phone would be a lie, and the work would quietly vanish.
+ * it again, so it is not kept. Telling him it was saved on the phone would be
+ * a lie, and the work would quietly vanish.
  */
 export function saveNote(res: PostSessionResult): string | undefined {
   if (res.saved) return undefined;
-  return res.invalid
-    ? "I could not save that one. Tell Dad — he may need to sign in again."
-    : "No internet. Saved on this phone for later.";
+  if (res.invalid) return "I could not save that one. Tell Dad.";
+  if (res.signedOut) return "Saved on this phone. Ask Dad to type the PIN again.";
+  return "No internet. Saved on this phone for later.";
 }
 
 function queueKey(item: SessionResult): string {
@@ -121,23 +164,35 @@ async function drain(): Promise<number> {
   if (items.length === 0) return 0;
   const left: SessionResult[] = [];
   let sent = 0;
-  for (const item of items) {
-    const outcome = await send(item);
+  for (const [index, item] of items.entries()) {
+    if (sending.has(queueKey(item))) {
+      left.push(item);
+      continue;
+    }
+    const outcome = await send(item, AbortSignal.timeout(SEND_TIMEOUT_MS));
     if (outcome.saved) sent++;
-    else if (outcome.kind === "transient") left.push(item);
+    else if (outcome.kind === "signedOut") {
+      // The rest would get the same 401. Keep them all for after the PIN.
+      left.push(...items.slice(index));
+      break;
+    } else if (outcome.kind === "transient") left.push(item);
   }
-  // Re-read: a session finished in another tab while we were sending would be
-  // erased by writing our own snapshot back over it.
+  // Re-read before writing. While we were sending, another tab may have added a
+  // session and postSession() may have cleared one: our snapshot must neither
+  // erase the first nor bring the second back.
+  const current = readQueue();
+  const stillThere = new Set(current.map(queueKey));
   const mine = new Set(items.map(queueKey));
-  const arrived = readQueue().filter((i) => !mine.has(queueKey(i)));
-  writeQueue([...left, ...arrived]);
+  const arrived = current.filter((i) => !mine.has(queueKey(i)));
+  writeQueue([...left.filter((i) => stillThere.has(queueKey(i))), ...arrived]);
   return sent;
 }
 
 let flushing: Promise<number> | null = null;
 
 /**
- * Drain whatever is parked. Transient failures stay queued; rejects are dropped.
+ * Drain whatever is parked. Transient failures stay queued, signed-out ones
+ * wait for the PIN, rejects are dropped.
  *
  * One flush at a time: this runs on mount AND on every `online` event, and a
  * second PWA window runs its own. Two overlapping flushes would post the same

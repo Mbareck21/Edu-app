@@ -10,6 +10,7 @@ import type {
   ReadingLog,
   ReadingResult,
   SessionResult,
+  Streak,
 } from "@/lib/types";
 import { STEP_PASS_PCT, stepById } from "@/lib/types";
 import type { IconName } from "@/components/ui/Icon";
@@ -268,6 +269,18 @@ export function applyReading(
     ...profile,
     reading: { level: nextReadingLevel(profile.reading.level, recent), recent },
   };
+}
+
+/**
+ * The streak to show on `today`. Only applySession() moves the stored streak,
+ * so after skipped days the profile still holds the old number until he plays
+ * again, and Home and Me went on showing a streak that was already broken. It
+ * is alive while he last played today or yesterday — the same rule applySession
+ * uses to extend it.
+ */
+export function shownStreak(streak: Streak, today: string): number {
+  const last = streak.lastActiveDay;
+  return last && (last === today || last === previousDay(today)) ? streak.current : 0;
 }
 
 /**

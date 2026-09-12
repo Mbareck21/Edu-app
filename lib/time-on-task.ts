@@ -21,8 +21,13 @@ export type Stopwatch = {
   read: () => number;
 };
 
-export function startStopwatch(now: () => number = Date.now): Stopwatch {
-  let total = 0;
+/**
+ * `already` is the time a run had banked before a reload. Without it a
+ * resumed round timed only the questions after the reload: eight facts in 50
+ * seconds, a reload, two more in six, and he was told three stars for speed.
+ */
+export function startStopwatch(now: () => number = Date.now, already = 0): Stopwatch {
+  let total = Math.max(0, already);
   let last = now();
   const gap = () => Math.min(Math.max(0, now() - last), IDLE_GAP_MS);
   return {

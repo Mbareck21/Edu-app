@@ -44,7 +44,14 @@ export type Visual =
   | { kind: "bar"; a: number; b: number }
   | { kind: "tenframes"; n: number }
   | { kind: "placevalue"; value: number; place: PlaceName }
-  | { kind: "rect"; w: number; h: number; label: "area" | "perimeter" }
+  | {
+      kind: "rect";
+      w: number;
+      h: number;
+      label: "area" | "perimeter";
+      /** The side he is asked to find. Drawn as "?", with no grid to count. */
+      unknown?: "h";
+    }
   | { kind: "table"; rows: DataRow[] }
   | { kind: "bars"; bars: DataRow[]; scale: number }
   | { kind: "angle"; total: number; known: number }

@@ -99,10 +99,12 @@ test("a round is the whole table, due and weak facts first, flipped at random", 
   assert.ok(flipped, "7×8 must sometimes be asked as 8×7");
 });
 
-test("lightning draws from tables he has started, weakest first", () => {
+test("lightning draws from facts he has answered, weakest first", () => {
   assert.deepEqual(buildLightningRound({}, NOW, seeded(1)), [], "nothing started, nothing asked");
   const facts: Record<string, ReturnType<typeof newFact>> = {};
-  for (let b = 1; b <= 10; b++) facts[factKey(3, b)] = { ...newFact(3, b), streak: 4, dueAt: at(30) };
+  for (let b = 1; b <= 10; b++) {
+    facts[factKey(3, b)] = { ...newFact(3, b), streak: 4, correct: 4, dueAt: at(30) };
+  }
   // Missed once: a real miss must lead, ahead of facts he has never met.
   facts[factKey(8, 6)] = { ...newFact(8, 6), streak: 0, wrong: 1, dueAt: NOW };
   const round = buildLightningRound(facts, NOW, seeded(2));
@@ -140,4 +142,22 @@ test("a cell lights on the first right answer and goes dark on a miss", () => {
   assert.ok(isLit(f));
   assert.ok(!isKnown(f));
   assert.ok(!isLit(applyFactAnswer(f, false, 2000, "2026-09-07T18:00:00.000Z")));
+});
+
+test("one round of the nines does not start the other tables", () => {
+  // The whole nine table, answered: 2x9 to 8x9 are stored under keys that
+  // also name the twos to eights. None of those other facts were ever asked.
+  const facts: Record<string, ReturnType<typeof newFact>> = {};
+  const nines = new Set<string>();
+  for (let b = 1; b <= TABLE_UP_TO; b++) {
+    const key = factKey(9, b);
+    nines.add(key);
+    facts[key] = applyFactAnswer(newFact(9, b), b !== 7, 2000, NOW);
+  }
+  // A row the server stored but he never answered does not count either.
+  facts[factKey(4, 4)] = newFact(4, 4);
+  const round = buildLightningRound(facts, NOW, seeded(5));
+  assert.equal(round.length, ROUND_SIZE);
+  assert.ok(round.every((r) => nines.has(r.key)), "only the facts he answered");
+  assert.equal(round[0].key, factKey(9, 7), "the one he missed leads");
 });

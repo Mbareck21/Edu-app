@@ -18,7 +18,7 @@ import { WordList, toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
 import { allFactKeys, factFromRow } from "@/lib/tables";
 import { getProfile } from "@/lib/profile";
-import { BADGES } from "@/lib/rewards";
+import { BADGES, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +82,7 @@ export default async function MePage() {
   const today = todayKey(now);
   const week = lastSevenDays(today);
   const activeDays = new Set(profile.activity.map((a) => todayKey(new Date(a.at))));
+  const streak = shownStreak(profile.streak, today);
 
   const earned = new Map(profile.badges.map((b) => [b.id, b.earnedAt]));
 
@@ -115,7 +116,7 @@ export default async function MePage() {
               {profile.xp} XP
             </Pill>
             <Pill color="flame" icon="flame" variant="solid" size="sm">
-              {profile.streak.current} day
+              {streak} day
             </Pill>
           </div>
         </div>
@@ -125,7 +126,7 @@ export default async function MePage() {
       <div className="mt-3 flex gap-2">
         <Stat
           icon="flame"
-          value={profile.streak.current}
+          value={streak}
           label="Streak"
           color="var(--color-flame)"
         />

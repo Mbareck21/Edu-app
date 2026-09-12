@@ -5,7 +5,7 @@ import { z } from "zod";
 import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
 import { scheduleSkill } from "@/lib/mastery";
-import { MathProgress, RECENT_PCTS, nextLevel } from "@/lib/models/MathProgress";
+import { MathProgress, scoreRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
 import {
   PROFILE_KEY,
@@ -14,7 +14,7 @@ import {
   toClientProfile,
 } from "@/lib/models/Profile";
 import { SKILL_IDS, WordList, toSkillState } from "@/lib/models/WordList";
-import { getProfile, saveProfile } from "@/lib/profile";
+import { getProfile, updateProfile } from "@/lib/profile";
 import { applyReading, applySession, levelFor } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
@@ -34,6 +34,7 @@ const Body = z.object({
   listId: z.string().min(1).max(64).optional(),
   step: z.enum(STEP_IDS).optional(),
   mathSkill: z.string().min(1).max(40).optional(),
+  mathLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   wordResults: z
     .array(
       z.object({
@@ -64,6 +65,12 @@ function pctOf(body: ParsedBody): number {
 
 type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
 
+/**
+ * Set just before the first progress write goes out. Until then nothing of
+ * this session is stored anywhere, so a failure can safely give the claim back.
+ */
+type Writes = { started: boolean };
+
 /** Each step carries its own mark; unscored ones complete just for showing up. */
 function stepCompleted(step: StepId, pct: number): boolean {
   const info = stepById(step);
@@ -75,7 +82,8 @@ async function applyPathProgress(
   listId: string,
   step: StepId,
   body: ParsedBody,
-  now: Date
+  now: Date,
+  writes: Writes
 ): Promise<void> {
   if (!mongoose.isValidObjectId(listId)) return;
   const doc = await WordList.findById(listId).select("pathProgress");
@@ -89,6 +97,7 @@ async function applyPathProgress(
     plays: (Number(prev?.plays) || 0) + 1,
   });
   doc.markModified("pathProgress");
+  writes.started = true;
   await doc.save();
 }
 
@@ -96,7 +105,8 @@ async function applyPathProgress(
 async function applyWordResults(
   listId: string,
   results: WordResultIn[],
-  now: Date
+  now: Date,
+  writes: Writes
 ): Promise<void> {
   if (results.length === 0) return;
   if (!mongoose.isValidObjectId(listId)) return;
@@ -126,13 +136,14 @@ async function applyWordResults(
   }
   if (!touched) return;
   doc.markModified("words");
+  writes.started = true;
   await doc.save();
 }
 
 /** Route each word result to its list; the session's own list also gets pathProgress. */
-async function updateList(body: ParsedBody, now: Date): Promise<void> {
+async function updateList(body: ParsedBody, now: Date, writes: Writes): Promise<void> {
   if (body.listId && body.step) {
-    await applyPathProgress(body.listId, body.step, body, now);
+    await applyPathProgress(body.listId, body.step, body, now, writes);
   }
 
   const groups = new Map<string, WordResultIn[]>();
@@ -143,13 +154,12 @@ async function updateList(body: ParsedBody, now: Date): Promise<void> {
   }
   // One document per group, so the writes cannot collide.
   await Promise.all(
-    [...groups].map(([listId, results]) => applyWordResults(listId, results, now))
+    [...groups].map(([listId, results]) => applyWordResults(listId, results, now, writes))
   );
 }
 
-async function updateMath(body: ParsedBody, now: Date): Promise<void> {
+async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<void> {
   if (!body.mathSkill) return;
-  const pct = pctOf(body);
   const doc =
     (await MathProgress.findOne({ skill: body.mathSkill })) ??
     new MathProgress({ skill: body.mathSkill });
@@ -157,15 +167,12 @@ async function updateMath(body: ParsedBody, now: Date): Promise<void> {
   doc.attempts = (doc.attempts ?? 0) + body.answered;
   doc.correct = (doc.correct ?? 0) + body.correct;
   if (body.ms > 0 && (!doc.bestMs || body.ms < doc.bestMs)) doc.bestMs = body.ms;
-  const prevLevel = doc.level ?? 1;
-  doc.recentPcts = [pct, ...(doc.recentPcts ?? [])].slice(0, RECENT_PCTS);
-  const level = nextLevel(prevLevel, doc.recentPcts);
-  // Scores earned at the old level must not also justify the next promotion.
-  // Without this, three good level-1 sessions promoted to 2, and then the very
-  // next good session saw the same window again and jumped him straight to 3.
-  if (level !== prevLevel) doc.recentPcts = [];
-  doc.level = level;
+  // Only a round played at the stored level moves it; see scoreRound.
+  const scored = scoreRound(doc.level ?? 1, doc.recentPcts ?? [], pctOf(body), body.mathLevel);
+  doc.recentPcts = scored.recentPcts;
+  doc.level = scored.level;
   doc.lastAt = now;
+  writes.started = true;
   await doc.save();
 }
 
@@ -179,8 +186,13 @@ async function updateMath(body: ParsedBody, now: Date): Promise<void> {
  * and push a duplicate score into MathProgress.recentPcts.
  *
  * The `$ne` guard makes the check and the write one operation, so two requests
- * racing each other cannot both win. saveProfile() only $sets named fields, so
- * it never clobbers this list.
+ * racing each other cannot both win. updateProfile() only $sets named fields,
+ * so it never clobbers this list.
+ *
+ * The price of claiming first: if something fails after a progress write has
+ * gone out, the claim stays, the retry reports xp 0, and that session's XP is
+ * lost. That is the lesser harm next to advancing SRS twice. A failure before
+ * any progress write gives the claim back (releaseSession), so the retry counts.
  */
 async function reserveSession(sessionId: string): Promise<boolean> {
   const res = await Profile.updateOne(
@@ -188,6 +200,11 @@ async function reserveSession(sessionId: string): Promise<boolean> {
     { $push: { recentSessionIds: { $each: [sessionId], $position: 0, $slice: RECENT_SESSION_IDS } } }
   );
   return res.modifiedCount > 0;
+}
+
+/** Undo reserveSession, for a session that failed before anything was stored. */
+async function releaseSession(sessionId: string): Promise<void> {
+  await Profile.updateOne({ key: PROFILE_KEY }, { $pull: { recentSessionIds: sessionId } });
 }
 
 export async function POST(req: Request) {
@@ -207,6 +224,7 @@ export async function POST(req: Request) {
   const when = { at: now, today: todayKey(now) };
 
   await connectDB();
+  // Also creates the profile on the very first session, which reserveSession needs.
   const before = await getProfile();
 
   // A retry of a session we already applied: report the current state, change
@@ -226,19 +244,30 @@ export async function POST(req: Request) {
   }
 
   const result: SessionResult = body;
-  const applied = applySession(before, result, when);
-  const withReading = body.reading
-    ? applyReading(applied.profile, body.reading, when)
-    : applied.profile;
+  const writes: Writes = { started: false };
+  try {
+    // Progress first, profile last: a half-written session is better than XP
+    // for work the list never recorded. Only the profile step re-runs when
+    // another save got in first; the list and math writes happen once.
+    await updateList(body, now, writes);
+    await updateMath(body, now, writes);
+    const { changed, saved } = await updateProfile((current) => {
+      const applied = applySession(current, result, when);
+      return {
+        profile: body.reading ? applyReading(applied.profile, body.reading, when) : applied.profile,
+        gained: applied.gained,
+      };
+    });
 
-  // Progress first, profile last: a half-written session is better than XP
-  // for work the list never recorded.
-  await updateList(body, now);
-  await updateMath(body, now);
-  const saved = await saveProfile(withReading);
-
-  return NextResponse.json({
-    gained: applied.gained,
-    profile: toClientProfile(saved),
-  });
+    return NextResponse.json({
+      gained: changed.gained,
+      profile: toClientProfile(saved),
+    });
+  } catch (err) {
+    if (body.sessionId && !writes.started) {
+      // Best effort: if this fails too, the original error is the one to see.
+      await releaseSession(body.sessionId).catch(() => undefined);
+    }
+    throw err;
+  }
 }

@@ -543,7 +543,7 @@ export default function ChatPage() {
             </Button>
           )}
           <input
-            className="min-h-[48px] flex-1 rounded-full border-2 px-4 text-base"
+            className="min-h-[48px] min-w-0 flex-1 rounded-full border-2 px-4 text-base"
             style={{ borderColor: "var(--color-line)", background: "#fff" }}
             placeholder={micBusy ? "Listening…" : "Type a message"}
             value={input}

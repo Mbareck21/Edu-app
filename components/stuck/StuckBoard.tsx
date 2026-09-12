@@ -138,7 +138,7 @@ function StuckBoardInner({
         <div className="mt-3 flex gap-2">
           <input
             id="stuck-add"
-            className="min-h-[52px] flex-1 rounded-tile border-2 px-3 text-base"
+            className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
             style={{ borderColor: "var(--color-line)", background: "#fff" }}
             placeholder="fifty, thirty, eighty"
             value={text}

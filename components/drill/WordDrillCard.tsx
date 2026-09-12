@@ -86,7 +86,9 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
         <h2 className="font-display text-xl font-bold">Word drills</h2>
       </div>
 
-      {all === 0 ? (
+      {/* `all` is only what is left to learn; once every word is known it hits
+          zero, and the picker must stay so he can still drill them. */}
+      {total === 0 ? (
         <p className="mt-2 font-body text-sm" style={{ color: "var(--color-muted)" }}>
           Add a word list first, then come back.
         </p>

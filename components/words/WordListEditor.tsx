@@ -231,7 +231,7 @@ export default function WordListEditor({
               <div className="flex items-center gap-2">
                 <input
                   aria-label="word"
-                  className="min-h-[48px] flex-1 rounded-tile border-2 px-3 font-display text-base font-bold"
+                  className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 px-3 font-display text-base font-bold"
                   style={{ borderColor: "var(--color-line)", background: "#fff" }}
                   placeholder="word"
                   value={r.word}

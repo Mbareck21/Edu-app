@@ -12,6 +12,8 @@
 // So: fuzzy token equality, then a longest-common-subsequence alignment that
 // tolerates insertions and omissions.
 
+import { toWords } from "@/lib/number-words";
+
 /** Share of the sentence's words he has to land for the turn to pass. */
 export const ECHO_PASS = 0.75;
 /** At or above this it is celebrated rather than merely accepted. */
@@ -48,37 +50,29 @@ const NUMBER_WORDS: Record<string, string> = {
   ninety: "90",
 };
 
-const TENS = new Set(["20", "30", "40", "50", "60", "70", "80", "90"]);
-
-/** "twenty one" is two spoken words but one written number. Join them. */
-function joinTens(words: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < words.length; i++) {
-    const a = words[i];
-    const b = words[i + 1];
-    if (TENS.has(a) && b !== undefined && /^[1-9]$/.test(b)) {
-      out.push(String(Number(a) + Number(b)));
-      i++;
-      continue;
-    }
-    out.push(a);
-  }
-  return out;
-}
-
-/** Lower-case, punctuation-free words. Digits and number words are unified so
-    "5" from Whisper matches "five" in the passage. */
+/**
+ * Lower-case, punctuation-free words, with every number broken into the words
+ * it is spoken as and each of those written as a digit: "25", "twenty-five"
+ * and "twenty five" all become ["20", "5"]. The screen shows "twenty five" as
+ * two words and Whisper writes "25", so a number has to line up one spoken
+ * word at a time. Digits, not words, so a number never fuzzy-matches a
+ * look-alike ("five" and "fire").
+ */
 export function echoTokens(text: string): string[] {
-  const words = text
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/[^a-z0-9'\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.replace(/^'+|'+$/g, ""))
-    .filter(Boolean)
-    .map((w) => NUMBER_WORDS[w] ?? w);
-  return joinTens(words);
+  return (
+    text
+      .toLowerCase()
+      .replace(/[‘’]/g, "'")
+      // Whisper writes "1,000"; without this it reads as a 1 and a 0.
+      .replace(/(\d),(?=\d{3}\b)/g, "$1")
+      .replace(/\d+/g, (digits) => toWords(Number(digits)) || digits)
+      .replace(/[^a-z0-9'\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w.replace(/^'+|'+$/g, ""))
+      .filter(Boolean)
+      .map((w) => NUMBER_WORDS[w] ?? w)
+  );
 }
 
 function levenshtein(a: string, b: string): number {
@@ -133,10 +127,18 @@ export type EchoScore = {
  * doubled word costs one word, not the rest of the line.
  */
 export function compareEcho(sentence: string, heard: string): EchoScore {
-  // Display words keep their punctuation; scoring words do not. Both come
-  // from the same split so the indexes line up.
+  // Display words keep their punctuation; scoring words do not. Most display
+  // words hold one scoring word, but "25" and "twenty-five" hold two, so each
+  // scoring word remembers which display word it came from.
   const display = sentence.split(/\s+/).filter(Boolean);
-  const target = display.map((w) => echoTokens(w)[0] ?? "");
+  const target: string[] = [];
+  const owner: number[] = [];
+  display.forEach((w, d) => {
+    for (const t of echoTokens(w)) {
+      target.push(t);
+      owner.push(d);
+    }
+  });
   const said = echoTokens(heard);
 
   const n = target.length;
@@ -147,25 +149,21 @@ export function compareEcho(sentence: string, heard: string): EchoScore {
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] =
-        target[i] && echoWordMatch(target[i], said[j])
-          ? dp[i + 1][j + 1] + 1
-          : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      dp[i][j] = echoWordMatch(target[i], said[j])
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
 
-  const tokens: EchoToken[] = display.map((word, i) => ({
-    word,
-    said: false,
-    scored: Boolean(target[i]),
-  }));
+  // A display word counts as said once every scoring word in it was heard.
+  const missing = display.map(() => 0);
+  for (const d of owner) missing[d]++;
+  const scored = missing.map((count) => count > 0);
   let i = 0;
   let j = 0;
-  let matched = 0;
   while (i < n && j < m) {
-    if (target[i] && echoWordMatch(target[i], said[j])) {
-      tokens[i].said = true;
-      matched++;
+    if (echoWordMatch(target[i], said[j])) {
+      missing[owner[i]]--;
       i++;
       j++;
     } else if (dp[i + 1][j] >= dp[i][j + 1]) {
@@ -175,9 +173,16 @@ export function compareEcho(sentence: string, heard: string): EchoScore {
     }
   }
 
+  const tokens: EchoToken[] = display.map((word, d) => ({
+    word,
+    said: scored[d] && missing[d] === 0,
+    scored: scored[d],
+  }));
+
   // Words with no letters or digits at all (a lone dash) can never be said, so
   // they are not counted against him.
-  const total = target.filter(Boolean).length;
+  const matched = tokens.filter((t) => t.said).length;
+  const total = scored.filter(Boolean).length;
   const pct = total === 0 ? 0 : matched / total;
   return {
     tokens,

@@ -15,6 +15,7 @@ import {
   rotate,
   rungFor,
 } from "@/lib/spell-chain";
+import { dueAfterDays } from "@/lib/spacing";
 
 const NOW = "2026-09-01T18:00:00.000Z";
 
@@ -154,6 +155,8 @@ test("an empty rotation does not crash the sitting", () => {
 
 const DAY = 24 * 60 * 60 * 1000;
 const at = (offsetDays: number) => new Date(Date.parse(NOW) + offsetDays * DAY).toISOString();
+/** Re-checks come due from the start of his day, `days` after `from`. */
+const dueFrom = (from: string, days: number) => dueAfterDays(new Date(from), days).toISOString();
 
 function graduated(word = "fifty"): ReturnType<typeof newChain> {
   let s = newChain(word);
@@ -165,7 +168,7 @@ test("reaching ten schedules the first re-check for tomorrow", () => {
   const s = graduated();
   assert.ok(isFinished(s));
   assert.equal(s.checks, 0);
-  assert.equal(s.dueAt, at(1));
+  assert.equal(s.dueAt, dueFrom(NOW, 1));
   assert.equal(checkDue(s, NOW), false, "not due the moment he finishes");
   assert.equal(checkDue(s, at(1)), true);
 });
@@ -178,11 +181,11 @@ test("passing a re-check pushes the next one further out", () => {
   let s = graduated();
   s = applyWrite(s, "fifty", at(1)).state;   // day 1 check, pass
   assert.equal(s.checks, 1);
-  assert.equal(s.dueAt, at(1 + 3), "3 days after the first pass");
+  assert.equal(s.dueAt, dueFrom(at(1), 3), "3 days after the first pass");
   assert.ok(isFinished(s), "still finished");
   s = applyWrite(s, "fifty", at(4)).state;   // day 4 check, pass
   assert.equal(s.checks, 2);
-  assert.equal(s.dueAt, at(4 + 7));
+  assert.equal(s.dueAt, dueFrom(at(4), 7));
 });
 
 test("missing a re-check makes it a working word again, at zero", () => {
@@ -209,7 +212,7 @@ test("a row finished before re-checks existed is scheduled, not stranded", () =>
   const s = fromRow("fifty", { current: 10, best: 10, reps: 10, attempts: 10, graduatedAt: NOW });
   assert.equal(s.checks, 0);
   assert.ok(isFinished(s));
-  assert.equal(s.dueAt, at(1), "first re-check a day after he finished");
+  assert.equal(s.dueAt, dueFrom(NOW, 1), "first re-check a day after he finished");
   assert.equal(checkDue(s, NOW), false);
   assert.equal(checkDue(s, at(1)), true);
   // A row that already carries a dueAt keeps it.
@@ -233,10 +236,10 @@ test("a check counts once, when due — extra writes do not climb the ladder", (
   assert.equal(s.dueAt, dueAfterFinish, "practice did not move the schedule");
   s = applyWrite(s, "fifty", at(1)).state;    // now due: this one is the check
   assert.equal(s.checks, 1);
-  assert.equal(s.dueAt, at(1 + 3));
+  assert.equal(s.dueAt, dueFrom(at(1), 3));
   s = applyWrite(s, "fifty", at(1)).state;    // straight after: not due again
   assert.equal(s.checks, 1, "a second write the same day is not a second check");
-  assert.equal(s.dueAt, at(1 + 3));
+  assert.equal(s.dueAt, dueFrom(at(1), 3));
 });
 
 test("a miss on a finished word resets it even when no check was due", () => {

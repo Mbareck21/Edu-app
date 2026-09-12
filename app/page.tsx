@@ -13,6 +13,7 @@ import TopBar from "@/components/ui/TopBar";
 import { todayKey } from "@/lib/day";
 import { getListSummaries } from "@/lib/lists";
 import { getProfile } from "@/lib/profile";
+import { shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,7 @@ export default async function LearnPage() {
       <TopBar
         name={profile.name}
         xp={profile.xp}
-        streak={profile.streak.current}
+        streak={shownStreak(profile.streak, today)}
         subtitle="Time to learn some words."
         className="pt-3 pb-3"
       />

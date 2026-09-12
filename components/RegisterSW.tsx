@@ -21,7 +21,12 @@ export default function RegisterSW() {
   const askedForIt = useRef(false);
 
   useEffect(() => {
-    void flushQueue();
+    // Not on the sign-in page: with no cookie every queued session only gets a
+    // 401 there. The PIN form flushes once he is signed in again.
+    const flush = () => {
+      if (window.location.pathname !== "/login") void flushQueue();
+    };
+    flush();
 
     if (!("serviceWorker" in navigator)) return;
     const forced = new URLSearchParams(window.location.search).get("sw") === "1";
@@ -74,12 +79,11 @@ export default function RegisterSW() {
     if (document.readyState === "complete") onLoad();
     else window.addEventListener("load", onLoad, { once: true });
 
-    const onOnline = () => void flushQueue();
-    window.addEventListener("online", onOnline);
+    window.addEventListener("online", flush);
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     return () => {
       window.removeEventListener("load", onLoad);
-      window.removeEventListener("online", onOnline);
+      window.removeEventListener("online", flush);
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       registration?.removeEventListener("updatefound", onUpdateFound);
     };

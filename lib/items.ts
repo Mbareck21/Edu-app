@@ -217,6 +217,28 @@ export function normalizeAnswer(text: string): string {
 }
 
 /**
+ * Which still-unfound word the "write what you remember" box should take.
+ * While he is typing, a match waits if a longer unfound word starts the same
+ * way: otherwise "twenty-one" is taken as "twenty" at the sixth letter and he
+ * gets credit for the wrong word. Pressing Enter (`submitted`) takes the match.
+ */
+export function recalledWord(
+  typed: string,
+  unfound: readonly string[],
+  submitted: boolean
+): string | null {
+  const text = normalizeAnswer(typed);
+  if (!text) return null;
+  const hit = unfound.find((w) => normalizeAnswer(w) === text);
+  if (!hit || submitted) return hit ?? null;
+  const longer = unfound.some((w) => {
+    const key = normalizeAnswer(w);
+    return key !== text && key.startsWith(text);
+  });
+  return longer ? null : hit;
+}
+
+/**
  * Punctuation a nine-year-old adds out of habit, not because he thinks it is
  * part of the word. Apostrophes are NOT here: "dont" is not "don't".
  */
@@ -948,10 +970,14 @@ export function itemForSkill(
     return hard ? makeWrite(word, pool) : makeSpell(word, pool, rng);
   }
   if (skill === "recognize") {
-    const item = hard
-      ? makeCloze(word, pool, rng) ?? makeRecognize(word, pool, rng)
-      : makeRecognize(word, pool, rng);
-    return item ?? makeListen(word, pool, rng, false);
+    const item =
+      (hard
+        ? makeCloze(word, pool, rng) ?? makeRecognize(word, pool, rng)
+        : makeRecognize(word, pool, rng)) ?? makeListen(word, pool, rng, false);
+    // The stand-ins (the harder cloze, the listen fallback) are tagged "use" and
+    // "listen" by their makers. Asked for "recognize", the answer has to feed
+    // "recognize", or that skill stops at streak 2 and stays due forever.
+    return { ...item, skill: "recognize" };
   }
   // use
   const chain = hard

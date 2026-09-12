@@ -140,24 +140,40 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: failure }, { status: 502 });
   }
 
-  let touched = 0;
-  doc.words.forEach((w, index) => {
-    const got = filled.get(String(w.word).trim().toLowerCase());
-    if (!got) return;
-    // Never overwrite what a parent already wrote. The family rides along with
-    // a fresh examples fill; it is never written on its own.
-    if ((w.examples?.length ?? 0) > 0 || got.examples.length === 0) return;
-    doc.set(`words.${index}.examples`, got.examples);
-    touched++;
-    if ((w.family?.length ?? 0) === 0 && got.family.length > 0) {
-      doc.set(`words.${index}.family`, got.family);
-    }
+  // Only the example and family fields of the words that were filled are
+  // written, matched by the word itself. The model call takes seconds, and
+  // saving the whole words array loaded before it overwrote any review
+  // progress a session wrote to this list in the meantime. The filters are
+  // re-checked at write time, so a sentence a parent typed during the wait is
+  // never overwritten either. The family rides along with a fresh examples
+  // fill; it is never written on its own.
+  // "x.0" not existing is Mongo's test for an array that is empty or missing.
+  const empty = { $exists: false };
+  // The keys are trimmed and lower-cased; the filter has to match the word as stored.
+  const stored = new Map((doc.words ?? []).map((w) => [String(w.word).trim().toLowerCase(), String(w.word)]));
+  const updates = [...filled].map(([key, got]) => {
+    const word = stored.get(key) ?? key;
+    const withFamily = got.family.length > 0;
+    return {
+      updateOne: {
+        filter: { _id: doc._id },
+        update: {
+          $set: {
+            "words.$[w].examples": got.examples,
+            ...(withFamily ? { "words.$[f].family": got.family } : {}),
+          },
+        },
+        arrayFilters: [
+          { "w.word": word, "w.examples.0": empty },
+          ...(withFamily ? [{ "f.word": word, "f.examples.0": empty, "f.family.0": empty }] : []),
+        ],
+      },
+    };
   });
+  if (updates.length === 0) return NextResponse.json(toClient(doc.toObject()));
 
-  if (touched > 0) {
-    doc.markModified("words");
-    await doc.save();
-  }
-
-  return NextResponse.json(toClient(doc.toObject()));
+  await WordList.bulkWrite(updates);
+  const fresh = await WordList.findById(id).select("-readingHistory").lean();
+  if (!fresh) return NextResponse.json({ error: "not found" }, { status: 404 });
+  return NextResponse.json(toClient(fresh));
 }

@@ -169,6 +169,44 @@ for (const skill of MATH_SKILLS) {
   }
 }
 
+test("every answer is a whole number he can type, across many seeds", () => {
+  // One seed per skill hid a word problem that lost more than it had: the
+  // answer came out negative, the number pad could not enter it, and the
+  // lesson never ended. gradeAnswer only accepts digits, so this holds for all.
+  for (const skill of MATH_SKILLS) {
+    for (const level of LEVELS) {
+      for (let seed = 1; seed <= 500; seed++) {
+        const rng = mulberry32(seed);
+        for (let i = 0; i < 10; i++) {
+          const q = skill.generate(level, rng);
+          assert.ok(
+            Number.isInteger(q.answer) && q.answer >= 0,
+            `${skill.id} L${level} seed ${seed}: answer ${q.answer} in "${q.prompt}"`,
+          );
+        }
+      }
+    }
+  }
+});
+
+test("finding the other side does not show that side in the picture", () => {
+  const skill = getSkill("geometry");
+  for (const level of LEVELS) {
+    const rng = mulberry32(77 + level);
+    for (let i = 0; i < SAMPLES; i++) {
+      const q = skill.generate(level, rng);
+      assert.equal(q.visual.kind, "rect");
+      if (q.visual.kind !== "rect") continue;
+      if (level === 3) {
+        assert.equal(q.visual.unknown, "h", `the asked side must be hidden: "${q.prompt}"`);
+        assert.equal(q.visual.h, q.answer);
+      } else {
+        assert.equal(q.visual.unknown, undefined, `both sides are given: "${q.prompt}"`);
+      }
+    }
+  }
+});
+
 test("word problems stay at Grade-3 reading level", () => {
   const skill = getSkill("word-problems");
   for (const level of LEVELS) {

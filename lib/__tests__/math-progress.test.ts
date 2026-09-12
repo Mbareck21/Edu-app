@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { MAX_MATH_LEVEL, cleanRounds, nextLevel } from "@/lib/models/MathProgress";
+import { MAX_MATH_LEVEL, cleanRounds, nextLevel, scoreRound } from "@/lib/models/MathProgress";
 
 test("three strong sessions in a row step the level up", () => {
   assert.equal(nextLevel(1, [90, 95, 100]), 2);
@@ -36,4 +36,19 @@ test("clean rounds count the run he has banked toward the next level", () => {
   assert.equal(cleanRounds([95, 90, 100]), 3);
   assert.equal(cleanRounds([95, 80, 100]), 1, "the run stops at the weak round");
   assert.equal(cleanRounds([80, 95, 100]), 0, "a weak newest round banks nothing");
+});
+
+test("a round moves the level only when it was played at that level", () => {
+  // "Play again" after a promotion still runs the old level, and a drill can
+  // be played at any level: easy level-1 rounds must not push a level-2 skill.
+  assert.deepEqual(scoreRound(2, [95, 95], 100, 1), { level: 2, recentPcts: [95, 95] });
+  assert.deepEqual(scoreRound(2, [40], 10, 3), { level: 2, recentPcts: [40] }, "a hard drill cannot drop it");
+  assert.deepEqual(scoreRound(2, [95, 95], 100, 2), { level: 3, recentPcts: [] }, "at its level it counts");
+});
+
+test("a round with no level counts as the stored level, as older queued sessions did", () => {
+  assert.deepEqual(scoreRound(1, [90, 90], 100), { level: 2, recentPcts: [] });
+  assert.deepEqual(scoreRound(1, [80], 90), { level: 1, recentPcts: [90, 80] });
+  assert.deepEqual(scoreRound(3, [55], 40), { level: 2, recentPcts: [] });
+  assert.deepEqual(scoreRound(2, [90, 90, 50], 70), { level: 2, recentPcts: [70, 90, 90] }, "window stays at three");
 });

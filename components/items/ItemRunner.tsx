@@ -77,6 +77,13 @@ export type ItemRunnerProps = {
 
 /** Everything a reload needs to put him back mid-run. */
 type Saved = {
+  /**
+   * The lesson itself. The page deals a new lesson on every request (new seed,
+   * new item ids), so a reload could never find the saved ids in it: the
+   * lesson started over while keeping the answers already given, and posted
+   * about sixteen answers for a ten-item lesson.
+   */
+  items: LessonItem[];
   queueIds: string[];
   attempts: Attempt[];
   answeredIds: string[];
@@ -84,19 +91,23 @@ type Saved = {
   round: number;
   plans: [string, { left: number; index: number }][];
   repeatsScheduled: number;
+  /** Time on task banked before a reload. */
+  ms?: number;
 };
 
 function isSaved(v: unknown): v is Saved {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Partial<Saved>;
   return (
+    Array.isArray(o.items) &&
     Array.isArray(o.queueIds) &&
     Array.isArray(o.attempts) &&
     Array.isArray(o.answeredIds) &&
     typeof o.streak === "number" &&
     typeof o.round === "number" &&
     Array.isArray(o.plans) &&
-    typeof o.repeatsScheduled === "number"
+    typeof o.repeatsScheduled === "number" &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
 }
 
@@ -178,7 +189,7 @@ export default function ItemRunner(props: ItemRunnerProps) {
 }
 
 function ItemRunnerInner({
-  items,
+  items: dealt,
   post,
   exitHref,
   accent = "green",
@@ -197,12 +208,16 @@ function ItemRunnerInner({
   resumeKey,
   initial,
 }: ItemRunnerProps & { initial: Saved | null }) {
+  // A resumed lesson is the one he was doing, not the one this request dealt.
+  // Held in state: a router.refresh() mid-lesson (coming back to the app)
+  // deals a new lesson with new ids, and a queue from the old one saved
+  // against the new one resumed as an empty queue and posted the lesson done.
+  const [items] = useState(() => (initial ? initial.items : dealt));
+  const bankedMs = initial?.ms ?? 0;
   const [queue, setQueue] = useState<LessonItem[]>(() => {
     if (!initial) return items;
-    // The same seed rebuilt the same items; put them back in the saved order.
     const byId = new Map(items.map((i) => [i.id, i]));
-    const restored = initial.queueIds.map((id) => byId.get(id)).filter((i): i is LessonItem => Boolean(i));
-    return restored.length > 0 ? restored : items;
+    return initial.queueIds.map((id) => byId.get(id)).filter((i): i is LessonItem => Boolean(i));
   });
   const [chosen, setChosen] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -237,10 +252,10 @@ function ItemRunnerInner({
   useEffect(() => {
     const now = Date.now();
     startedAt.current = now;
-    watch.current = startStopwatch();
+    watch.current = startStopwatch(Date.now, bankedMs);
     itemStartedAt.current = now;
     rng.current = mulberry32(now % 2147483647);
-  }, []);
+  }, [bankedMs]);
 
   // Missing examples get written in the background — the lesson never waits.
   useEffect(() => {
@@ -402,6 +417,7 @@ function ItemRunnerInner({
     // Where he is, so a reload lands here and not on the first card.
     if (resumeKey) {
       saveProgress(resumeKey, {
+        items,
         queueIds: next.map((i) => i.id),
         attempts: attempts.current,
         answeredIds: [...answeredIds.current],
@@ -409,6 +425,7 @@ function ItemRunnerInner({
         round: round + 1,
         plans: [...repeatPlans.current.entries()],
         repeatsScheduled: repeatsScheduled.current,
+        ms: watch.current?.read() ?? 0,
       });
     }
   }

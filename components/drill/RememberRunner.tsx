@@ -10,7 +10,7 @@ import LessonComplete from "@/components/ui/LessonComplete";
 import ProgressRing from "@/components/ui/ProgressRing";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { fireConfetti } from "@/components/ui/Confetti";
-import { normalizeAnswer } from "@/lib/items";
+import { recalledWord } from "@/lib/items";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { XP, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
@@ -55,7 +55,6 @@ export default function RememberRunner({
   const posted = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const keyed = new Map(words.map((w) => [normalizeAnswer(w), w]));
   const missed = words.filter((w) => !found.includes(w));
 
   const finish = useCallback(() => {
@@ -108,13 +107,17 @@ export default function RememberRunner({
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
+  function take(word: string) {
+    setFound((f) => [...f, word]);
+    setFloat((n) => n + 1);
+    setTyped("");
+    sfx.correct();
+  }
+
   function onType(value: string) {
-    const hit = keyed.get(normalizeAnswer(value));
-    if (hit && !found.includes(hit)) {
-      setFound((f) => [...f, hit]);
-      setFloat((n) => n + 1);
-      setTyped("");
-      sfx.correct();
+    const hit = recalledWord(value, missed, false);
+    if (hit) {
+      take(hit);
       return;
     }
     setTyped(value);
@@ -239,7 +242,11 @@ export default function RememberRunner({
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              setTyped("");
+              // A word that waited for a longer one ("twenty" while "twenty-one"
+              // is unfound) is taken here; anything else just clears the box.
+              const hit = recalledWord(typed, missed, true);
+              if (hit) take(hit);
+              else setTyped("");
             }
           }}
           autoComplete="off"

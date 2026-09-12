@@ -64,16 +64,17 @@ function SignalText({
  * the session — the page mints a new seed per request, so without it a
  * reload would deal a different set of passages.
  */
-type Saved = { seed: number; idx: number; missed: boolean[] };
+type Saved = { seed: number; idx: number; missed: boolean[]; ms?: number };
 
 function isSaved(v: unknown): v is Saved {
   if (typeof v !== "object" || v === null) return false;
-  const o = v as { seed?: unknown; idx?: unknown; missed?: unknown };
+  const o = v as { seed?: unknown; idx?: unknown; missed?: unknown; ms?: unknown };
   return (
     typeof o.seed === "number" &&
     typeof o.idx === "number" &&
     Array.isArray(o.missed) &&
-    o.missed.every((b) => typeof b === "boolean")
+    o.missed.every((b) => typeof b === "boolean") &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
 }
 
@@ -88,8 +89,9 @@ function StructureRunnerInner({
   saveKey,
   initial,
 }: StructureRunnerProps & { saveKey: string; initial: Saved | null }) {
-  // A resumed run keeps the seed that dealt its passages.
-  const seed = initial ? initial.seed : freshSeed;
+  // A resumed run keeps the seed that dealt its passages. Held in state, so a
+  // refresh mid-lesson (a new seed from the server) cannot swap the passages.
+  const [seed] = useState(initial ? initial.seed : freshSeed);
   // Same seed on the server and here, so the options never jump on hydration.
   // The seed changes every visit, so the passages and their order do too —
   // walking the five in declaration order taught him the positions, not the
@@ -111,8 +113,14 @@ function StructureRunnerInner({
   const [picked, setPicked] = useState<TextStructureId | null>(null);
   const [shake, setShake] = useState(false);
 
-  // Time on task, same stopwatch the other runners use.
+  // Time on task, same stopwatch the other runners use. A fresh run starts it
+  // on Start; a resumed one skips the intro, so it starts here with the time
+  // banked before the reload, or the lesson posted 0:00.
   const watch = useRef<Stopwatch | null>(null);
+  const bankedMs = initial ? (initial.ms ?? 0) : null;
+  useEffect(() => {
+    if (bankedMs !== null) watch.current = startStopwatch(Date.now, bankedMs);
+  }, [bankedMs]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const savedRef = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -133,7 +141,7 @@ function StructureRunnerInner({
       setPicked(id);
       setMissed((m) => {
         const next = m.map((v, i) => (i === idx ? true : v));
-        saveProgress(saveKey, { seed, idx, missed: next });
+        saveProgress(saveKey, { seed, idx, missed: next, ms: watch.current?.read() ?? 0 });
         return next;
       });
       sfx.wrong();
@@ -148,7 +156,7 @@ function StructureRunnerInner({
       setIdx(idx + 1);
       setSolved(false);
       setPicked(null);
-      saveProgress(saveKey, { seed, idx: idx + 1, missed });
+      saveProgress(saveKey, { seed, idx: idx + 1, missed, ms: watch.current?.read() ?? 0 });
     } else {
       clearProgress(saveKey);
       setElapsedMs(watch.current?.read() ?? 0);
@@ -193,7 +201,9 @@ function StructureRunnerInner({
         perfect={perfect}
         note={saving ? "Saving…" : queuedNote}
         primary={{ label: "Back to Learn", href: "/" }}
-        secondary={{ label: "Again", href: `/learn/structure?r=${seed}` }}
+        // This visit's seed, not the resumed run's: that one is already the
+        // page's ?r after an Again, and the same key would not remount.
+        secondary={{ label: "Again", href: `/learn/structure?r=${freshSeed}` }}
       />
     );
   }

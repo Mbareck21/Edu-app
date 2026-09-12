@@ -52,3 +52,11 @@ test("a clock that goes backwards never subtracts time", () => {
   t = 4000;
   assert.equal(sw.read(), 0);
 });
+
+test("a resumed run keeps the time it banked before the reload", () => {
+  const c = fakeClock();
+  const sw = startStopwatch(c.now, 50_000);
+  c.tick(6000);
+  sw.mark();
+  assert.equal(sw.read(), 56_000);
+});

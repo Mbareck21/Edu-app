@@ -43,6 +43,13 @@ export type ChainRunnerProps = {
   post?: { ref: string; listId: string; step: StepId };
   /** Where the finish screen sends him. Defaults back to the Words tab. */
   exit?: { label: string; href: string };
+  /**
+   * Where a sitting that is not a path step saves itself. Left off for the
+   * Words tab. The writing drill used to share the Words tab's slot: a drill
+   * left half-done on unit words came back on the Words tab, whose chains
+   * cover only his stuck words, and the board drew nothing.
+   */
+  resumeId?: string;
   /** Their counts as the server has them right now. */
   chains: Record<string, ChainState>;
   onDone?: () => void;
@@ -81,6 +88,8 @@ export type ChainSaved = {
   writeIndex: number;
   log: { checked: string[]; finished: string[] };
   correct: number;
+  /** Time on task banked before a reload. */
+  ms?: number;
 };
 
 const strings = (v: unknown): v is string[] =>
@@ -98,7 +107,8 @@ export function isChainSaved(v: unknown): v is ChainSaved {
     o.log !== null &&
     strings(o.log.checked) &&
     strings(o.log.finished) &&
-    typeof o.correct === "number"
+    typeof o.correct === "number" &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
 }
 
@@ -108,8 +118,11 @@ export function chainResumeKey(ref: string | undefined): string {
 }
 
 export default function ChainRunner(props: ChainRunnerProps) {
-  const key = chainResumeKey(props.post?.ref);
-  const saved = useSavedRun(key, isChainSaved);
+  const key = chainResumeKey(props.post?.ref ?? props.resumeId);
+  const stored = useSavedRun(key, isChainSaved);
+  // A sitting can only resume on words this page has chains for; otherwise
+  // it would draw nothing and save that nothing back.
+  const saved = stored && stored.words.every((w) => props.chains[w]) ? stored : null;
   // A resumed sitting keeps its own words: the page picks a fresh set on
   // every visit, and the saved position only means anything against these.
   return (
@@ -124,7 +137,7 @@ export default function ChainRunner(props: ChainRunnerProps) {
 }
 
 function ChainRunnerInner({
-  words,
+  words: dealtWords,
   senses,
   chains,
   post,
@@ -134,6 +147,9 @@ function ChainRunnerInner({
   initial,
 }: ChainRunnerProps & { saveKey: string; initial: ChainSaved | null }) {
   const [state, setState] = useState<Record<string, ChainState>>(chains);
+  // The sitting's words, held: the page picks a new set whenever it is
+  // refreshed, and the rotation below only means anything against these.
+  const [words] = useState(dealtWords);
   /**
    * The words still in this sitting. A word leaves the moment it needs no
    * more writing today — it passed its one re-check, or it just reached ten —
@@ -169,15 +185,26 @@ function ChainRunnerInner({
   const correctRef = useRef(initial?.correct ?? 0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // Before the save below: effects run in order, and the first save reads it.
+  const bankedMs = initial?.ms ?? 0;
+  useEffect(() => {
+    watch.current = startStopwatch(Date.now, bankedMs);
+  }, [bankedMs]);
   // Where he is, for a reload. Every write moves one of these; cleared when
   // the sitting is done so the next one starts clean.
   useEffect(() => {
     if (done) clearProgress(saveKey);
-    else saveProgress(saveKey, { words, active, turn, writeIndex, log, correct: correctRef.current });
+    else
+      saveProgress(saveKey, {
+        words,
+        active,
+        turn,
+        writeIndex,
+        log,
+        correct: correctRef.current,
+        ms: watch.current?.read() ?? 0,
+      });
   }, [done, words, active, turn, writeIndex, log, saveKey]);
-  useEffect(() => {
-    watch.current = startStopwatch();
-  }, []);
 
   const word = useMemo(
     () => repairWord ?? rotate(active, turn),
@@ -399,7 +426,7 @@ function ChainRunnerInner({
         >
           <input
             ref={inputRef}
-            className="min-h-[52px] flex-1 rounded-tile border-2 px-3 text-lg"
+            className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-lg"
             style={{ borderColor: "var(--color-line)", background: "#fff" }}
             placeholder="Type the word"
             value={typed}

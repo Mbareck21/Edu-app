@@ -40,6 +40,8 @@ export type TablesSaved = {
   sessionRef: string;
   queue: number[];
   firstTry: Record<number, boolean>;
+  /** Time on task banked before a reload; the stars are for speed. */
+  ms?: number;
 };
 
 export function isTablesSaved(v: unknown): v is TablesSaved {
@@ -53,7 +55,8 @@ export function isTablesSaved(v: unknown): v is TablesSaved {
     Array.isArray(o.queue) &&
     o.queue.every((n) => typeof n === "number") &&
     typeof o.firstTry === "object" &&
-    o.firstTry !== null
+    o.firstTry !== null &&
+    (o.ms === undefined || typeof o.ms === "number")
   );
 }
 
@@ -106,13 +109,14 @@ export default function TablesRunner({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const posted = useRef(false);
 
+  const bankedMs = initial?.ms ?? 0;
   useEffect(() => {
-    watch.current = startStopwatch();
+    watch.current = startStopwatch(Date.now, bankedMs);
     askedAt.current = Date.now();
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [bankedMs]);
 
   const done = queue.length === 0;
 
@@ -120,7 +124,15 @@ export default function TablesRunner({
   // wrong, so this runs after each one; cleared once the round is done.
   useEffect(() => {
     if (done) clearProgress(saveKey);
-    else saveProgress(saveKey, { facts, label, sessionRef, queue, firstTry: firstTry.current });
+    else
+      saveProgress(saveKey, {
+        facts,
+        label,
+        sessionRef,
+        queue,
+        firstTry: firstTry.current,
+        ms: watch.current?.read() ?? 0,
+      });
   }, [done, facts, label, queue, saveKey, sessionRef]);
 
   const index = queue[0];

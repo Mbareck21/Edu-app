@@ -33,14 +33,14 @@ export default function NewListForm() {
               return;
             }
             const list = (await res.json()) as { _id: string };
-            router.push(`/words/${list._id}`);
+            router.push(`/me/lists/${list._id}`);
           } finally {
             setBusy(false);
           }
         }}
       >
         <input
-          className="min-h-[52px] flex-1 rounded-tile border-2 px-3 text-base"
+          className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
           style={{ borderColor: "var(--color-line)", background: "#fff" }}
           placeholder="Week 1 — Animals"
           value={name}

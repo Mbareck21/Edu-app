@@ -25,7 +25,7 @@ export default function SchoolLists({ options }: { options: SeedOption[] }) {
 
   async function seed(option: SeedOption) {
     if (option.existingListId) {
-      router.push(`/words/${option.existingListId}`);
+      router.push(`/me/lists/${option.existingListId}`);
       return;
     }
     setBusyId(option.id);
@@ -41,7 +41,7 @@ export default function SchoolLists({ options }: { options: SeedOption[] }) {
         return;
       }
       const list = (await res.json()) as { _id: string };
-      router.push(`/words/${list._id}`);
+      router.push(`/me/lists/${list._id}`);
     } finally {
       setBusyId(null);
     }

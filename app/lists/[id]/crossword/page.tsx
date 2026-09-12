@@ -33,7 +33,7 @@ export default async function CrosswordPage({
       <GameFrame
         title="Crossword"
         listName={list.name}
-        backHref={`/words/${list._id}`}
+        backHref={`/me/lists/${list._id}`}
         color="blue"
         icon="words"
         printView={
@@ -51,7 +51,7 @@ export default async function CrosswordPage({
     <GameFrame
       title="Crossword"
       listName={list.name}
-      backHref={`/words/${list._id}`}
+      backHref={`/me/lists/${list._id}`}
       color="blue"
       icon="words"
       printView={<PrintView listName={list.name} result={result} />}

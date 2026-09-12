@@ -99,3 +99,44 @@ test("the thing named in the question does not answer it", () => {
   assert.equal(judgeAnswer("car", ["red car"], "What color was the car?").verdict, "wrong");
   assert.equal(judgeAnswer("happy", ["not happy"], "How did she feel?").verdict, "wrong");
 });
+
+test("an answer that says the opposite is wrong, whichever phrasing it matches", () => {
+  const acc = ["yes it matches", "yes it fits", "it matches"];
+  const q = "Does the later conclusion match the earlier observations?";
+  assert.equal(judgeAnswer("no it does not match", acc, q).verdict, "wrong");
+  assert.equal(judgeAnswer("it doesn't match", acc, q).verdict, "wrong");
+  assert.equal(judgeAnswer("it doesnt match", acc, q).verdict, "wrong");
+  assert.equal(judgeAnswer("nope it matches", acc, "What did the writer find?").verdict, "wrong");
+  assert.equal(judgeAnswer("not happy", ["happy"], "How did she feel?").verdict, "wrong");
+  assert.equal(judgeAnswer("she was never happy", ["happy"], "How did she feel?").verdict, "wrong");
+  // The same no on both sides is still scored on its content words.
+  assert.equal(judgeAnswer("not happy", ["not happy"], "How did she feel?").verdict, "correct");
+  assert.equal(judgeAnswer("he found nothing", ["nothing"], "What did he find?").verdict, "correct");
+  assert.equal(
+    judgeAnswer("he did not give up", ["yes he did not give up"], "Did he keep going?").verdict,
+    "correct"
+  );
+});
+
+test("an accepted yes or no does not make the same statement without it wrong", () => {
+  const q = "Was the soil wet?";
+  assert.equal(judgeAnswer("it was dry", ["no, it was dry"], q).verdict, "correct");
+  assert.equal(judgeAnswer("no it was dry", ["no, it was dry"], q).verdict, "correct");
+  assert.equal(judgeAnswer("it was not dry", ["no, it was dry"], q).verdict, "wrong");
+});
+
+test("a yes/no question after a lead-in still takes a plain yes or no", () => {
+  const acc = ["yes it fits", "it fits because the soil was dry"];
+  const q = "The writer said the soil was dry. Does the flood fit that?";
+  assert.equal(judgeAnswer("yes", acc, q).verdict, "correct");
+  assert.equal(judgeAnswer("no", acc, q).verdict, "wrong");
+  assert.equal(judgeAnswer("yes", ["yes he did"], "In the end, did Omar find the dog?").verdict, "correct");
+  assert.equal(judgeAnswer("yes", ["yes it fits"], "Does it fit what she said, or not?").verdict, "correct");
+});
+
+test("a question-word question is never a yes/no question, lead-in or not", () => {
+  const acc = ["yes it fits"];
+  assert.equal(judgeAnswer("yes", acc, "What does the writer say about the soil?").verdict, "wrong");
+  assert.equal(judgeAnswer("yes", acc, "The soil was dry. Why did the plants die?").verdict, "wrong");
+  assert.equal(judgeAnswer("yes", acc, "When the rain came, what did Layla do?").verdict, "wrong");
+});

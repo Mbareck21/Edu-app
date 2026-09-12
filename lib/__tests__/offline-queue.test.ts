@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { QUEUE_KEY, flushQueue, postSession, queueSize } from "@/lib/offline-queue";
+import { QUEUE_KEY, flushQueue, postSession, queueSize, saveNote } from "@/lib/offline-queue";
 import type { SessionResult } from "@/lib/types";
 
 // offline-queue only touches storage when `window` exists, so the fake window
@@ -128,4 +128,82 @@ test("flushQueue clears what the server accepted", async () => {
   respondWith(okResponse);
   assert.equal(await flushQueue(), 1);
   assert.equal(queueSize(), 0);
+});
+
+test("the session is on the phone before the first send, and leaves once saved", async () => {
+  const sizeAtSend: number[] = [];
+  respondWith(() => {
+    sizeAtSend.push(queueSize());
+    return okResponse();
+  });
+  const res = await postSession(session);
+  assert.equal(res.saved, true);
+  assert.deepEqual(sizeAtSend, [1]);
+  assert.equal(queueSize(), 0);
+});
+
+test("every send carries an abort signal, so a hung POST cannot wait forever", async () => {
+  const signals: unknown[] = [];
+  g.fetch = (async (_url: string, init?: { signal?: unknown }) => {
+    signals.push(init?.signal);
+    return okResponse();
+  }) as unknown as typeof fetch;
+  await postSession(session);
+  store.set(QUEUE_KEY, JSON.stringify([{ ...session, sessionId: "good-payload-002" }]));
+  await flushQueue();
+  assert.equal(signals.length, 2);
+  for (const s of signals) assert.ok(s instanceof AbortSignal);
+});
+
+test("a 401 keeps the session for after the PIN, without a retry", async () => {
+  respondWith(() => new Response("unauthorized", { status: 401 }));
+  const res = await postSession(session);
+  assert.deepEqual(res, { saved: false, signedOut: true });
+  assert.equal(calls.length, 1);
+  assert.equal(queueSize(), 1);
+  assert.equal(saveNote(res), "Saved on this phone. Ask Dad to type the PIN again.");
+});
+
+test("a signed-out flush keeps every session and stops at the first 401", async () => {
+  store.set(
+    QUEUE_KEY,
+    JSON.stringify([
+      { ...session, sessionId: "queued-session-01" },
+      { ...session, sessionId: "queued-session-02" },
+    ])
+  );
+  respondWith(() => new Response("unauthorized", { status: 401 }));
+  assert.equal(await flushQueue(), 0);
+  assert.equal(calls.length, 1);
+  assert.equal(queueSize(), 2);
+});
+
+test("a flush leaves a session postSession is still sending alone", async () => {
+  const answers = new Map<string, (r: Response) => void>();
+  respondWith(
+    (body) => new Promise<Response>((resolve) => answers.set(body.sessionId ?? "", resolve))
+  );
+  const posting = postSession({ ...session, sessionId: "posting-now-0001" });
+  // Another tab parks a session behind it.
+  const queued = JSON.parse(store.get(QUEUE_KEY) ?? "[]") as SessionResult[];
+  store.set(QUEUE_KEY, JSON.stringify([...queued, { ...session, sessionId: "other-tab-00001" }]));
+
+  const flushing = flushQueue();
+  assert.deepEqual(
+    calls.map((c) => c.sessionId),
+    ["posting-now-0001", "other-tab-00001"],
+    "the flush did not send the one being posted"
+  );
+
+  answers.get("posting-now-0001")?.(okResponse());
+  assert.equal((await posting).saved, true);
+  answers.get("other-tab-00001")?.(new Response("boom", { status: 503 }));
+  assert.equal(await flushing, 0);
+
+  const left = JSON.parse(store.get(QUEUE_KEY) ?? "[]") as SessionResult[];
+  assert.deepEqual(
+    left.map((i) => i.sessionId),
+    ["other-tab-00001"],
+    "the flush's snapshot did not bring back the saved one"
+  );
 });
