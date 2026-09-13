@@ -99,9 +99,21 @@ function mergeProfile(orig, live) {
     const liveStart = dayMinus(ls.lastActiveDay, num(ls.current) - 1);
     if (dayMinus(liveStart, 1) === os.lastActiveDay) current = num(os.current) + num(ls.current);
   }
+  // The live side's first run can join the original's and then break before
+  // the export, so neither side's best holds it. Sep 2026: original 19 days to
+  // Sep 6, live Sep 7-9, a gap, then Sep 12; best came out 19 instead of 22.
+  const liveDays = new Set(
+    (live.activity ?? []).map((a) =>
+      new Date(a.at).toLocaleDateString("en-CA", { timeZone: process.env.KID_TZ ?? "America/Chicago" })
+    )
+  );
+  let joined = num(os.current);
+  if (os.lastActiveDay) {
+    for (let d = dayMinus(os.lastActiveDay, -1); liveDays.has(d); d = dayMinus(d, -1)) joined++;
+  }
   const streak = {
     current,
-    best: Math.max(num(os.best), num(ls.best), current),
+    best: Math.max(num(os.best), num(ls.best), current, joined),
     lastActiveDay: (liveIsNewer ? ls.lastActiveDay : os.lastActiveDay) ?? "",
   };
 
