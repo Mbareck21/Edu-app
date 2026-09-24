@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { ARCHIVE_MAX, readingWordsToAdd, type GlossWord } from "@/lib/reading";
 import { addPoolWords, getPool } from "@/lib/word-source";
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
@@ -60,24 +60,30 @@ export async function POST(req: Request) {
   const perfect = firstTry === perQ.length && hintsUsed === 0;
   const sessionLevel = Number(doc.currentReading?.level) || Number(doc.readingLevel) || 1;
 
+  // Every change goes out in one write, and only onto the passage he read.
+  // "New reading" tapped while this was saving used to write the same list
+  // at the same moment; one save failed and the new passage was thrown away.
+  const set: Record<string, unknown> = {};
+
   // Lifetime aggregates
   const stats = doc.readingStats ?? {};
-  doc.set("readingStats.totalSessions", (Number(stats.totalSessions) || 0) + 1);
-  doc.set("readingStats.totalQuestions", (Number(stats.totalQuestions) || 0) + perQ.length);
-  doc.set(
-    "readingStats.totalFirstTryCorrect",
-    (Number(stats.totalFirstTryCorrect) || 0) + firstTry
-  );
-  doc.set("readingStats.totalHintsUsed", (Number(stats.totalHintsUsed) || 0) + hintsUsed);
+  set["readingStats.totalSessions"] = (Number(stats.totalSessions) || 0) + 1;
+  set["readingStats.totalQuestions"] = (Number(stats.totalQuestions) || 0) + perQ.length;
+  set["readingStats.totalFirstTryCorrect"] = (Number(stats.totalFirstTryCorrect) || 0) + firstTry;
+  set["readingStats.totalHintsUsed"] = (Number(stats.totalHintsUsed) || 0) + hintsUsed;
 
   // Per-type accumulators
   for (const q of perQ) {
     const path = `readingStats.byType.${q.type}`;
     const cur =
       (doc.get(path) as { asked?: number; firstTryCorrect?: number } | undefined) ?? {};
-    doc.set(`${path}.asked`, (Number(cur.asked) || 0) + 1);
+    // Two questions of one type in a passage: count from what this loop set.
+    const asked = (set[`${path}.asked`] as number | undefined) ?? (Number(cur.asked) || 0);
+    set[`${path}.asked`] = asked + 1;
     if (q.firstTryCorrect) {
-      doc.set(`${path}.firstTryCorrect`, (Number(cur.firstTryCorrect) || 0) + 1);
+      const right =
+        (set[`${path}.firstTryCorrect`] as number | undefined) ?? (Number(cur.firstTryCorrect) || 0);
+      set[`${path}.firstTryCorrect`] = right + 1;
     }
   }
 
@@ -95,7 +101,7 @@ export async function POST(req: Request) {
       perfect,
     },
   ].slice(-MAX_RECENT_SESSIONS);
-  doc.set("readingStats.recentSessions", nextRecent);
+  set["readingStats.recentSessions"] = nextRecent;
 
   // The reading ladder now lives on Profile.reading (POST
   // /api/sessions/complete moves it). The list's readingLevel just mirrors the
@@ -107,14 +113,16 @@ export async function POST(req: Request) {
   // it without archiving meant only unfinished passages were ever kept.
   if (typeof finished.paragraph === "string" && finished.paragraph) {
     const archive = doc.toObject().readingArchive;
-    doc.set(
-      "readingArchive",
-      [...(Array.isArray(archive) ? archive : []), finished].slice(-ARCHIVE_MAX)
-    );
+    set["readingArchive"] = [...(Array.isArray(archive) ? archive : []), finished].slice(-ARCHIVE_MAX);
   }
-  doc.set("currentReading", null);
+  set["currentReading"] = null;
 
-  await doc.save();
+  const written = await WordList.updateOne(
+    { _id: doc._id, "currentReading.generatedAt": finished.generatedAt as Date },
+    { $set: set }
+  );
+  // Another passage took its place in between: this one is no longer open.
+  if (written.matchedCount === 0) return NextResponse.json(toClient(doc.toObject()));
 
   // The highlighted words he met go into Words to fix, with their spelling
   // chains, so the writing trainer and every word test pick them up. Words

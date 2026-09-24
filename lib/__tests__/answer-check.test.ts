@@ -140,3 +140,30 @@ test("a question-word question is never a yes/no question, lead-in or not", () =
   assert.equal(judgeAnswer("yes", acc, "The soil was dry. Why did the plants die?").verdict, "wrong");
   assert.equal(judgeAnswer("yes", acc, "When the rain came, what did Layla do?").verdict, "wrong");
 });
+
+// Found in review 2026-09-23: right answers marked wrong, wrong ones accepted.
+const PASSAGE =
+  "On Tuesday the class planted 100 seeds. On Thursday they watered them. Omar's mother helped. His brother watched.";
+const CASES: [string, string[], string, "right" | "wrong"][] = [
+  ["he didn't give up", ["no he kept trying", "no"], "Did Omar give up?", "right"],
+  ["he did not give up", ["no he kept trying", "no"], "Did Omar give up?", "right"],
+  ["he gave up", ["no he kept trying", "no"], "Did Omar give up?", "wrong"],
+  ["it doesnt fit", ["no", "no it does not fit"], "Does the ending fit what the writer said?", "right"],
+  ["yes", ["it fits", "the ending fits"], "Does the ending fit what the writer said?", "right"],
+  ["no", ["it fits", "the ending fits"], "Does the ending fit what the writer said?", "wrong"],
+  ["they didn't get any water", ["no water", "there was no water"], "Why did the seeds not grow?", "right"],
+  ["she cried", ["crying", "she was crying"], "What did Maya do when the plant died?", "right"],
+  ["1000 seeds", ["100 seeds", "100"], "How many seeds did the class plant?", "wrong"],
+  ["1775", ["1776"], "In what year was the bell made?", "wrong"],
+  ["thursday", ["tuesday", "on tuesday"], "On which day did they plant the seeds?", "wrong"],
+  ["tusday", ["tuesday", "on tuesday"], "On which day did they plant the seeds?", "right"],
+  ["layla planted in the garden", ["layla planted tomato seeds in the garden"], "What did Layla plant in the garden?", "wrong"],
+  ["tomato seeds", ["layla planted tomato seeds in the garden"], "What did Layla plant in the garden?", "right"],
+  ["no", ["no one would play with her"], "Why did Layla stay inside, do you think?", "wrong"],
+];
+for (const [answer, acceptable, question, want] of CASES) {
+  test(`"${answer}" to "${question}" is ${want}`, () => {
+    const j = judgeAnswer(answer, acceptable, question, PASSAGE);
+    assert.equal(j.verdict === "wrong" ? "wrong" : "right", want);
+  });
+}

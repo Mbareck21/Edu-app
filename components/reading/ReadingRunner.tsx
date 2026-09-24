@@ -308,14 +308,21 @@ function ReadingRunnerInner({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : `Error ${res.status}`);
+        // The route's own words are written for him; a status code is not.
+        setError(
+          res.status === 429
+            ? "The story writer needs a short rest. Try again in a minute."
+            : typeof data.error === "string" && res.status !== 500
+              ? data.error
+              : "The story did not come. Try again."
+        );
         return null;
       }
       const fresh = (data as ClientWordList).currentReading;
       installReading(fresh);
       return fresh;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
+    } catch {
+      setError("No internet right now. Try again when you are back online.");
       return null;
     } finally {
       setBusy(null);
@@ -406,7 +413,7 @@ function ReadingRunnerInner({
     if (!q || !typed.trim()) return;
     const key = typed.trim().toLowerCase().replace(/\s+/g, " ");
     if (alreadyTried(key)) return;
-    const judged = judgeAnswer(typed, q.acceptable, q.q);
+    const judged = judgeAnswer(typed, q.acceptable, q.q, reading?.paragraph ?? "");
     if (judged.verdict === "wrong") {
       setTried((t) => [...t, key]);
       markWrong(qIdx);
@@ -479,12 +486,8 @@ function ReadingRunnerInner({
     void (async () => {
       setBusy("saving");
       try {
-        await fetch("/api/reading/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ listId: list._id, perQuestion }),
-        }).catch(() => null);
-
+        // The session first: postSession stores it on the phone before it
+        // sends, so closing the app during a slow save can no longer lose it.
         const posted = await postSession({
           kind: "reading",
           ref: `read:${list._id}`,
@@ -504,6 +507,18 @@ function ReadingRunnerInner({
         });
         if (posted.saved) setGainedXp(posted.gained.xp);
         else setQueuedNote(saveNote(posted));
+
+        // Then the passage's stats and glossed words. A repeat is harmless (the
+        // route ignores a passage already closed), so one retry is safe.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const res = await fetch("/api/reading/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ listId: list._id, perQuestion }),
+          }).catch(() => null);
+          if (res?.ok) break;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
       } finally {
         setBusy(null);
       }
@@ -540,14 +555,17 @@ function ReadingRunnerInner({
         ms={elapsedMs}
         accuracy={questions.length ? firstTry / questions.length : 0}
         perfect={perfect}
-        note={busy === "saving" ? "Saving…" : queuedNote}
+        note={busy === "saving" ? "Saving…" : (error ?? queuedNote)}
         primary={
           onDone
             ? { label: "Continue", onClick: onDone }
             : { label: "Back to Learn", href: "/" }
         }
         secondary={{
-          label: "New reading",
+          label: busy === "generating" ? "Writing…" : "New reading",
+          // Not while saving (the new passage would land on the list the save
+          // is writing), and once only: every tap is a paid call.
+          disabled: busy !== null,
           onClick: () => {
             void (async () => {
               const fresh = await generate();
@@ -689,6 +707,9 @@ function ReadingRunnerInner({
           fullWidth
           size="lg"
           color="green"
+          // Not while a new passage is being written: it would swap the
+          // story, and his answers, out from under him.
+          disabled={busy !== null}
           onClick={() => {
             setMode("listen");
             setEcho(null);
@@ -705,6 +726,9 @@ function ReadingRunnerInner({
           size="lg"
           variant="secondary"
           color="green"
+          // Not while a new passage is being written: it would swap the
+          // story, and his answers, out from under him.
+          disabled={busy !== null}
           onClick={() => {
             setMode("echo");
             setEcho(null);
@@ -720,6 +744,9 @@ function ReadingRunnerInner({
           size="lg"
           variant="secondary"
           color="green"
+          // Not while a new passage is being written: it would swap the
+          // story, and his answers, out from under him.
+          disabled={busy !== null}
           onClick={() => {
             setMode("alone");
             setEcho(null);
@@ -885,13 +912,20 @@ function ReadingRunnerInner({
   if (!q) return null;
   const state = qStates[qIdx] ?? { wrong: 0, hints: 0, revealed: false, done: false };
   const isMcq = q.options.length > 0 && q.answerIndex >= 0;
-  const revealAnswer = isMcq ? q.options[q.answerIndex] : q.acceptable[0];
+  const revealAnswer = isMcq
+    ? q.options[q.answerIndex]
+    : withNames(q.acceptable[0] ?? "", reading.paragraph);
 
   // Early on he is shown where to look before he answers; later only after a
   // miss; later still not until the reveal.
   const helped =
     scaffold === "full" || (scaffold === "light" && state.wrong > 0);
-  const markSource = Boolean(q.source) && (state.revealed || helped);
+  // When the marked sentence is itself the answer ("Which sentence shows…?"),
+  // marking it first hands him the answer. Those wait for the reveal.
+  const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const sourceIsAnswer =
+    q.type === "evidence" || q.options.some((o) => plain(o) === plain(q.source));
+  const markSource = Boolean(q.source) && (state.revealed || (helped && !sourceIsAnswer));
   // The first hint rides along with the marked sentence at full scaffolding.
   const hintsShown = Math.max(state.hints, helped && scaffold === "full" ? 1 : 0);
 

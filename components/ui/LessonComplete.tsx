@@ -11,7 +11,7 @@ import { sfx } from "@/lib/sfx";
 
 export type CompleteAction =
   | { label: string; href: string }
-  | { label: string; onClick: () => void };
+  | { label: string; onClick: () => void; disabled?: boolean };
 
 export type LessonCompleteProps = {
   title?: string;
@@ -74,7 +74,7 @@ function Action({ action, variant }: { action: CompleteAction; variant: "primary
     );
   }
   return (
-    <Button {...opts} onClick={action.onClick}>
+    <Button {...opts} onClick={action.onClick} disabled={action.disabled}>
       {action.label}
     </Button>
   );

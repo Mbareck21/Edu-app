@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
-import { WordList, toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
+import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfileWithSeen } from "@/lib/profile";
 import {
   currentQuarter,
@@ -30,7 +30,7 @@ import {
   ARCHIVE_MAX,
   pickArchived,
 } from "@/lib/reading";
-import { PROFILE_KEY, Profile, READING_SEEN_MAX } from "@/lib/models/Profile";
+import { PROFILE_KEY, READING_SEEN_MAX } from "@/lib/models/Profile";
 import {
   groq,
   CLUE_MODEL,
@@ -155,7 +155,7 @@ export async function POST(req: Request) {
   const rl = rateLimit(ip);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
+      { error: "The story writer needs a short rest. Try again in a minute.", retryAfterSec: rl.retryAfterSec },
       { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
     );
   }
@@ -174,7 +174,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
-  await connectDB();
+  const { WordList, Profile } = await db();
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
@@ -288,6 +288,8 @@ Write the passage and the questions now. Strict JSON only.`;
   // ten words short is still a passage, and handing him an error instead was
   // the worse outcome whenever the retry also failed.
   let fallback: z.infer<typeof ResponseShape> | null = null;
+  /** What he sees if every attempt fails. Only friendlyAiError writes here. */
+  let shown = "";
   let lastErr: string | null = null;
   // The call itself failed, as opposed to the writing missing a target. A
   // second attempt cannot fix a rate limit or a bad key, so it is not made.
@@ -395,6 +397,7 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       // Never hand the upstream text to the screen — it carried org ids and a
       // billing link the day the daily token budget ran out.
       lastErr = friendlyAiError(err, "The story would not come. Tap it again.");
+      shown = lastErr;
       hardFail = true;
     }
   }
@@ -426,8 +429,11 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       await doc.save();
       return NextResponse.json(toClient(doc.toObject()));
     }
+    // The shape errors ("bad questions.1.q: Too big…") are for the log, not
+    // for him; the log line above each retry already has them.
+    console.warn(`[reading/generate] gave up: ${lastErr || "no reading"}`);
     return NextResponse.json(
-      { error: lastErr || "could not generate reading" },
+      { error: shown || "The story did not come out right. Tap it again." },
       { status: 502 }
     );
   }

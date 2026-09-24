@@ -68,6 +68,8 @@ export default function EchoReader({
   const recordingRef = useRef<SilentRecording | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const doneRef = useRef(false);
+  /** A turn is under way. A second tap on "My turn" is ignored, not a second mic. */
+  const listeningRef = useRef(false);
   // Results accumulate in a ref: the summary is read once, at the end.
   const tallyRef = useRef({ passed: 0, pctSum: 0, pctCount: 0 });
 
@@ -138,6 +140,18 @@ export default function EchoReader({
   }, [idx, sentences.length, finish]);
 
   const listen = useCallback(async () => {
+    if (listeningRef.current) return;
+    listeningRef.current = true;
+    try {
+      await listenOnce();
+    } finally {
+      listeningRef.current = false;
+    }
+    // listenOnce is recreated with the sentence, so listen follows it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sentence]);
+
+  async function listenOnce() {
     playbackRef.current?.cancel();
     playbackRef.current = null;
     setError(null);
@@ -210,7 +224,7 @@ export default function EchoReader({
       setError("Something went wrong listening. Try again.");
       setStage("listen");
     }
-  }, [sentence]);
+  }
 
   if (!sentence) return null;
 

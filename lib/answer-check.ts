@@ -81,6 +81,22 @@ function joinTens(words: string[]): string[] {
   return out;
 }
 
+/** Contractions whose first half is not the verb as written. */
+const NOT_BASE: Record<string, string> = { ca: "can", wo: "will", sha: "shall" };
+const PLAIN_NOT = /^(do|does|did|is|was|are|were|has|have|had|could|would|should|can)nt$/;
+
+/**
+ * "didn't", "didnt" and "cannot" → the verb and "not", so "he didn't" and "he
+ * did not" are the same words. Scored as one word, "doesn't" never matched the
+ * "not" of an accepted "it does not fit" and a right answer was marked wrong.
+ */
+function splitNot(w: string): string[] {
+  const m = /^([a-z]+)n't$/.exec(w) ?? PLAIN_NOT.exec(w);
+  if (m) return [NOT_BASE[m[1]] ?? m[1], "not"];
+  if (w === "cannot") return ["can", "not"];
+  return [w];
+}
+
 /** Lower-case, punctuation-free words with articles dropped and number words
     unified with digits, so "The Five rocks!" and "5 rocks" tokenise alike. */
 function tokens(text: string): string[] {
@@ -92,6 +108,7 @@ function tokens(text: string): string[] {
     .filter(Boolean)
     .map((w) => w.replace(/^'+|'+$/g, ""))
     .filter(Boolean)
+    .flatMap(splitNot)
     .map((w) => NUMBER_WORDS[w] ?? w);
   return joinTens(words).filter((w) => !ARTICLES.has(w));
 }
@@ -121,6 +138,8 @@ function levenshtein(a: string, b: string): number {
 /** "rocks", "jumped", "boxes", "jumping" all share a stem with their base
     word. Crude on purpose — fuzzy matching catches what this misses. */
 function stem(w: string): string {
+  // "cried" and "cries" are "cry", which is also what "crying" comes down to.
+  if (w.length > 4 && (w.endsWith("ied") || w.endsWith("ies"))) return `${w.slice(0, -3)}y`;
   if (w.length > 5 && w.endsWith("ing")) return w.slice(0, -3);
   if (w.length > 4 && w.endsWith("es")) return w.slice(0, -2);
   if (w.length > 4 && w.endsWith("ed")) return w.slice(0, -2);
@@ -129,22 +148,31 @@ function stem(w: string): string {
 }
 
 /** Short words carry no room for a typo — "cat" vs "cap" is a different word,
-    not a slip — so fuzzy matching only starts at four letters. */
+    not a slip — so fuzzy matching only starts at four letters. A number has
+    no typos either: "1000" is not "100", and "1775" is not "1776". */
 function fuzzyEqual(a: string, b: string): boolean {
   const len = Math.max(a.length, b.length);
   if (len < 4) return false;
+  if (/\d/.test(a) || /\d/.test(b)) return false;
   const allowed = len >= 7 ? 2 : 1;
   return levenshtein(a, b) <= allowed;
 }
 
 type MatchQuality = "exact" | "loose" | "none";
 
+/** "no water" and "not any water" say the same thing. */
+const SAME_NEGATION = new Set(["no", "not", "never"]);
+
 /** Exact beats loose so a fully exact answer can be told apart from one that
-    needed spelling forgiveness. */
-function bestMatch(expected: string, given: string[]): MatchQuality {
+    needed spelling forgiveness. A word that is itself in the passage is never
+    a typo: "thursday" for "tuesday" is the other day the story named. */
+function bestMatch(expected: string, given: string[], passage: ReadonlySet<string>): MatchQuality {
   if (given.includes(expected)) return "exact";
+  if (SAME_NEGATION.has(expected) && given.some((w) => SAME_NEGATION.has(w))) return "exact";
   const s = stem(expected);
-  if (given.some((w) => stem(w) === s || fuzzyEqual(expected, w))) return "loose";
+  if (given.some((w) => stem(w) === s || (!passage.has(w) && fuzzyEqual(expected, w)))) {
+    return "loose";
+  }
   return "none";
 }
 
@@ -164,7 +192,9 @@ const HELPING_VERB_START = /^\s*(is|are|was|were|do|does|did|can|could|will|woul
  * open with a question word, so they never count.
  */
 function isYesNoQuestion(question: string): boolean {
-  const sentences = question.trim().split(/(?<=[.!?])\s+/);
+  // "Why did she stay inside, do you think?" asks why, not yes or no.
+  const asked = question.trim().replace(/[,;]?\s*do you think\s*\??$/i, "?");
+  const sentences = asked.split(/(?<=[.!?])\s+/);
   const clauses = (sentences[sentences.length - 1] ?? "").split(/[,;:]/);
   return [clauses[0], clauses[clauses.length - 1]].some((c) =>
     HELPING_VERB_START.test(c ?? "")
@@ -203,23 +233,54 @@ function contradicts(answer: string[], expected: string[], yesNo: boolean): bool
 
 const VERDICT_RANK: Record<AnswerVerdict, number> = { wrong: 0, close: 1, correct: 2 };
 
-function judgeAgainst(answerWords: string[], acceptable: string, question: string): Candidate {
+/** A leading yes or no. "No one would play" starts with no, but is not one. */
+function leadingPolarity(words: string[]): "yes" | "no" | undefined {
+  if (words[0] === "no" && (words[1] === "one" || words[1] === "1")) return undefined;
+  return POLARITY[words[0] ?? ""];
+}
+
+/** True when the word, or a spelling slip of it, is one the question used. */
+function inQuestion(w: string, question: readonly string[]): boolean {
+  return question.some((q) => stem(q) === stem(w) || fuzzyEqual(q, w));
+}
+
+/**
+ * The yes or no an answer gives by saying the question back: "he didn't give
+ * up" to "Did Omar give up?" is a no, "it fits" to "Does it fit?" is a yes.
+ * Only when every content word comes from the question; an answer that adds
+ * something of its own is scored on what it adds.
+ */
+function restatedPolarity(words: string[], question: readonly string[]): "yes" | "no" | undefined {
+  const content = contentWords(words).filter((w) => !NEGATIONS.has(w));
+  if (content.length === 0 || !content.every((w) => inQuestion(w, question))) return undefined;
+  return hasNegation(words) ? "no" : "yes";
+}
+
+function judgeAgainst(
+  answerWords: string[],
+  acceptable: string,
+  question: string,
+  passage: ReadonlySet<string>
+): Candidate {
   const accepted = tokens(acceptable);
   const yesNo = isYesNoQuestion(question);
-  const lead = POLARITY[accepted[0] ?? ""];
+  const asked = tokens(question);
+  const said = leadingPolarity(accepted);
   // On a yes/no question the accepted "no, it was dry" is a no plus what is so.
   // Scored whole, "it was dry" named half of it and was marked wrong.
-  const expected = contentWords(yesNo && lead && accepted.length > 1 ? accepted.slice(1) : accepted);
-  const questionWords = new Set(tokens(question).map(stem));
+  const expected = contentWords(yesNo && said && accepted.length > 1 ? accepted.slice(1) : accepted);
+  const questionWords = new Set(asked.map(stem));
 
   // "Does the ending fit?" is answered by "yes". The writer phrases the
   // acceptable answers in full ("yes it fits"), and scoring content words
   // marked a plain "yes" half right, so wrong. On a yes/no question his first
-  // word decides: the same yes or no is right, the opposite is wrong.
-  if (yesNo && lead) {
-    const said = POLARITY[answerWords[0] ?? ""];
-    if (said === lead) return { verdict: "correct", coverage: 1 };
-    if (said) return { verdict: "wrong", coverage: 0 };
+  // word decides: the same yes or no is right, the opposite is wrong. Either
+  // side can also say it by repeating the question: "it fits", "he didn't give up".
+  const lead = yesNo ? (said ?? restatedPolarity(accepted, asked)) : undefined;
+  if (lead) {
+    const his = leadingPolarity(answerWords) ?? restatedPolarity(answerWords, asked);
+    if (his === lead) return { verdict: "correct", coverage: 1 };
+    if (his) return { verdict: "wrong", coverage: 0 };
   }
 
   // Content words score what he named, not whether he said it was so. "it
@@ -243,14 +304,19 @@ function judgeAgainst(answerWords: string[], acceptable: string, question: strin
   }
 
   const given = contentWords(answerWords);
+  // Words the question already said are not the answer. "What did Layla plant
+  // in the garden?" is not answered by "Layla planted in the garden", which
+  // named three of the five words in "Layla planted tomato seeds in the garden".
+  const focus = expected.filter((w) => !questionWords.has(stem(w)));
+  const scored = focus.length > 0 ? focus : expected;
   let exact = 0;
   let loose = 0;
-  for (const word of expected) {
-    const q = bestMatch(word, given);
+  for (const word of scored) {
+    const q = bestMatch(word, given, passage);
     if (q === "exact") exact++;
     else if (q === "loose") loose++;
   }
-  const coverage = (exact + loose) / expected.length;
+  const coverage = (exact + loose) / scored.length;
 
   // Full coverage with every word spelled right is correct; full coverage
   // that leaned on stem or fuzzy matches means he understood but the writing
@@ -264,10 +330,10 @@ function judgeAgainst(answerWords: string[], acceptable: string, question: strin
   // ("What color was the car?" is not answered by "car"), and not when the
   // first word flips the meaning ("not happy").
   if (
-    expected.length === 2 &&
-    !NEGATIONS.has(expected[0]) &&
-    !questionWords.has(stem(expected[1])) &&
-    bestMatch(expected[1], given) !== "none"
+    scored.length === 2 &&
+    !NEGATIONS.has(scored[0]) &&
+    !questionWords.has(stem(scored[1])) &&
+    bestMatch(scored[1], given, passage) !== "none"
   ) {
     return { verdict: "close", coverage };
   }
@@ -283,14 +349,17 @@ export function judgeAnswer(
   answer: string,
   acceptable: readonly string[],
   /** The question asked. Lets a yes/no question take a plain yes. */
-  question = ""
+  question = "",
+  /** The passage. A word from it is never forgiven as a typo of another. */
+  passage = ""
 ): AnswerJudgement {
   const answerWords = tokens(answer);
   if (answerWords.length === 0) return { verdict: "wrong", matched: "", coverage: 0 };
+  const passageWords = new Set(tokens(passage));
 
   let best: AnswerJudgement = { verdict: "wrong", matched: "", coverage: 0 };
   for (const acc of acceptable) {
-    const c = judgeAgainst(answerWords, acc, question);
+    const c = judgeAgainst(answerWords, acc, question, passageWords);
     const better =
       VERDICT_RANK[c.verdict] > VERDICT_RANK[best.verdict] ||
       (VERDICT_RANK[c.verdict] === VERDICT_RANK[best.verdict] && c.coverage > best.coverage);
