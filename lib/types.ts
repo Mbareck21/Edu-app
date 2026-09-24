@@ -2,6 +2,7 @@
 // Pure data only — no React, no Mongoose. Safe to import anywhere.
 
 import type { IconName } from "@/components/ui/Icon";
+import type { LearnerId } from "@/lib/learners";
 import type { Level } from "@/lib/math";
 
 // ── Unit path steps ───────────────────────────────────────────────────────
@@ -111,6 +112,13 @@ export type SessionKind = "vocab" | "math" | "reading";
 export type SessionResult = {
   /** Client-minted id. Lets the server ignore a retry of a session it already applied. */
   sessionId?: string;
+  /**
+   * Which child played it, stamped on the phone. A session waiting in the
+   * queue must not be sent under the other child's sign-in.
+   */
+  learner?: LearnerId;
+  /** When it was played (ms). A session sent the next day still counts for its own day. */
+  playedAt?: number;
   kind: SessionKind;
   /** listId:step, or the math skill id. Used for the activity log. */
   ref: string;

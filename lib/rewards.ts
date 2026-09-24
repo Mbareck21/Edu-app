@@ -301,20 +301,25 @@ export function applySession(
   // the floor before it is perfect — see lib/session-score.ts.
   const perfect = result.perfect && sessionPerfect({ answered, correct, timed: result.timed });
 
-  // Streak: a new day extends it, a gap resets it to 1.
+  // Streak: a new day extends it, a gap resets it to 1. A session played on
+  // an earlier day than the last one (sent late from the phone's queue) leaves
+  // the streak and today's count alone: they have already moved past it.
   const last = profile.streak.lastActiveDay;
-  const sameDay = last === now.today;
+  const late = Boolean(last) && now.today < last;
+  const sameDay = last === now.today || late;
   const streakExtended = !sameDay;
   const current = sameDay
     ? profile.streak.current
     : last && previousDay(now.today) === last
       ? profile.streak.current + 1
       : 1;
-  const streak = {
-    current,
-    best: Math.max(profile.streak.best, current),
-    lastActiveDay: now.today,
-  };
+  const streak = late
+    ? profile.streak
+    : {
+        current,
+        best: Math.max(profile.streak.best, current),
+        lastActiveDay: now.today,
+      };
 
   const xpGained =
     correct * XP.correct +
@@ -325,6 +330,7 @@ export function applySession(
 
   const lessonsBefore = profile.today.day === now.today ? profile.today.lessons : 0;
   const lessonsToday = lessonsBefore + 1;
+  const today = late && profile.today.day !== now.today ? profile.today : { day: now.today, lessons: lessonsToday };
 
   const entry: ActivityEntry = {
     at: now.at.toISOString(),
@@ -339,7 +345,7 @@ export function applySession(
     ...profile,
     xp: profile.xp + xpGained,
     streak,
-    today: { day: now.today, lessons: lessonsToday },
+    today,
     badges: [...profile.badges],
     stats: {
       lessons: profile.stats.lessons + 1,
@@ -380,7 +386,7 @@ export function applySession(
       streakExtended,
       leveledUp: after.level > before.level,
       level: after.level,
-      goalMet: lessonsToday >= next.dailyGoal && lessonsBefore < next.dailyGoal,
+      goalMet: !late && lessonsToday >= next.dailyGoal && lessonsBefore < next.dailyGoal,
     },
   };
 }

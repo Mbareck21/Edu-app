@@ -3,6 +3,7 @@
 // the first send and leaves only once the server has answered for it, so the
 // app can be swiped away mid-save; the next load flushes whatever is left.
 
+import { learnerFromCookie } from "@/lib/learners";
 import type { ClientProfile, SessionResult } from "@/lib/types";
 import type { Gained } from "@/lib/rewards";
 
@@ -27,8 +28,11 @@ export type PostSessionResult = PostSessionOk | PostSessionQueued;
 /**
  * "invalid" = the server said no and will say no again; retrying is pointless.
  * "signedOut" = the sign-in cookie is gone; the session is fine but has to wait.
+ * "otherLearner" = the other child is signed in; it waits for its own child.
  */
-type SendOutcome = PostSessionOk | { saved: false; kind: "invalid" | "signedOut" | "transient" };
+type SendOutcome =
+  | PostSessionOk
+  | { saved: false; kind: "invalid" | "signedOut" | "otherLearner" | "transient" };
 
 function readQueue(): SessionResult[] {
   if (typeof window === "undefined") return [];
@@ -66,6 +70,7 @@ function unqueue(sessionId: string): void {
 const TRANSIENT = { saved: false, kind: "transient" } as const;
 const INVALID = { saved: false, kind: "invalid" } as const;
 const SIGNED_OUT = { saved: false, kind: "signedOut" } as const;
+const OTHER_LEARNER = { saved: false, kind: "otherLearner" } as const;
 
 function newSessionId(): string {
   const uuid = globalThis.crypto?.randomUUID?.();
@@ -85,6 +90,8 @@ async function send(result: SessionResult, signal: AbortSignal): Promise<SendOut
     // ran out or the secret changed. Counting it as a refusal threw away every
     // queued lesson the moment the app opened on the sign-in page.
     if (res.status === 401) return SIGNED_OUT;
+    // Played by the other child: keep it until they sign in again.
+    if (res.status === 409) return OTHER_LEARNER;
     // Any other 4xx is the server refusing this payload — it will refuse it again.
     if (res.status >= 400 && res.status < 500) return INVALID;
     if (!res.ok) return TRANSIENT;
@@ -114,7 +121,14 @@ export async function postSession(result: SessionResult): Promise<PostSessionRes
   // The retry and the stored copy must carry the same id so the server can
   // tell a re-send from a second session.
   const sessionId = result.sessionId ?? newSessionId();
-  const payload: SessionResult = { ...result, sessionId };
+  const learner =
+    result.learner ?? (typeof document === "undefined" ? null : learnerFromCookie(document.cookie));
+  const payload: SessionResult = {
+    ...result,
+    sessionId,
+    playedAt: result.playedAt ?? Date.now(),
+    ...(learner ? { learner } : {}),
+  };
 
   // Before the send, not after it fails: the runner has already cleared its
   // resume data, so a hung POST and a swipe used to lose the whole lesson.
@@ -175,7 +189,7 @@ async function drain(): Promise<number> {
       // The rest would get the same 401. Keep them all for after the PIN.
       left.push(...items.slice(index));
       break;
-    } else if (outcome.kind === "transient") left.push(item);
+    } else if (outcome.kind === "transient" || outcome.kind === "otherLearner") left.push(item);
   }
   // Re-read before writing. While we were sending, another tab may have added a
   // session and postSession() may have cleared one: our snapshot must neither
@@ -186,6 +200,77 @@ async function drain(): Promise<number> {
   const arrived = current.filter((i) => !mine.has(queueKey(i)));
   writeQueue([...left.filter((i) => stillThere.has(queueKey(i))), ...arrived]);
   return sent;
+}
+
+// ── Finished passages ────────────────────────────────────────────────────
+// The passage's own close (stats, glossed words, archive) is a second request
+// after the session. Dropped when offline, the passage stayed open and paid
+// out again the next time. It waits here instead, and the flush sends it.
+
+export const READING_QUEUE_KEY = "quest:reading-done";
+const READING_ENDPOINT = "/api/reading/complete";
+
+export type ReadingDone = {
+  listId: string;
+  /** The passage it closes; the server ignores it if another took its place. */
+  generatedAt?: string;
+  learner?: string;
+  perQuestion: { type: string; firstTryCorrect: boolean; hintsUsed: number }[];
+};
+
+function readReadingQueue(): ReadingDone[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(READING_QUEUE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as ReadingDone[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeReadingQueue(items: ReadingDone[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(READING_QUEUE_KEY, JSON.stringify(items.slice(-MAX_QUEUE)));
+  } catch {
+    // Storage full or blocked.
+  }
+}
+
+/** True when the server took it, or refused it for good. */
+async function sendReadingDone(item: ReadingDone): Promise<boolean> {
+  try {
+    const res = await fetch(READING_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 409) return false;
+    return res.ok || (res.status >= 400 && res.status < 500);
+  } catch {
+    return false;
+  }
+}
+
+/** Close a finished passage now, or keep it on the phone for the next flush. */
+export async function postReadingDone(item: ReadingDone): Promise<void> {
+  const learner =
+    item.learner ?? (typeof document === "undefined" ? null : learnerFromCookie(document.cookie));
+  const payload = learner ? { ...item, learner } : item;
+  if (await sendReadingDone(payload)) return;
+  writeReadingQueue([...readReadingQueue(), payload]);
+}
+
+async function drainReadings(): Promise<void> {
+  const items = readReadingQueue();
+  if (items.length === 0) return;
+  const left: ReadingDone[] = [];
+  for (const item of items) {
+    if (!(await sendReadingDone(item))) left.push(item);
+  }
+  const current = readReadingQueue();
+  writeReadingQueue([...left, ...current.slice(items.length)]);
 }
 
 let flushing: Promise<number> | null = null;
@@ -200,9 +285,15 @@ let flushing: Promise<number> | null = null;
  */
 export function flushQueue(): Promise<number> {
   if (flushing) return flushing;
-  const run = drain().finally(() => {
-    if (flushing === run) flushing = null;
-  });
+  // Sessions first: a passage is closed only after its session is in.
+  const run = drain()
+    .then(async (sent) => {
+      await drainReadings();
+      return sent;
+    })
+    .finally(() => {
+      if (flushing === run) flushing = null;
+    });
   flushing = run;
   return run;
 }

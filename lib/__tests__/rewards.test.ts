@@ -129,6 +129,25 @@ test("a missed day resets the streak but keeps the best", () => {
   assert.equal(after.streak.best, 3);
 });
 
+test("a late session from an earlier day leaves the streak and today alone", () => {
+  let p: ProfileState = emptyProfile();
+  for (const day of ["2026-08-18", "2026-08-19"]) {
+    p = applySession(p, result(), now(day)).profile;
+  }
+  const late = applySession(p, result(), now("2026-08-17"));
+  assert.deepEqual(late.profile.streak, p.streak);
+  assert.deepEqual(late.profile.today, p.today);
+  assert.equal(late.gained.streakExtended, false);
+  assert.equal(late.gained.goalMet, false);
+  assert.ok(late.profile.xp > p.xp, "the work still earns XP");
+});
+
+test("a queued session from yesterday, sent before today's, keeps the streak going", () => {
+  const monday = applySession(emptyProfile(), result(), now("2026-08-17")).profile;
+  const tuesday = applySession(monday, result(), now("2026-08-18")).profile;
+  assert.equal(tuesday.streak.current, 2);
+});
+
 test("shownStreak keeps a streak played today or yesterday, and shows 0 after a gap", () => {
   const streak = { current: 5, best: 7, lastActiveDay: "2026-08-19" };
   assert.equal(shownStreak(streak, "2026-08-19"), 5);

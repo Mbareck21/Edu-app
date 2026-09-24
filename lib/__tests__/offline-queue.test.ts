@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { QUEUE_KEY, flushQueue, postSession, queueSize, saveNote } from "@/lib/offline-queue";
+import {
+  QUEUE_KEY,
+  READING_QUEUE_KEY,
+  flushQueue,
+  postReadingDone,
+  postSession,
+  queueSize,
+  saveNote,
+} from "@/lib/offline-queue";
 import type { SessionResult } from "@/lib/types";
 
 // offline-queue only touches storage when `window` exists, so the fake window
@@ -206,4 +214,46 @@ test("a flush leaves a session postSession is still sending alone", async () => 
     ["other-tab-00001"],
     "the flush's snapshot did not bring back the saved one"
   );
+});
+
+test("a session is stamped with when it was played", async () => {
+  respondWith(okResponse);
+  const before = Date.now();
+  await postSession(session);
+  const at = calls[0].playedAt ?? 0;
+  assert.ok(at >= before && at <= Date.now());
+});
+
+test("flushQueue keeps the other child's sessions for later", async () => {
+  store.set(
+    QUEUE_KEY,
+    JSON.stringify([
+      { ...session, sessionId: "other-child-0001", learner: "nour" },
+      { ...session, sessionId: "this-child-00002", learner: "wissam" },
+    ])
+  );
+  respondWith((body) =>
+    body.learner === "nour" ? new Response("other", { status: 409 }) : okResponse()
+  );
+  const sent = await flushQueue();
+  assert.equal(sent, 1);
+  const left = JSON.parse(store.get(QUEUE_KEY) ?? "[]") as SessionResult[];
+  assert.deepEqual(left.map((i) => i.sessionId), ["other-child-0001"]);
+});
+
+test("a finished passage that cannot be sent waits, and the flush sends it", async () => {
+  const sentReadings: string[] = [];
+  g.fetch = (async (url: string, init?: { body?: string }) => {
+    if (String(url).includes("/api/reading/complete")) {
+      sentReadings.push(String(init?.body));
+      if (sentReadings.length === 1) throw new Error("offline");
+      return new Response("{}", { status: 200 });
+    }
+    return okResponse();
+  }) as unknown as typeof fetch;
+  await postReadingDone({ listId: "list-1", generatedAt: "t", perQuestion: [] });
+  assert.equal(JSON.parse(store.get(READING_QUEUE_KEY) ?? "[]").length, 1);
+  await flushQueue();
+  assert.equal(sentReadings.length, 2);
+  assert.equal(JSON.parse(store.get(READING_QUEUE_KEY) ?? "[]").length, 0);
 });

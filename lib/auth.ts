@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-import { isLearnerId, type LearnerId } from "@/lib/learners";
+import { LEARNER_COOKIE, isLearnerId, type LearnerId } from "@/lib/learners";
 
 const COOKIE_NAME = "eduapp_session";
 const ALG = "HS256";
@@ -21,17 +21,21 @@ export async function issueSessionCookie(learner: LearnerId): Promise<void> {
     .setExpirationTime("30d")
     .sign(secret());
 
-  (await cookies()).set(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
+  const jar = await cookies();
+  const options = {
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
-  });
+  };
+  jar.set(COOKIE_NAME, token, { ...options, httpOnly: true });
+  jar.set(LEARNER_COOKIE, learner, options);
 }
 
 export async function clearSessionCookie(): Promise<void> {
-  (await cookies()).delete(COOKIE_NAME);
+  const jar = await cookies();
+  jar.delete(COOKIE_NAME);
+  jar.delete(LEARNER_COOKIE);
 }
 
 export async function verifySessionToken(token: string | undefined): Promise<boolean> {

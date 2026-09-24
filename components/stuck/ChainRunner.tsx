@@ -175,6 +175,8 @@ function ChainRunnerInner({
   const [afterMiss, setAfterMiss] = useState(false);
   const [missed, setMissed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The check did not reach the server; what he typed stays so he can tap again. */
+  const [sendError, setSendError] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const [done, setDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -230,14 +232,18 @@ function ChainRunnerInner({
   const submit = useCallback(async () => {
     if (!word || busy || !typed.trim()) return;
     setBusy(true);
+    setSendError(null);
     try {
       const res = await fetch("/api/stuck/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ word, typed, afterMiss }),
-      });
-      const data = await res.json();
-      if (!res.ok) return;
+      }).catch(() => null);
+      const data = res?.ok ? await res.json().catch(() => null) : null;
+      if (!data) {
+        setSendError("That did not send. Check the internet and tap Check again.");
+        return;
+      }
 
       const nowIso = new Date().toISOString();
       const before = state[word];
@@ -444,6 +450,12 @@ function ChainRunnerInner({
             Check
           </Button>
         </form>
+
+        {sendError ? (
+          <p className="mt-3 text-sm font-bold" role="alert" style={{ color: "var(--color-coral-dark)" }}>
+            {sendError}
+          </p>
+        ) : null}
 
         {missed ? (
           <div className="mt-4 rounded-tile px-3 py-3" style={{ background: "var(--color-coral-soft)" }}>

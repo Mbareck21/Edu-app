@@ -15,15 +15,6 @@ const ResponseShape = z.object({
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const ip = getClientIp(req);
-  const rl = rateLimit(ip);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
-
   const { id } = await ctx.params;
   if (!mongoose.isValidObjectId(id)) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
@@ -44,6 +35,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (missing.length === 0) {
     const fresh = await WordList.findById(id).lean();
     return NextResponse.json(toClient(fresh!));
+  }
+
+  // Only a real model call spends the allowance: this route runs on every
+  // visit, and a visit with nothing to fill used to use it up.
+  const ip = getClientIp(req);
+  const rl = rateLimit(ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
   }
 
   try {
@@ -86,20 +88,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       normalized.set(String(k).trim().toLowerCase(), ex);
     }
 
-    // In-place merge. Only fill words that were missing — never overwrite a
-    // parent-edited explanation.
-    let filled = 0;
+    // Only the explanation of each filled word is written, matched by the word
+    // itself. The model call takes seconds, and saving the whole words array
+    // loaded before it overwrote any review progress a session wrote to this
+    // list in the meantime. The filter is re-checked at write time, so a
+    // value a parent typed during the wait is never overwritten.
+    const updates = [];
     for (const w of doc.words) {
       if (w.explanation && w.explanation.trim()) continue;
       const ex = normalized.get(String(w.word).trim().toLowerCase());
-      if (ex) {
-        w.explanation = ex;
-        filled++;
-      }
+      if (!ex) continue;
+      updates.push({
+        updateOne: {
+          filter: { _id: doc._id },
+          update: { $set: { "words.$[w].explanation": ex } },
+          arrayFilters: [{ "w.word": w.word, "w.explanation": { $not: /\S/ } }],
+        },
+      });
     }
-    if (filled > 0) {
-      doc.markModified("words");
-      await doc.save();
+    if (updates.length > 0) {
+      await WordList.bulkWrite(updates);
       // The meanings are shared: the other child's copy gets them too.
       await syncList(await currentLearner(), id);
     } else {

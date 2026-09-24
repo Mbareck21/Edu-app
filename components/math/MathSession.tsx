@@ -64,8 +64,16 @@ export default function MathSession(props: MathSessionProps) {
   // Keyed on the skill and level, not the seed: the seed changes on reload.
   const key = resumeKey("math", props.skillId, props.level);
   const saved = useSavedRun(key, isSaved);
+  // The level is in the key too. "Again" refreshes the page, and a level-up
+  // that arrives with it starts a new round at the new level, instead of
+  // changing the question on screen under the round in progress.
   return (
-    <MathSessionInner key={saved ? "resumed" : "fresh"} {...props} saveKey={key} initial={saved} />
+    <MathSessionInner
+      key={`${props.level}:${saved ? "resumed" : "fresh"}`}
+      {...props}
+      saveKey={key}
+      initial={saved}
+    />
   );
 }
 

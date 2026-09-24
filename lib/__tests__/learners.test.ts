@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { learnerForPin, ownerOf } from "../learners";
+import { learnerForPin, learnerFromCookie, ownerOf } from "../learners";
 
 const env = { PARENT_PIN: "1234", WISSAM_PIN: "2026" };
 
@@ -21,4 +21,12 @@ test("anything with no owner is Nour's", () => {
   assert.equal(ownerOf(undefined), "nour");
   assert.equal(ownerOf("wissam"), "wissam");
   assert.equal(ownerOf("someone"), "nour");
+});
+
+test("the label cookie names the child, and nothing else does", () => {
+  assert.equal(learnerFromCookie("a=1; eduapp_learner=wissam; b=2"), "wissam");
+  assert.equal(learnerFromCookie("eduapp_learner=nour"), "nour");
+  assert.equal(learnerFromCookie("eduapp_learner=someone"), null);
+  assert.equal(learnerFromCookie("x_eduapp_learner=nour"), null);
+  assert.equal(learnerFromCookie(""), null);
 });

@@ -10,6 +10,18 @@
 export const LEARNER_IDS = ["nour", "wissam"] as const;
 export type LearnerId = (typeof LEARNER_IDS)[number];
 
+/**
+ * A readable copy of who is signed in, set next to the real (httpOnly) sign-in
+ * cookie. Only a label for the phone: the server trusts the signed one.
+ */
+export const LEARNER_COOKIE = "eduapp_learner";
+
+/** The child named by the label cookie, if any. Client-side. */
+export function learnerFromCookie(cookie: string): LearnerId | null {
+  const m = cookie.match(new RegExp(`(?:^|;\\s*)${LEARNER_COOKIE}=([^;]*)`));
+  return m && isLearnerId(m[1]) ? m[1] : null;
+}
+
 export const LEARNER_NAMES: Record<LearnerId, string> = {
   nour: "Nour",
   wissam: "Wissam",

@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { z } from "zod";
 
+import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
+import { LEARNER_IDS } from "@/lib/learners";
 import { isStuckMiss, scheduleSkill } from "@/lib/mastery";
 import { addPoolWords, getPool } from "@/lib/word-source";
 import { scoreRound } from "@/lib/models/MathProgress";
@@ -21,8 +23,13 @@ import type { SessionResult, StepId } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+/** How far back a session sent late may still count for the day it was played. */
+const MAX_BACKDATE_MS = 7 * 24 * 60 * 60 * 1000;
+
 const Body = z.object({
   sessionId: z.string().min(8).max(64).optional(),
+  learner: z.enum(LEARNER_IDS).optional(),
+  playedAt: z.number().int().min(0).optional(),
   kind: z.enum(["vocab", "math", "reading"]),
   ref: z.string().min(1).max(120),
   answered: z.number().int().min(0).max(500),
@@ -239,7 +246,17 @@ export async function POST(req: Request) {
   }
   const body = parsed.data;
 
-  const now = new Date();
+  // Played by the other child, before a switch on this phone. 409 keeps it
+  // queued there until that child signs in again.
+  if (body.learner && body.learner !== (await currentLearner())) {
+    return NextResponse.json({ error: "other learner" }, { status: 409 });
+  }
+
+  // Played offline and sent later: it counts for the day it was played, so
+  // yesterday's lesson keeps yesterday's streak day.
+  const arrived = Date.now();
+  const played = body.playedAt ?? arrived;
+  const now = new Date(Math.min(arrived, Math.max(arrived - MAX_BACKDATE_MS, played)));
   const when = { at: now, today: todayKey(now) };
 
   // Also creates the profile on the very first session, which reserveSession needs.

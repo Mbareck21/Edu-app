@@ -18,7 +18,7 @@ import AudioButton from "@/components/items/AudioButton";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postReadingDone, postSession, saveNote } from "@/lib/offline-queue";
 import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import {
@@ -561,16 +561,9 @@ function ReadingRunnerInner({
         } else setQueuedNote(saveNote(posted));
 
         // Then the passage's stats and glossed words. A repeat is harmless (the
-        // route ignores a passage already closed), so one retry is safe.
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const res = await fetch("/api/reading/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ listId: list._id, perQuestion }),
-          }).catch(() => null);
-          if (res?.ok) break;
-          await new Promise((r) => setTimeout(r, 1500));
-        }
+        // route ignores a passage already closed). Offline, it waits on the
+        // phone and goes with the next flush.
+        await postReadingDone({ listId: list._id, generatedAt: reading.generatedAt, perQuestion });
       } finally {
         setBusy(null);
       }

@@ -74,14 +74,6 @@ function parseBatch(raw: string): Map<string, Filled> {
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const rl = rateLimit(getClientIp(req));
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
-
   const { id } = await ctx.params;
   if (!mongoose.isValidObjectId(id)) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
@@ -101,6 +93,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (missing.length === 0) {
     return NextResponse.json(toClient(doc.toObject()));
+  }
+
+  // Only a real model call spends the allowance: this route runs on every
+  // visit, and a visit with nothing to fill used to use it up.
+  const rl = rateLimit(getClientIp(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
   }
 
   const batches: string[][] = [];

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
+import { currentLearner } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { LEARNER_IDS } from "@/lib/learners";
 import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { ARCHIVE_MAX, readingWordsToAdd, type GlossWord } from "@/lib/reading";
 import { addPoolWords, getPool } from "@/lib/word-source";
@@ -10,6 +12,9 @@ export const runtime = "nodejs";
 
 const Body = z.object({
   listId: z.string().min(1),
+  /** The passage this closes. Sent late from the phone, another may be open now. */
+  generatedAt: z.string().max(40).optional(),
+  learner: z.enum(LEARNER_IDS).optional(),
   perQuestion: z
     .array(
       z.object({
@@ -39,6 +44,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
+  // Read by the other child before a switch: it waits on the phone for them.
+  if (parsed.data.learner && parsed.data.learner !== (await currentLearner())) {
+    return NextResponse.json({ error: "other learner" }, { status: 409 });
+  }
+
   const { WordList } = await db();
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
@@ -52,6 +62,11 @@ export async function POST(req: Request) {
   // Counting it again would add a second session to his reading stats, so the
   // repeat changes nothing and still reports success.
   if (!finished) return NextResponse.json(toClient(doc.toObject()));
+  // Sent late, and a newer passage is open now: this one is not it.
+  const openAt = finished.generatedAt ? new Date(finished.generatedAt as Date).toISOString() : "";
+  if (parsed.data.generatedAt && parsed.data.generatedAt !== openAt) {
+    return NextResponse.json(toClient(doc.toObject()));
+  }
 
   const perQ = parsed.data.perQuestion;
   const firstTry = perQ.filter((q) => q.firstTryCorrect).length;
