@@ -18,16 +18,15 @@
  * Server-only: these touch Mongoose.
  */
 
-import { connectDB } from "@/lib/db";
-import { SpellChain } from "@/lib/models/SpellChain";
-import { WordList, toClient, type ClientWordList } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { toClient, type ClientWordList } from "@/lib/models/WordList";
 
 /** The one pool document's name. Also what the parent sees it called. */
 export const POOL_NAME = "Stuck words";
 
 /** School lists. Never the pool. */
 export async function getUnits(): Promise<ClientWordList[]> {
-  await connectDB();
+  const { WordList } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } })
     .sort({ updatedAt: -1 })
     .lean();
@@ -42,7 +41,7 @@ export async function getUnits(): Promise<ClientWordList[]> {
  * get that slot.
  */
 export async function getPractice(): Promise<ClientWordList[]> {
-  await connectDB();
+  const { WordList } = await db();
   const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
   const all = docs.map(toClient);
   return [
@@ -59,7 +58,7 @@ export async function getPractice(): Promise<ClientWordList[]> {
  * chain count.
  */
 export async function getPool(): Promise<ClientWordList> {
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findOneAndUpdate(
     { kind: "pool" },
     { $setOnInsert: { kind: "pool", name: POOL_NAME, words: [] } },
@@ -79,6 +78,7 @@ export async function addPoolWords(
   words: readonly { word: string; clue: string; arabic: string }[]
 ): Promise<void> {
   if (words.length === 0) return;
+  const { WordList, SpellChain } = await db();
   await WordList.updateOne({ _id: poolId }, { $push: { words: { $each: words } } });
   // A word he has been stuck on before keeps the chain it already had —
   // re-adding it must not wipe a run he earned. $setOnInsert only.

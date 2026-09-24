@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { toClient } from "@/lib/models/WordList";
 import { addPoolWords, getPool } from "@/lib/word-source";
 import { parseWordEntry } from "@/lib/stuck-entry";
 import { fillArabic, fillClues } from "@/lib/fill-clues";
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
     );
   }
 
+  const { WordList } = await db();
   const pool = await getPool();
   const existing = new Set(pool.words.map((w) => w.word));
   const fresh = entry.words.filter((w) => !existing.has(w));
@@ -63,7 +64,6 @@ export async function POST(req: Request) {
     fresh.map((word) => ({ word, clue: clues[word] ?? "", arabic: arabic[word] ?? "" }))
   );
 
-  await connectDB();
   const after = await WordList.findById(pool._id).lean();
   return NextResponse.json({
     list: after ? toClient(after) : pool,

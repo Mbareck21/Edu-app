@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { currentLearner } from "@/lib/auth";
+import { toClient } from "@/lib/models/WordList";
+import { syncList } from "@/lib/shared-lists";
 import { CLUE_MODEL, TRANSLATE_SYSTEM_PROMPT, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
@@ -27,7 +29,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(id);
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -95,6 +97,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (filled > 0) {
       doc.markModified("words");
       await doc.save();
+      // The meanings are shared: the other child's copy gets them too.
+      await syncList(await currentLearner(), id);
     } else {
       // The model returned something but nothing matched our missing words.
       // Surface a diagnostic so the client (and logs) show why instead of

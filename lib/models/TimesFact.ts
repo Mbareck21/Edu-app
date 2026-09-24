@@ -5,7 +5,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
  * is the same row). Only the server writes these, from what he actually
  * answered. Rules live in lib/tables.ts, which is pure.
  */
-const TimesFactSchema = new Schema(
+export const TimesFactSchema = new Schema(
   {
     key: { type: String, required: true, unique: true, trim: true },
     streak: { type: Number, default: 0 },

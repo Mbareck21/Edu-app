@@ -14,7 +14,9 @@ import {
   scienceUnitForWeek,
   themeForWeek,
 } from "@/lib/curriculum";
+import { currentLearner } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
+import { LEARNER_NAMES } from "@/lib/learners";
 import { getPractice } from "@/lib/word-source";
 import { todayKey } from "@/lib/day";
 import { countKnowledge } from "@/lib/mastery";
@@ -121,6 +123,7 @@ export default async function WordsPage() {
   // AI translation gets corrected, so the pool has to be reachable here even
   // though it is deliberately hidden from the units strip and the daily beats.
   const lists = await getPractice();
+  const me = await currentLearner();
 
   return (
     <AppShell>
@@ -154,6 +157,9 @@ export default async function WordsPage() {
                         </h3>
                         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
                           {list.words.length} words · reading level {list.readingLevel}
+                          {list.kind !== "pool" && list.addedBy !== me
+                            ? ` · added by ${LEARNER_NAMES[list.addedBy]}`
+                            : ""}
                         </p>
                       </div>
                       <span style={{ color: "var(--color-faint)" }}>
@@ -174,7 +180,9 @@ export default async function WordsPage() {
                         <Icon name="edit" size={18} />
                         Edit
                       </Link>
-                      <DeleteListButton id={list._id} name={list.name} />
+                      {list.kind === "pool" || list.addedBy === me ? (
+                        <DeleteListButton id={list._id} name={list.name} />
+                      ) : null}
                     </div>
 
                     <div className="mt-3">

@@ -5,9 +5,10 @@ import mongoose from "mongoose";
 import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
 import WordListEditor, { type WordStates } from "@/components/words/WordListEditor";
-import { connectDB } from "@/lib/db";
+import { currentLearner } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { wordKnowledge } from "@/lib/mastery";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { toClient } from "@/lib/models/WordList";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function EditWordListPage({
   const { listId } = await params;
   if (!mongoose.isValidObjectId(listId)) notFound();
 
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(listId).lean();
   if (!doc) notFound();
   const list = toClient(doc);
@@ -44,7 +45,7 @@ export default async function EditWordListPage({
         </p>
       </header>
 
-      <WordListEditor list={list} states={states} />
+      <WordListEditor list={list} states={states} me={await currentLearner()} />
 
       <section className="mt-6">
         <p

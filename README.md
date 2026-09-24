@@ -36,7 +36,8 @@ Tests: `npm test` (rewards, mastery, lesson builder, math generators, curriculum
 |---|---|
 | `MONGODB_URI` | <https://cloud.mongodb.com> → cluster → Connect |
 | `GROQ_API_KEY` | <https://console.groq.com/keys> |
-| `PARENT_PIN`  | 4–6 digit family PIN |
+| `PARENT_PIN`  | 4–6 digit family PIN; signs in as Nour |
+| `WISSAM_PIN`  | Wissam's PIN; signs in to his own profile |
 | `AUTH_SECRET` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `KID_TZ` | optional, defaults to `America/Chicago` |
 

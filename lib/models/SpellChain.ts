@@ -11,7 +11,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
  * The numbers here are only ever written by the server, from what he actually
  * typed. See lib/spell-chain.ts, which owns the rules and is pure.
  */
-const SpellChainSchema = new Schema(
+export const SpellChainSchema = new Schema(
   {
     /** Lowercase, trimmed. The identity — one row per word, app-wide. */
     word: { type: String, required: true, unique: true, trim: true, lowercase: true },

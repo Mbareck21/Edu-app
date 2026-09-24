@@ -7,10 +7,9 @@
  * and the per-word skill state the mastery helpers work on.
  */
 
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import {
   SKILL_IDS,
-  WordList,
   normalizePathProgress,
   toSkillState,
   type PathProgress,
@@ -57,7 +56,7 @@ function toSummary(doc: any): ListSummary {
  * The Stuck-words pool is excluded: it is not a unit and has no path to walk.
  */
 export async function getListSummaries(): Promise<ListSummary[]> {
-  await connectDB();
+  const { WordList } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } })
     .select(SUMMARY_FIELDS)
     .sort({ updatedAt: -1 })

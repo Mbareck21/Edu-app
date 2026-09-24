@@ -12,9 +12,8 @@ import {
 import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/components/drill/picks";
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
-import { SpellChain } from "@/lib/models/SpellChain";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { getPractice } from "@/lib/word-source";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +44,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   // without a changing key the finished screen just re-renders itself.
   const runKey = q.seed ?? "first";
 
-  await connectDB();
+  const { SpellChain } = await db();
   // Pool first: the words he is stuck on get the slot ahead of the units, so
   // they are shuffled through the drill like anything else he is learning.
   const lists: DrillList[] = (await getPractice())

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { connectDB } from "@/lib/db";
-import { TimesFact } from "@/lib/models/TimesFact";
+import { db } from "@/lib/db";
 import { TABLES, TABLE_UP_TO, applyFactAnswer, factFromRow, factKey } from "@/lib/tables";
 
 export const runtime = "nodejs";
@@ -39,7 +38,7 @@ export async function POST(req: Request) {
   const clean = typed.trim().replace(/[\s,]/g, "");
   const correct = /^\d+$/.test(clean) && Number(clean) === a * b;
 
-  await connectDB();
+  const { TimesFact } = await db();
   const now = new Date();
   const before = factFromRow(key, await TimesFact.findOne({ key }).lean());
   const after = applyFactAnswer(before, correct, ms, now.toISOString());

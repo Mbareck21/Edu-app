@@ -6,10 +6,12 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
+import { LEARNER_NAMES, ownerOf, type LearnerId } from "@/lib/learners";
 import type { Knowledge } from "@/lib/mastery";
 import type { ClientWord, ClientWordList } from "@/lib/models/WordList";
 
-type Row = { word: string; clue: string; arabic: string; state: Knowledge };
+/** `owner` is null on a row typed here and not saved yet. */
+type Row = { word: string; clue: string; arabic: string; state: Knowledge; owner: LearnerId | null };
 
 type Busy = null | "saving" | "clues" | "arabic" | "meanings";
 
@@ -27,12 +29,13 @@ const STATE_TONE: Record<Knowledge, { label: string; bg: string; fg: string }> =
 export type WordStates = Record<string, Knowledge>;
 
 function toRows(words: ClientWord[], states: WordStates): Row[] {
-  if (words.length === 0) return [{ word: "", clue: "", arabic: "", state: "new" }];
+  if (words.length === 0) return [{ word: "", clue: "", arabic: "", state: "new", owner: null }];
   return words.map((w) => ({
     word: w.word,
     clue: w.clue,
     arabic: w.arabic,
     state: states[w.word] ?? "new",
+    owner: ownerOf(w.addedBy),
   }));
 }
 
@@ -51,9 +54,12 @@ function StateChip({ state }: { state: Knowledge }) {
 export default function WordListEditor({
   list,
   states,
+  me,
 }: {
   list: ClientWordList;
   states: WordStates;
+  /** Who is signed in. A shared list's word can only be removed by who added it. */
+  me: LearnerId;
 }) {
   const router = useRouter();
   const [name, setName] = useState(list.name);
@@ -68,13 +74,13 @@ export default function WordListEditor({
   }
 
   function addRow() {
-    setRows((rs) => [...rs, { word: "", clue: "", arabic: "", state: "new" }]);
+    setRows((rs) => [...rs, { word: "", clue: "", arabic: "", state: "new", owner: null }]);
   }
 
   function removeRow(i: number) {
     setRows((rs) =>
       rs.length === 1
-        ? [{ word: "", clue: "", arabic: "", state: "new" }]
+        ? [{ word: "", clue: "", arabic: "", state: "new", owner: null }]
         : rs.filter((_, idx) => idx !== i)
     );
   }
@@ -101,7 +107,12 @@ export default function WordListEditor({
       }),
     });
     if (!res.ok) {
-      setError("Could not save. Words take letters, spaces and hyphens only.");
+      const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      setError(
+        res.status === 403 && typeof data?.error === "string"
+          ? data.error
+          : "Could not save. Words take letters, spaces and hyphens only."
+      );
       return null;
     }
     return (await res.json()) as ClientWordList;
@@ -222,7 +233,11 @@ export default function WordListEditor({
         </div>
 
         <ul className="mt-4 space-y-4">
-          {rows.map((r, i) => (
+          {rows.map((r, i) => {
+            // Someone else's word on a shared list: its meaning can be fixed,
+            // but only they can take it out (or respell it, which is the same).
+            const locked = list.kind !== "pool" && r.owner !== null && r.owner !== me;
+            return (
             <li
               key={i}
               className="rounded-tile border p-3"
@@ -235,18 +250,28 @@ export default function WordListEditor({
                   style={{ borderColor: "var(--color-line)", background: "#fff" }}
                   placeholder="word"
                   value={r.word}
+                  readOnly={locked}
                   onChange={(e) => update(i, { word: e.target.value })}
                 />
                 <StateChip state={r.state} />
-                <button
-                  type="button"
-                  aria-label="Remove word"
-                  onClick={() => removeRow(i)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-                  style={{ color: "var(--color-muted)" }}
-                >
-                  <Icon name="x" size={22} />
-                </button>
+                {locked && r.owner ? (
+                  <span
+                    className="shrink-0 text-xs font-bold"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    {LEARNER_NAMES[r.owner]}&rsquo;s
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Remove word"
+                    onClick={() => removeRow(i)}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+                    style={{ color: "var(--color-muted)" }}
+                  >
+                    <Icon name="x" size={22} />
+                  </button>
+                )}
               </div>
               <input
                 aria-label="clue"
@@ -267,7 +292,8 @@ export default function WordListEditor({
                 onChange={(e) => update(i, { arabic: e.target.value })}
               />
             </li>
-          ))}
+            );
+          })}
         </ul>
       </Card>
 

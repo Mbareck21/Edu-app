@@ -4,7 +4,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 // `level` adapts: 3 recent sessions at >= 90% level up, two in a row under 60%
 // level down. `recentPcts` keeps the last 3 scores that drive that.
 
-const MathProgressSchema = new Schema(
+export const MathProgressSchema = new Schema(
   {
     skill: { type: String, required: true, unique: true, trim: true },
     level: { type: Number, default: 1, min: 1, max: 3 },

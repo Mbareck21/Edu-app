@@ -8,9 +8,9 @@ import {
   parseMathMode,
 } from "@/components/drill/options";
 import { requestSeed } from "@/components/ui/time";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level, type MathSkillId } from "@/lib/math";
-import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
+import { toClientMathProgress } from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ type Search = Promise<{
 
 /** The level "Auto" picks: what he is on now, or the middle of all of them. */
 async function autoLevel(skill: MathSkillId | "mixed"): Promise<Level> {
+  const { MathProgress } = await db();
   const docs = await MathProgress.find().lean();
   const levels = docs.map((d) => toClientMathProgress(d));
   if (skill !== MIXED_SKILL) {
@@ -46,7 +47,6 @@ export default async function MathDrillPage({ searchParams }: { searchParams: Se
   // the runner would otherwise keep its finished state across that soft nav.
   const runKey = q.seed ?? "first";
 
-  await connectDB();
   const level = choice === "auto" ? await autoLevel(skill) : choice;
 
   return (

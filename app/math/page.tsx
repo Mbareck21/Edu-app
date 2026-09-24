@@ -6,7 +6,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import { todayKey } from "@/lib/day";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import {
   MATH_SKILLS,
   MATH_UNITS,
@@ -19,11 +19,9 @@ import {
 import {
   LEVEL_UP_RUN,
   MAX_MATH_LEVEL,
-  MathProgress,
   cleanRounds,
   toClientMathProgress,
 } from "@/lib/models/MathProgress";
-import { TimesFact } from "@/lib/models/TimesFact";
 import { allFactKeys, factFromRow, isLit } from "@/lib/tables";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +107,7 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
 }
 
 export default async function MathPage() {
-  await connectDB();
+  const { MathProgress, TimesFact } = await db();
   const [docs, factRows] = await Promise.all([MathProgress.find().lean(), TimesFact.find().lean()]);
   // Lit, not known: the grid lights a cell on the first right answer, so this
   // card said "Light up the grid" to a boy who had lit nearly all of it.

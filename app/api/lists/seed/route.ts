@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { currentLearner } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { syncList } from "@/lib/shared-lists";
+import { toClient } from "@/lib/models/WordList";
 import { READING_THEMES, SCIENCE_UNITS } from "@/lib/curriculum";
 import { packById } from "@/lib/word-packs";
 import { fillArabic, fillClues } from "@/lib/fill-clues";
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unknown unit" }, { status: 404 });
   }
 
-  await connectDB();
+  const { WordList } = await db();
   const name = listName(pack ? pack.name : source ? source.title : "");
 
   // One tap, one list: tapping again opens the list that is already there.
@@ -87,16 +89,20 @@ export async function POST(req: Request) {
     fillArabic(words),
   ]);
 
+  const learner = await currentLearner();
   const doc = await WordList.create({
     name,
     hiddenMessage: "",
+    addedBy: learner,
     words: words.map((w) => ({
       word: w,
       clue: clues[w] ?? "",
       arabic: arabic[w] ?? "",
       explanation: "",
+      addedBy: learner,
     })),
   });
+  await syncList(learner, String(doc._id));
 
   return NextResponse.json(toClient(doc.toObject()), { status: 201 });
 }

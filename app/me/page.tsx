@@ -8,13 +8,11 @@ import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
 import ProfileSettings from "@/components/ProfileSettings";
 import { lastSevenDays, todayKey } from "@/lib/day";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { buildDigest } from "@/lib/digest";
 import { countKnowledge } from "@/lib/mastery";
 import { toClientProfile } from "@/lib/models/Profile";
-import { SpellChain } from "@/lib/models/SpellChain";
-import { TimesFact } from "@/lib/models/TimesFact";
-import { WordList, toClient, type ClientWord } from "@/lib/models/WordList";
+import { toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
 import { allFactKeys, factFromRow } from "@/lib/tables";
 import { getProfile } from "@/lib/profile";
@@ -60,7 +58,7 @@ export default async function MePage() {
   const state = await getProfile();
   const profile = toClientProfile(state);
 
-  await connectDB();
+  const { WordList, SpellChain, TimesFact } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } }).lean();
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
   const counts = countKnowledge(words);

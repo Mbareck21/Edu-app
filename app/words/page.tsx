@@ -2,8 +2,7 @@ import Link from "next/link";
 
 import BottomNav from "@/components/ui/BottomNav";
 import StuckBoard from "@/components/stuck/StuckBoard";
-import { SpellChain } from "@/lib/models/SpellChain";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { fromRow, type ChainState } from "@/lib/spell-chain";
 import { getPool } from "@/lib/word-source";
 
@@ -19,7 +18,7 @@ export const metadata = { title: "Words" };
  */
 export default async function WordsPage() {
   const pool = await getPool();
-  await connectDB();
+  const { SpellChain } = await db();
 
   const words = pool.words.map((w) => w.word);
   const rows = words.length > 0 ? await SpellChain.find({ word: { $in: words } }).lean() : [];

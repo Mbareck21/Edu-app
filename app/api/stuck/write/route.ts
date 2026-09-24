@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { connectDB } from "@/lib/db";
-import { SpellChain } from "@/lib/models/SpellChain";
+import { db } from "@/lib/db";
 import { applyWrite, fromRow, rungFor } from "@/lib/spell-chain";
 
 export const runtime = "nodejs";
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
   }
   const word = parsed.data.word.trim().toLowerCase();
 
-  await connectDB();
+  const { SpellChain } = await db();
   const before = fromRow(word, await SpellChain.findOne({ word }).lean());
   const now = new Date();
   const step = applyWrite(before, parsed.data.typed, now.toISOString());

@@ -2,9 +2,9 @@ import { notFound } from "next/navigation";
 
 import MathSession from "@/components/math/MathSession";
 import { requestSeed } from "@/components/ui/time";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level } from "@/lib/math";
-import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
+import { toClientMathProgress } from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export default async function MathSkillPage({ params }: Params) {
   const { skill } = await params;
   if (!isMathSkillId(skill)) notFound();
 
-  await connectDB();
+  const { MathProgress } = await db();
   const doc = await MathProgress.findOne({ skill }).lean();
   const level = (doc ? toClientMathProgress(doc).level : 1) as Level;
 

@@ -25,7 +25,11 @@ export default function DeleteListButton({ id, name }: { id: string; name: strin
         if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
         setBusy(true);
         try {
-          await fetch(`/api/lists/${id}`, { method: "DELETE" });
+          const res = await fetch(`/api/lists/${id}`, { method: "DELETE" });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+            alert(typeof data?.error === "string" ? data.error : "Could not delete the list.");
+          }
           router.refresh();
         } finally {
           setBusy(false);

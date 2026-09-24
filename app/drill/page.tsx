@@ -11,9 +11,9 @@ import { sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { MATH_SKILLS } from "@/lib/math";
-import { MathProgress, toClientMathProgress } from "@/lib/models/MathProgress";
+import { toClientMathProgress } from "@/lib/models/MathProgress";
 import { getPractice } from "@/lib/word-source";
 import { getProfile } from "@/lib/profile";
 
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Drill" };
 
 export default async function DrillPage() {
-  await connectDB();
+  const { MathProgress } = await db();
   const [practice, mathDocs, profile] = await Promise.all([
     getPractice(),
     MathProgress.find().lean(),

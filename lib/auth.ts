@@ -1,6 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
+import { isLearnerId, type LearnerId } from "@/lib/learners";
+
 const COOKIE_NAME = "eduapp_session";
 const ALG = "HS256";
 
@@ -12,8 +14,8 @@ function secret(): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-export async function issueSessionCookie(): Promise<void> {
-  const token = await new SignJWT({ ok: true })
+export async function issueSessionCookie(learner: LearnerId): Promise<void> {
+  const token = await new SignJWT({ ok: true, learner })
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -45,6 +47,17 @@ export async function verifySessionToken(token: string | undefined): Promise<boo
 export async function isSignedIn(): Promise<boolean> {
   const c = (await cookies()).get(COOKIE_NAME)?.value;
   return verifySessionToken(c);
+}
+
+/**
+ * Who is signed in. A cookie from before there were two children carries no
+ * name, and only Nour had one then.
+ */
+export async function currentLearner(): Promise<LearnerId> {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) throw new Error("not signed in");
+  const { payload } = await jwtVerify(token, secret(), { algorithms: [ALG] });
+  return isLearnerId(payload.learner) ? payload.learner : "nour";
 }
 
 export const SESSION_COOKIE_NAME = COOKIE_NAME;

@@ -1,5 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
+import { ownerOf, type LearnerId } from "@/lib/learners";
 import type { SkillStateLike } from "@/lib/types";
 
 // ── Reading comprehension types ───────────────────────────────────────────
@@ -190,6 +191,9 @@ const WordSchema = new Schema(
     family: { type: [String], default: [] },
     srs: { type: SrsStateSchema, default: () => ({}) },
     skills: { type: WordSkillsSchema, default: () => ({}) },
+    // Which child added the word (lib/learners.ts). Empty means Nour: every
+    // word from before there were two. Only the one who added it can remove it.
+    addedBy: { type: String, default: "" },
   },
   { _id: false }
 );
@@ -205,7 +209,7 @@ const PathStepSchema = new Schema(
   { _id: false }
 );
 
-const WordListSchema = new Schema(
+export const WordListSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     hiddenMessage: { type: String, trim: true, default: "" },
@@ -217,6 +221,9 @@ const WordListSchema = new Schema(
     // listId, and giving the pool its own type would mean a second code path
     // for the same policy in every one of them.
     kind: { type: String, enum: ["unit", "pool"], default: "unit", index: true },
+    // Which child added the list; empty means Nour. Lists are shared between
+    // the children, but only the one who added a list can delete it.
+    addedBy: { type: String, default: "" },
     readingLevel: { type: Number, default: 1, min: 1, max: 10 },
     currentReading: { type: CurrentReadingSchema, default: null },
     // Whole passages he has finished with, newest last. When the writer is
@@ -266,6 +273,8 @@ export type ClientWord = {
   family: string[];
   srs: SrsState;
   skills: WordSkills;
+  /** Always filled by toClient; optional so hand-built test words need not say. */
+  addedBy?: LearnerId;
 };
 
 export type ReadingQuestion = {
@@ -336,6 +345,7 @@ export type ClientWordList = {
   hiddenMessage: string;
   words: ClientWord[];
   kind: "unit" | "pool";
+  addedBy: LearnerId;
   readingLevel: number;
   currentReading: CurrentReading | null;
   readingStats: ReadingStats;
@@ -426,6 +436,7 @@ function toClientWord(w: any): ClientWord {
     examples: Array.isArray(w?.examples) ? w.examples.map(String) : [],
     family: Array.isArray(w?.family) ? w.family.map(String) : [],
     skills,
+    addedBy: ownerOf(w?.addedBy),
     srs: {
       interval: Number(srs.interval ?? 0),
       dueAt: srs.dueAt
@@ -469,6 +480,7 @@ export function toClient(doc: {
   name: string;
   hiddenMessage?: string;
   kind?: string;
+  addedBy?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   words: any[];
   readingLevel?: number;
@@ -553,11 +565,48 @@ export function toClient(doc: {
     hiddenMessage: doc.hiddenMessage || "",
     words: doc.words.map((w) => toClientWord(w)),
     kind: doc.kind === "pool" ? "pool" : "unit",
+    addedBy: ownerOf(doc.addedBy),
     readingLevel: Math.max(1, Math.min(10, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,
     pathProgress: normalizePathProgress(doc.pathProgress),
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
+  };
+}
+
+// ── Shared content ────────────────────────────────────────────────────────
+
+/**
+ * The part of a word both children share: what it is and what it means.
+ * Progress (srs, skills) stays with each child.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function wordContent(w: any) {
+  return {
+    word: String(w?.word ?? ""),
+    clue: String(w?.clue ?? ""),
+    arabic: String(w?.arabic ?? ""),
+    explanation: String(w?.explanation ?? ""),
+    examples: Array.isArray(w?.examples) ? w.examples.map(String) : [],
+    family: Array.isArray(w?.family) ? w.family.map(String) : [],
+    addedBy: String(w?.addedBy ?? ""),
+  };
+}
+
+/**
+ * The part of a list both children share. Reading passages, path progress
+ * and reading level are one child's, so they are not here.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function listContent(doc: any) {
+  return {
+    name: String(doc?.name ?? ""),
+    hiddenMessage: String(doc?.hiddenMessage ?? ""),
+    kind: "unit" as const,
+    addedBy: String(doc?.addedBy ?? ""),
+    words: Array.isArray(doc?.words)
+      ? (doc.words as unknown[]).map(wordContent)
+      : ([] as ReturnType<typeof wordContent>[]),
   };
 }

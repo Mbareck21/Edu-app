@@ -1,5 +1,7 @@
-import { connectDB } from "@/lib/db";
-import { PROFILE_KEY, Profile, toProfileState } from "@/lib/models/Profile";
+import { currentLearner } from "@/lib/auth";
+import { db, learnerModels } from "@/lib/db";
+import { LEARNER_NAMES } from "@/lib/learners";
+import { PROFILE_KEY, toProfileState } from "@/lib/models/Profile";
 import type { ProfileState } from "@/lib/types";
 
 /**
@@ -33,10 +35,12 @@ export async function getProfileWithSeen(): Promise<{
 }
 
 async function readProfileDoc() {
-  await connectDB();
+  const learner = await currentLearner();
+  const { Profile } = await learnerModels(learner);
   return Profile.findOneAndUpdate(
     { key: PROFILE_KEY },
-    { $setOnInsert: { key: PROFILE_KEY } },
+    // A new child's profile starts with their name, not the schema's "Nour".
+    { $setOnInsert: { key: PROFILE_KEY, name: LEARNER_NAMES[learner] } },
     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   ).lean();
 }
@@ -65,6 +69,7 @@ export async function updateProfile<T extends { profile: ProfileState }>(
       typeof doc?.rev === "number" ? { rev: doc.rev } : { rev: { $exists: false } };
     const changed = change(toProfileState(doc));
     const state = changed.profile;
+    const { Profile } = await db();
     const saved = await Profile.findOneAndUpdate(
       { key: PROFILE_KEY, ...unchanged },
       {

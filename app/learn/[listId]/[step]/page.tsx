@@ -5,18 +5,17 @@ import ItemRunner from "@/components/items/ItemRunner";
 import ChainRunner from "@/components/stuck/ChainRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
 import { requestSeed } from "@/components/ui/time";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
 import { orderByNeed } from "@/lib/practice-order";
 import { resumeKey } from "@/lib/resume";
 import { skillDue } from "@/lib/mastery";
-import { SpellChain } from "@/lib/models/SpellChain";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
 import { getProfile } from "@/lib/profile";
 import { scaffoldFor } from "@/lib/reading";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { toClient } from "@/lib/models/WordList";
 import { isStepId, stepById } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +34,7 @@ export default async function StepPage({
   // without a changing key the finished screen just re-renders itself.
   const runKey = (await searchParams).r ?? "first";
 
-  await connectDB();
+  const { WordList, SpellChain } = await db();
   const doc = await WordList.findById(listId).lean();
   if (!doc) notFound();
   const list = toClient(doc);

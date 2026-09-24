@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { toClient } from "@/lib/models/WordList";
 import { scrambleAll } from "@/lib/scramble";
 import { sampleWords, WORD_GAME_SESSION_SIZE } from "@/lib/session-sample";
 import GameFrame from "@/components/games/GameFrame";
@@ -16,7 +16,7 @@ export default async function ScramblePage({
 }) {
   const { id } = await params;
   if (!mongoose.isValidObjectId(id)) notFound();
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(id).lean();
   if (!doc) notFound();
   const list = toClient(doc);

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { toClient } from "@/lib/models/WordList";
 import ListEditor from "@/components/ListEditor";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function EditListPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   if (!mongoose.isValidObjectId(id)) notFound();
 
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(id).lean();
   if (!doc) notFound();
   const list = toClient(doc);

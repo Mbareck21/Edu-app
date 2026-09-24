@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
 
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { currentLearner } from "@/lib/auth";
+import { toClient } from "@/lib/models/WordList";
+import { syncList } from "@/lib/shared-lists";
 import { CLUE_MODEL, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
@@ -85,7 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
-  await connectDB();
+  const { WordList } = await db();
   // readingHistory is server-only and can be long; nothing here reads it.
   const doc = await WordList.findById(id).select("-readingHistory");
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -173,6 +175,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (updates.length === 0) return NextResponse.json(toClient(doc.toObject()));
 
   await WordList.bulkWrite(updates);
+  // Examples are shared: the other child's copy gets them too.
+  await syncList(await currentLearner(), id);
   const fresh = await WordList.findById(id).select("-readingHistory").lean();
   if (!fresh) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(toClient(fresh));

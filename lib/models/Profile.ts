@@ -14,8 +14,8 @@ import type {
   SessionKind,
 } from "@/lib/types";
 
-// Singleton document: one profile for the one kid using the app.
-// Always read/written through `{ key: "default" }`.
+// Singleton document: one profile per child, each in that child's own
+// database (lib/db.ts). Always read/written through `{ key: "default" }`.
 
 const StreakSchema = new Schema(
   {
@@ -108,7 +108,7 @@ const ReadingSchema = new Schema(
 /** How many past passages the generator is told to avoid repeating. */
 export const READING_SEEN_MAX = 8;
 
-const ProfileSchema = new Schema(
+export const ProfileSchema = new Schema(
   {
     key: { type: String, required: true, unique: true, default: "default" },
     name: { type: String, trim: true, default: "Nour" },

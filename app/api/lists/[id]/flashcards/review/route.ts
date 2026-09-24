@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, type SrsState } from "@/lib/models/WordList";
+import { db } from "@/lib/db";
+import { type SrsState } from "@/lib/models/WordList";
 import { scheduleNext } from "@/lib/srs";
 
 export const runtime = "nodejs";
@@ -42,7 +42,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
 
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(id);
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
 

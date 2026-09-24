@@ -3,17 +3,16 @@ import mongoose from "mongoose";
 import { z } from "zod";
 
 import { todayKey } from "@/lib/day";
-import { connectDB } from "@/lib/db";
+import { db } from "@/lib/db";
 import { scheduleSkill } from "@/lib/mastery";
-import { MathProgress, scoreRound } from "@/lib/models/MathProgress";
+import { scoreRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
 import {
   PROFILE_KEY,
-  Profile,
   RECENT_SESSION_IDS,
   toClientProfile,
 } from "@/lib/models/Profile";
-import { SKILL_IDS, WordList, toSkillState } from "@/lib/models/WordList";
+import { SKILL_IDS, toSkillState } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
 import { applyReading, applySession, levelFor } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
@@ -86,6 +85,7 @@ async function applyPathProgress(
   writes: Writes
 ): Promise<void> {
   if (!mongoose.isValidObjectId(listId)) return;
+  const { WordList } = await db();
   const doc = await WordList.findById(listId).select("pathProgress");
   if (!doc) return;
 
@@ -110,6 +110,7 @@ async function applyWordResults(
 ): Promise<void> {
   if (results.length === 0) return;
   if (!mongoose.isValidObjectId(listId)) return;
+  const { WordList } = await db();
   const doc = await WordList.findById(listId).select("words");
   if (!doc) return;
 
@@ -160,6 +161,7 @@ async function updateList(body: ParsedBody, now: Date, writes: Writes): Promise<
 
 async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<void> {
   if (!body.mathSkill) return;
+  const { MathProgress } = await db();
   const doc =
     (await MathProgress.findOne({ skill: body.mathSkill })) ??
     new MathProgress({ skill: body.mathSkill });
@@ -195,6 +197,7 @@ async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<
  * any progress write gives the claim back (releaseSession), so the retry counts.
  */
 async function reserveSession(sessionId: string): Promise<boolean> {
+  const { Profile } = await db();
   const res = await Profile.updateOne(
     { key: PROFILE_KEY, recentSessionIds: { $ne: sessionId } },
     { $push: { recentSessionIds: { $each: [sessionId], $position: 0, $slice: RECENT_SESSION_IDS } } }
@@ -204,6 +207,7 @@ async function reserveSession(sessionId: string): Promise<boolean> {
 
 /** Undo reserveSession, for a session that failed before anything was stored. */
 async function releaseSession(sessionId: string): Promise<void> {
+  const { Profile } = await db();
   await Profile.updateOne({ key: PROFILE_KEY }, { $pull: { recentSessionIds: sessionId } });
 }
 
@@ -223,7 +227,6 @@ export async function POST(req: Request) {
   const now = new Date();
   const when = { at: now, today: todayKey(now) };
 
-  await connectDB();
   // Also creates the profile on the very first session, which reserveSession needs.
   const before = await getProfile();
 

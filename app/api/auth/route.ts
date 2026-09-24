@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { issueSessionCookie, clearSessionCookie } from "@/lib/auth";
 import { getClientIp } from "@/lib/groq";
+import { learnerForPin } from "@/lib/learners";
 
 const Body = z.object({ pin: z.string().min(1).max(20) });
 
@@ -48,12 +49,13 @@ export async function POST(req: Request) {
       { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
     );
   }
-  if (parsed.data.pin !== expected) {
+  const learner = learnerForPin(parsed.data.pin);
+  if (!learner) {
     FAILURES.set(ip, [...failures, now]);
     return NextResponse.json({ error: "wrong pin" }, { status: 401 });
   }
   FAILURES.delete(ip);
-  await issueSessionCookie();
+  await issueSessionCookie(learner);
   return NextResponse.json({ ok: true });
 }
 

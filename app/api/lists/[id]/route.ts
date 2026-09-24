@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import { connectDB } from "@/lib/db";
-import { WordList, toClient } from "@/lib/models/WordList";
+import { currentLearner } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { LEARNER_NAMES, ownerOf } from "@/lib/learners";
+import { toClient } from "@/lib/models/WordList";
+import { mayDelete, syncList } from "@/lib/shared-lists";
 
 export const runtime = "nodejs";
 
@@ -26,7 +29,7 @@ function badId(id: string) {
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (badId(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  await connectDB();
+  const { WordList } = await db();
   const doc = await WordList.findById(id).lean();
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(toClient(doc));
@@ -45,7 +48,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues }, { status: 400 });
   }
-  await connectDB();
+  const learner = await currentLearner();
+  const { WordList } = await db();
 
   // If the patch touches words, do a load+merge+save so we preserve per-word
   // SRS state across saves. A naive findByIdAndUpdate({ words }) would wipe
@@ -72,6 +76,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         family?: unknown;
         srs?: unknown;
         skills?: unknown;
+        addedBy?: string;
       }
     >();
     for (const w of doc.words || []) {
@@ -84,7 +89,23 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         family: w.family,
         srs: w.srs,
         skills: w.skills,
+        addedBy: w.addedBy,
       });
+    }
+    // Lists are shared, and a child may only take out words they put in.
+    // The Stuck-words pool is not shared: every word in it is this child's.
+    const keep = new Set(parsed.data.words.map((w) => w.word.toLowerCase()));
+    const theirs = [...existing]
+      .filter(([key, w]) => doc.kind !== "pool" && !keep.has(key) && ownerOf(w.addedBy) !== learner)
+      .map(([key, w]) => ({ key, owner: ownerOf(w.addedBy) }));
+    if (theirs.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Only ${LEARNER_NAMES[theirs[0].owner]} can remove "${theirs[0].key}".`,
+          words: theirs.map((t) => t.key),
+        },
+        { status: 403 }
+      );
     }
     const merged = parsed.data.words.map((w) => {
       const key = w.word.toLowerCase();
@@ -104,10 +125,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         family: prev?.family ?? [],
         srs: prev?.srs ?? {},
         skills: prev?.skills ?? {},
+        addedBy: prev ? (prev.addedBy ?? "") : learner,
       };
     });
     doc.set("words", merged);
     await doc.save();
+    await syncList(learner, id);
     const fresh = await WordList.findById(id).lean();
     if (!fresh) return NextResponse.json({ error: "not found" }, { status: 404 });
     return NextResponse.json(toClient(fresh));
@@ -119,14 +142,26 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (parsed.data.hiddenMessage !== undefined) update.hiddenMessage = parsed.data.hiddenMessage;
   const doc = await WordList.findByIdAndUpdate(id, update, { returnDocument: "after" }).lean();
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
+  await syncList(learner, id);
   return NextResponse.json(toClient(doc));
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (badId(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  await connectDB();
-  const doc = await WordList.findByIdAndDelete(id).lean();
+  const learner = await currentLearner();
+  const { WordList } = await db();
+  const doc = await WordList.findById(id).select("addedBy kind").lean();
   if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // The Stuck-words pool is in this child's own database: always theirs.
+  if (doc.kind !== "pool" && !mayDelete(learner, doc)) {
+    return NextResponse.json(
+      { error: `Only ${LEARNER_NAMES[ownerOf(doc.addedBy)]} can delete this list.` },
+      { status: 403 }
+    );
+  }
+  await WordList.deleteOne({ _id: id });
+  // Gone from the other child's lists too.
+  await syncList(learner, id);
   return NextResponse.json({ ok: true });
 }
