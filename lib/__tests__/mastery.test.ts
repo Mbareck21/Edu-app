@@ -5,6 +5,7 @@ import {
   countKnowledge,
   countKnown,
   dueSkills,
+  isStuckMiss,
   newSkillState,
   scheduleSkill,
   skillDue,
@@ -273,4 +274,20 @@ test("the flashcards step id survives the rename to a writing drill", () => {
   // sessions rejected by the API's enum. Only the label changed.
   assert.equal(stepById("flashcards").id, "flashcards");
   assert.equal(stepById("flashcards").name, "Write It");
+});
+
+test("a word is stuck on a second miss in a row within a week", () => {
+  const now = new Date("2026-09-23T20:00:00Z");
+  const missed = (daysAgo: number): SkillState => ({
+    correct: 2,
+    wrong: 1,
+    streak: 0,
+    lastAt: new Date(now.getTime() - daysAgo * 86_400_000).toISOString(),
+    dueAt: now.toISOString(),
+  });
+  assert.equal(isStuckMiss(missed(2), false, now), true);
+  assert.equal(isStuckMiss(missed(8), false, now), false, "a week apart is not stuck");
+  assert.equal(isStuckMiss(missed(2), true, now), false, "a right answer is not a miss");
+  assert.equal(isStuckMiss({ ...missed(2), streak: 1 }, false, now), false, "last answer was right");
+  assert.equal(isStuckMiss({ ...missed(2), wrong: 0 }, false, now), false, "first miss ever");
 });

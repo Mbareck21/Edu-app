@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
-import { scheduleSkill } from "@/lib/mastery";
+import { isStuckMiss, scheduleSkill } from "@/lib/mastery";
+import { addPoolWords, getPool } from "@/lib/word-source";
 import { scoreRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
 import {
@@ -101,17 +102,23 @@ async function applyPathProgress(
   await doc.save();
 }
 
-/** Per-word, per-skill answers for one list, in one read-modify-write. */
+type PoolWord = { word: string; clue: string; arabic: string };
+
+/**
+ * Per-word, per-skill answers for one list, in one read-modify-write. Words
+ * he is stuck on (see isStuckMiss) are collected into `stuck`.
+ */
 async function applyWordResults(
   listId: string,
   results: WordResultIn[],
   now: Date,
-  writes: Writes
+  writes: Writes,
+  stuck: Map<string, PoolWord>
 ): Promise<void> {
   if (results.length === 0) return;
   if (!mongoose.isValidObjectId(listId)) return;
   const { WordList } = await db();
-  const doc = await WordList.findById(listId).select("words");
+  const doc = await WordList.findById(listId).select("words kind");
   if (!doc) return;
 
   const byWord = new Map<string, number>();
@@ -121,11 +128,12 @@ async function applyWordResults(
     const index = byWord.get(r.word.toLowerCase());
     if (index === undefined) continue;
     const skill = r.skill;
-    const next = scheduleSkill(
-      toSkillState(doc.words[index].skills?.[skill], now),
-      r.correct,
-      now
-    );
+    const prev = toSkillState(doc.words[index].skills?.[skill], now);
+    const next = scheduleSkill(prev, r.correct, now);
+    if (doc.kind !== "pool" && isStuckMiss(prev, r.correct, now)) {
+      const w = doc.words[index];
+      stuck.set(String(w.word), { word: String(w.word), clue: w.clue ?? "", arabic: w.arabic ?? "" });
+    }
     doc.set(`words.${index}.skills.${skill}`, {
       correct: next.correct,
       wrong: next.wrong,
@@ -154,9 +162,16 @@ async function updateList(body: ParsedBody, now: Date, writes: Writes): Promise<
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
   // One document per group, so the writes cannot collide.
+  const stuck = new Map<string, PoolWord>();
   await Promise.all(
-    [...groups].map(([listId, results]) => applyWordResults(listId, results, now, writes))
+    [...groups].map(([listId, results]) => applyWordResults(listId, results, now, writes, stuck))
   );
+  // Missed twice running: into Words to fix, once, unless it is there already.
+  if (stuck.size > 0) {
+    const pool = await getPool();
+    const have = new Set(pool.words.map((w) => w.word));
+    await addPoolWords(pool._id, [...stuck.values()].filter((w) => !have.has(w.word)));
+  }
 }
 
 async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<void> {

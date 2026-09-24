@@ -82,6 +82,22 @@ export function scheduleSkill(state: SkillState, correct: boolean, now: Date): S
   };
 }
 
+/** How close together two misses must be to mean he is stuck, not unlucky. */
+export const STUCK_WINDOW_DAYS = 7;
+
+/**
+ * A miss that follows a miss on the same skill within a week: the word is
+ * stuck, and goes to Words to fix. One miss is not enough — his spelling
+ * misses are frequent, and every slip would flood the tab. `prev` is the
+ * skill before this answer; a miss leaves streak 0 and the next right answer
+ * always lifts it, so streak 0 with a miss on record means the last answer
+ * was a miss.
+ */
+export function isStuckMiss(prev: SkillState, correct: boolean, now: Date): boolean {
+  if (correct || prev.wrong === 0 || prev.streak !== 0 || !prev.lastAt) return false;
+  return now.getTime() - new Date(prev.lastAt).getTime() <= STUCK_WINDOW_DAYS * 86_400_000;
+}
+
 function touched(word: ClientWord): boolean {
   if (word.srs.reviewCount > 0) return true;
   return SKILL_IDS.some((id) => {
