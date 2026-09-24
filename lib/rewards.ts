@@ -210,12 +210,13 @@ export const READING_CAP = 20;
 export const MAX_READING_LEVEL = 10;
 
 /**
- * At level 1 in Q1 a reading is 3 questions, sometimes 5 — so the only scores
- * that exist are 0/33/67/100 or 0/20/.../100. An 85 mark meant "perfect three
- * times running", and a 70 floor made 2-of-3 a FAILING reading. 80/50 keeps the
- * same shape with scores that can actually occur.
+ * Scores that can occur: a reading is 3 to 5 questions, so 0/33/67/100,
+ * 0/25/.../100 or 0/20/.../100. An 85 mark meant "perfect three times
+ * running". Since readings became four school-style questions (2026-09-23),
+ * 80 did the same: 3 of 4 is 75, so only a perfect reading counted and a
+ * steady reader never moved. 75 counts 3 of 4 and 4 of 5, still not 2 of 3.
  */
-export const READING_UP_PCT = 80;
+export const READING_UP_PCT = 75;
 export const READING_UP_RUN = 3;
 export const READING_DOWN_PCT = 50;
 export const READING_DOWN_RUN = 2;
@@ -381,5 +382,46 @@ export function applySession(
       level: after.level,
       goalMet: lessonsToday >= next.dailyGoal && lessonsBefore < next.dailyGoal,
     },
+  };
+}
+
+/** What the Me page and the finish screen show about his reading. */
+export type ReadingProgress = {
+  level: number;
+  /** Good readings (READING_UP_PCT or better) in a row at this level. */
+  goodInARow: number;
+  /** Good readings still needed to move up; 0 at the top level. */
+  toNext: number;
+  /** The last readings' scores, oldest first, for a small chart. */
+  scores: number[];
+  /** Words a minute from timed reads, oldest first. */
+  wpms: number[];
+  thisWeek: number;
+};
+
+export function readingProgress(
+  reading: { level: number; recent: readonly ReadingLog[] },
+  now: Date = new Date(),
+  shown = 10
+): ReadingProgress {
+  const level = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(reading.level) || 1));
+  let goodInARow = 0;
+  for (const r of reading.recent) {
+    if (r.level !== level || r.pct < READING_UP_PCT) break;
+    goodInARow++;
+  }
+  goodInARow = Math.min(goodInARow, READING_UP_RUN);
+  const weekAgo = now.getTime() - 7 * 86_400_000;
+  return {
+    level,
+    goodInARow,
+    toNext: level >= MAX_READING_LEVEL ? 0 : READING_UP_RUN - goodInARow,
+    scores: reading.recent.slice(0, shown).map((r) => r.pct).reverse(),
+    wpms: reading.recent
+      .filter((r) => typeof r.wpm === "number" && r.wpm > 0)
+      .slice(0, shown)
+      .map((r) => r.wpm as number)
+      .reverse(),
+    thisWeek: reading.recent.filter((r) => new Date(r.at).getTime() >= weekAgo).length,
   };
 }

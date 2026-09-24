@@ -10,6 +10,7 @@ import {
   levelFloor,
   levelFor,
   shownStreak,
+  readingProgress,
 } from "@/lib/rewards";
 import type { ProfileState, SessionResult } from "@/lib/types";
 
@@ -249,4 +250,24 @@ test("leveledUp is reported when the level changes", () => {
   const { gained } = applySession(p, result(), now());
   assert.equal(gained.leveledUp, true);
   assert.ok(gained.level >= 2);
+});
+
+test("reading progress counts good readings in a row at this level", () => {
+  const now = new Date("2026-09-23T20:00:00Z");
+  const log = (pct: number, level = 1, daysAgo = 1, wpm?: number) => ({
+    at: new Date(now.getTime() - daysAgo * 86_400_000).toISOString(),
+    level,
+    pct,
+    wordsCount: 100,
+    ...(wpm ? { wpm } : {}),
+  });
+  // Newest first: 75 and 100 are good, the 50 before them breaks the run.
+  const p = readingProgress({ level: 1, recent: [log(75, 1, 1, 60), log(100), log(50, 1, 9, 52)] }, now);
+  assert.equal(p.goodInARow, 2);
+  assert.equal(p.toNext, 1);
+  assert.deepEqual(p.scores, [50, 100, 75]);
+  assert.deepEqual(p.wpms, [52, 60]);
+  assert.equal(p.thisWeek, 2);
+  // A reading from another level does not count toward this one.
+  assert.equal(readingProgress({ level: 2, recent: [log(100, 1)] }, now).goodInARow, 0);
 });

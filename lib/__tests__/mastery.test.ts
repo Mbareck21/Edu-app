@@ -187,11 +187,12 @@ function log(pct: number, level = 1): ReadingLog {
 
 test("three readings at READING_UP_PCT step the level up, capped at 10", () => {
   assert.equal(nextReadingLevel(1, [log(90), log(88), log(86)]), 2);
-  // 80 is the mark, and with 5 questions 4-of-5 is exactly 80.
-  assert.equal(nextReadingLevel(1, [log(80), log(80), log(80)]), 2);
+  // 75 is the mark: 3 of 4 counts, and so does 4 of 5.
+  assert.equal(nextReadingLevel(1, [log(75), log(75), log(80)]), 2);
   assert.equal(nextReadingLevel(10, [log(90), log(88), log(86)]), 10);
   assert.equal(nextReadingLevel(1, [log(90), log(88)]), 1);
-  assert.equal(nextReadingLevel(1, [log(90), log(88), log(75)]), 1);
+  // 2 of 3 is still not a good reading.
+  assert.equal(nextReadingLevel(1, [log(90), log(88), log(67)]), 1);
 });
 
 test("two readings under READING_DOWN_PCT step the level down, floor 1", () => {

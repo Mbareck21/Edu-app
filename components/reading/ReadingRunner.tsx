@@ -35,6 +35,7 @@ import {
   wordsFirst,
   wpmNormForDate,
 } from "@/lib/reading";
+import { readingProgress } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import { playTextThroughTTS, type Playback } from "@/lib/voice";
 import type {
@@ -273,6 +274,8 @@ function ReadingRunnerInner({
   const savedRef = useRef(false);
   const [gainedXp, setGainedXp] = useState(0);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
+  /** Where this reading left him on the ladder, for the finish screen. */
+  const [ladderNote, setLadderNote] = useState<string | undefined>(undefined);
   const [elapsedMs, setElapsedMs] = useState(resumedAllDone ? (initial?.ms ?? 0) : 0);
 
   const paragraphs = useMemo(
@@ -545,8 +548,17 @@ function ReadingRunnerInner({
             ...(wpm ? { wpm } : {}),
           },
         });
-        if (posted.saved) setGainedXp(posted.gained.xp);
-        else setQueuedNote(saveNote(posted));
+        if (posted.saved) {
+          setGainedXp(posted.gained.xp);
+          const after = readingProgress(posted.profile.reading);
+          setLadderNote(
+            after.level > level
+              ? `Level up! You are on reading level ${after.level} now.`
+              : after.toNext > 0
+                ? `${after.toNext} more good ${after.toNext === 1 ? "reading" : "readings"} to level ${after.level + 1}.`
+                : undefined
+          );
+        } else setQueuedNote(saveNote(posted));
 
         // Then the passage's stats and glossed words. A repeat is harmless (the
         // route ignores a passage already closed), so one retry is safe.
@@ -595,7 +607,7 @@ function ReadingRunnerInner({
         ms={elapsedMs}
         accuracy={questions.length ? firstTry / questions.length : 0}
         perfect={perfect}
-        note={busy === "saving" ? "Saving…" : (error ?? queuedNote)}
+        note={busy === "saving" ? "Saving…" : (error ?? queuedNote ?? ladderNote)}
         primary={
           onDone
             ? { label: "Continue", onClick: onDone }

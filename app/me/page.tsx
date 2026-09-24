@@ -7,6 +7,7 @@ import Icon, { type IconName } from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
 import ProfileSettings from "@/components/ProfileSettings";
+import ReadingProgressCard from "@/components/reading/ReadingProgressCard";
 import SignOutButton from "@/components/SignOutButton";
 import { lastSevenDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -17,7 +18,7 @@ import { toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
 import { allFactKeys, factFromRow } from "@/lib/tables";
 import { getProfile } from "@/lib/profile";
-import { BADGES, shownStreak } from "@/lib/rewards";
+import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
 
@@ -197,6 +198,8 @@ export default async function MePage() {
           })}
         </div>
       </Card>
+
+      <ReadingProgressCard progress={readingProgress(profile.reading, now)} />
 
       {/* The parent's week: every section's numbers in one place. See lib/digest.ts. */}
       <Card className="mt-3">
