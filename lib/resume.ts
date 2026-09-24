@@ -53,3 +53,18 @@ export function clearProgress(key: string): void {
     // nothing to clear
   }
 }
+
+/** Drop every unfinished run on this device: a new child must not resume the last one's. */
+export function clearAllProgress(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const k of keys) window.sessionStorage.removeItem(k);
+  } catch {
+    // Blocked storage holds nothing to clear.
+  }
+}

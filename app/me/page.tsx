@@ -7,6 +7,7 @@ import Icon, { type IconName } from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
 import ProfileSettings from "@/components/ProfileSettings";
+import SignOutButton from "@/components/SignOutButton";
 import { lastSevenDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { buildDigest } from "@/lib/digest";
@@ -281,6 +282,9 @@ export default async function MePage() {
       <Card className="mt-3 mb-4">
         <h2 className="mb-3 font-display text-lg font-bold">Settings</h2>
         <ProfileSettings name={profile.name} dailyGoal={profile.dailyGoal} />
+        <div className="mt-5">
+          <SignOutButton name={profile.name} />
+        </div>
       </Card>
     </AppShell>
   );
