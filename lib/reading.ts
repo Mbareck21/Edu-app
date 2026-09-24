@@ -140,12 +140,18 @@ function quarterReached(
 }
 
 /**
- * The question set for one passage. Order here is the order he answers in:
- * the two "author" prompts come first because they are what he should be
- * asking himself while reading (McKeown, Beck & Blake — Questioning the Author).
+ * The question set for one passage, asked the way his school's reading tests
+ * ask: mostly four-option multiple choice ("According to the passage…",
+ * "What does the word … mean in this passage?", "How does … feel…?",
+ * "Which sentence from the story shows…?") and one short written answer.
+ * These replaced two open "what is the writer telling us" prompts that looked
+ * nothing like what he is graded on. Tapping an option also spares a slow
+ * speller from typing every answer.
  *
  * `quarter` is the school quarter today. Pass it so a standard his class has
  * started on shows up even when his reading level has not caught up yet.
+ * The Read step asks each question after the part it is about (partPlan), so
+ * the order here is only the order for the writer.
  */
 export function questionPlan(
   rawLevel: number,
@@ -157,44 +163,58 @@ export function questionPlan(
   const open = (id: keyof typeof STANDARD_OPENS, minLevel: number) =>
     level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]);
   const out: QuestionSpec[] = [
+    level >= 5
+      ? {
+          type: "sequence",
+          format: "mcq",
+          options: 4,
+          brief:
+            'An order question in school-test wording: "What happens right after …?" or "What does … do first?". Four options, all events from the passage, one in the right place.',
+        }
+      : {
+          type: "detail",
+          format: "mcq",
+          options: 4,
+          brief:
+            'A fact the passage states, in school-test wording: "According to the passage, …?". Four options: the right one and three that use words from the passage but are wrong.',
+        },
     {
-      type: "author",
-      format: "text",
+      type: "vocab",
+      format: "mcq",
+      options: 4,
       brief:
-        "What is the writer telling us in the first part? Ask it about THIS passage, naming a person, place or thing from it.",
+        `Word meaning in context, in school-test wording: "What does the word "X" mean in this passage?" X is one of the passage's hard words (a glossary or study word). Options: its meaning here in easy words, plus three a careless reader might pick (another meaning of the same word, the opposite, the meaning of a nearby word).`,
     },
+    kind === "story"
+      ? {
+          type: "inference",
+          format: "mcq",
+          options: 4,
+          brief:
+            'A character question, in school-test wording: "How does [name] feel when …?", "Which word best describes [name]?" or "Why does [name] …?". The answer is shown by what the character says or does, not written out. Four plausible feelings, traits or reasons.',
+        }
+      : {
+          type: "main_idea",
+          format: "mcq",
+          options: 4,
+          brief:
+            '"What is this passage mostly about?" Four options: the main idea, one single detail, one idea too big for the passage, one thing it does not say.',
+        },
     {
-      type: "author",
+      type: "cause_effect",
       format: "text",
       brief:
-        "Does the later part fit what the writer said before? Ask him to connect two parts of the passage.",
-    },
-    {
-      type: level >= 5 ? "sequence" : "detail",
-      format: "text",
-      brief:
-        level >= 5
-          ? "One order question: what happened before or after something named in the passage."
-          : "One fact question. The answer is written straight out in the passage.",
+        `A short written answer, like the school's short response: "Why did …?". The reason is in the passage; he types it in a few words.`,
     },
   ];
-
-  if (level >= 3) {
-    out.push({
-      type: "inference",
-      format: "text",
-      brief:
-        "One question whose answer is NOT written down. He has to work it out from what the passage shows.",
-    });
-  }
 
   if (open("retell", 4)) {
     out.push({
       type: "retell",
       format: "mcq",
-      options: 3,
+      options: 4,
       brief:
-        "Pick the best one-sentence summary of the whole passage. Three options: one right, one that is only a small detail, one that is about something else.",
+        '"Which sentence best tells what the passage is mostly about?" Four options: the right summary, one small detail, one about something else, one that gets the order or the ending wrong.',
     });
   }
 
@@ -208,26 +228,28 @@ export function questionPlan(
     });
   }
 
-  if (kind === "info" && open("evidence", 5)) {
+  if (open("evidence", 5)) {
     out.push({
       type: "evidence",
       format: "mcq",
       options: 4,
       brief:
-        "Name a point the writer makes, then ask which sentence is his evidence for it. The four options must be four sentences copied word for word from the passage.",
+        kind === "story"
+          ? `The school's "Part B": "Which sentence from the story best shows that [name] is [the trait or feeling from the character question]?". The four options must be four sentences copied word for word from the passage.`
+          : 'Name a point the writer makes, then ask "Which sentence from the passage best supports this?". The four options must be four sentences copied word for word from the passage.',
     });
   }
 
+  // One, not two: with the school-style set a science passage already asks
+  // four or five questions, and more than that tires him out.
   if (science) {
-    for (let i = 0; i < 2; i++) {
-      out.push({
-        type: "science_fact",
-        format: "mcq",
-        options: 3,
-        brief:
-          "A fact check: did the passage actually say this? Three options, one true to the passage. Keep the science simple.",
-      });
-    }
+    out.push({
+      type: "science_fact",
+      format: "mcq",
+      options: 3,
+      brief:
+        '"Which fact does the passage tell?" Three options, one true to the passage. Keep the science simple.',
+    });
   }
 
   return out;
@@ -632,4 +654,87 @@ export function pickArchived<T extends { generatedAt?: Date | string | null }>(
   const ready = archive.filter((a) => at(a) <= now - REUSE_AFTER_MS);
   ready.sort((a, b) => at(a) - at(b));
   return ready[0] ?? null;
+}
+
+// ── Reading part by part ──────────────────────────────────────────────────
+
+/** Sentences in one part. Short enough that a slow reader finishes it quickly. */
+export const PART_SENTENCES = 3;
+
+/**
+ * A passage in parts of about three sentences, never across a paragraph and
+ * never a one-sentence straggler when it can be avoided: seven sentences are
+ * 3 + 2 + 2, not 3 + 3 + 1. Reading the whole passage before any question was
+ * the most tiring shape there is for a slow reader.
+ */
+export function splitParts(text: string, per = PART_SENTENCES): string[] {
+  const parts: string[] = [];
+  for (const para of splitParagraphs(text)) {
+    const sentences = splitSentences(para);
+    const count = Math.max(1, Math.ceil(sentences.length / per));
+    const base = Math.floor(sentences.length / count);
+    const extra = sentences.length % count;
+    let at = 0;
+    for (let i = 0; i < count; i++) {
+      const size = base + (i < extra ? 1 : 0);
+      const chunk = sentences.slice(at, at + size);
+      at += size;
+      if (chunk.length > 0) parts.push(chunk.join(" "));
+    }
+  }
+  return parts.length > 0 ? parts : [text.trim()];
+}
+
+const squash = (t: string) => t.toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * When each question is asked: right after the part its answer is in. A
+ * question with no findable source ("What is the story mostly about?") waits
+ * for the end, and the last question always does, so every part is read.
+ * `order` lists question indexes in asking order; `partOf[i]` is the part
+ * question i waits for.
+ */
+export function partPlan(
+  parts: readonly string[],
+  questions: readonly { source: string }[]
+): { order: number[]; partOf: number[] } {
+  const last = Math.max(0, parts.length - 1);
+  const flat = parts.map(squash);
+  const partOf = questions.map((q) => {
+    const src = squash(q.source ?? "");
+    if (!src) return last;
+    const at = flat.findIndex((p) => p.includes(src) || p.includes(src.slice(0, 40)));
+    return at >= 0 ? at : last;
+  });
+  const order = questions.map((_, i) => i).sort((a, b) => partOf[a] - partOf[b] || a - b);
+  if (order.length > 0) partOf[order[order.length - 1]] = last;
+  return { order, partOf };
+}
+
+/** Words taught before the passage. */
+export const WORDS_FIRST = 3;
+
+/**
+ * The glossed words to meet before reading: the longest ones (the likeliest
+ * to stop him), shown in the order the passage uses them.
+ */
+export function wordsFirst<T extends { word: string }>(
+  glosses: readonly T[],
+  text: string,
+  n = WORDS_FIRST
+): T[] {
+  const lower = text.toLowerCase();
+  const seen = new Set<string>();
+  const unique = glosses.filter((g) => {
+    const w = g.word.trim().toLowerCase();
+    if (!w || seen.has(w)) return false;
+    seen.add(w);
+    return true;
+  });
+  const picked = [...unique].sort((a, b) => b.word.length - a.word.length).slice(0, n);
+  const pos = (g: T) => {
+    const at = lower.indexOf(g.word.toLowerCase());
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  return picked.sort((a, b) => pos(a) - pos(b));
 }

@@ -53,14 +53,22 @@ test("level params follow the plan's formulas", () => {
 });
 
 test("question plan grows with the level and matches the passage kind", () => {
+  // School-test style: fact, word meaning, character, one short written answer.
   const l1 = questionPlan(1, "story", false);
   assert.deepEqual(
     l1.map((q) => q.type),
-    ["author", "author", "detail"]
+    ["detail", "vocab", "inference", "cause_effect"]
+  );
+  assert.deepEqual(
+    l1.map((q) => q.format),
+    ["mcq", "mcq", "mcq", "text"]
+  );
+  assert.deepEqual(
+    questionPlan(1, "info", false).map((q) => q.type),
+    ["detail", "vocab", "main_idea", "cause_effect"]
   );
 
   const l3 = questionPlan(3, "story", false);
-  assert.ok(l3.some((q) => q.type === "inference"));
   assert.ok(!l3.some((q) => q.type === "retell"));
 
   const l4story = questionPlan(4, "story", false);
@@ -70,17 +78,18 @@ test("question plan grows with the level and matches the passage kind", () => {
 
   const l5info = questionPlan(5, "info", false);
   assert.ok(l5info.some((q) => q.type === "evidence"));
+  assert.ok(questionPlan(5, "story", false).some((q) => q.type === "evidence"));
   assert.ok(!l5info.some((q) => q.type === "theme"));
 
   // Sequence replaces the plain detail question from level 5 up.
   assert.ok(l5info.some((q) => q.type === "sequence"));
 });
 
-test("science passages add exactly two fact checks", () => {
+test("science passages add exactly one fact check", () => {
   const plain = questionPlan(6, "info", false);
   const science = questionPlan(6, "info", true);
-  assert.equal(science.length - plain.length, 2);
-  assert.equal(science.filter((q) => q.type === "science_fact").length, 2);
+  assert.equal(science.length - plain.length, 1);
+  assert.equal(science.filter((q) => q.type === "science_fact").length, 1);
 });
 
 test("every mcq slot names its option count", () => {
@@ -139,7 +148,7 @@ test("the school quarter opens standards the reading level has not reached", () 
   const q1 = questionPlan(1, "story", false, "Q1");
   assert.deepEqual(
     q1.map((q) => q.type),
-    ["author", "author", "detail"]
+    ["detail", "vocab", "inference", "cause_effect"]
   );
 
   // Same level in Q2: theme is assessed at school now (4.RC.9.RL), so it appears.

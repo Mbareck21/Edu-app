@@ -13,6 +13,8 @@ import Icon from "@/components/ui/Icon";
 import LessonComplete from "@/components/ui/LessonComplete";
 import Pill from "@/components/ui/Pill";
 import ProgressBar from "@/components/ui/ProgressBar";
+import ArabicChip from "@/components/items/ArabicChip";
+import AudioButton from "@/components/items/AudioButton";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
@@ -24,10 +26,13 @@ import {
   atGradeLevel,
   countWords,
   lexileForLevel,
+  partPlan,
   splitParagraphs,
+  splitParts,
   withNames,
   type Scaffold,
   wordsPerMinute,
+  wordsFirst,
   wpmNormForDate,
 } from "@/lib/reading";
 import { sfx } from "@/lib/sfx";
@@ -61,7 +66,7 @@ export type ReadingRunnerProps = {
   onDone?: () => void;
 };
 
-type Phase = "mode" | "read" | "questions" | "done";
+type Phase = "words" | "mode" | "read" | "questions" | "done";
 type Mode = "listen" | "alone" | "echo";
 
 const HINTS_BEFORE_REVEAL = 2;
@@ -91,6 +96,8 @@ type ReadingSaved = {
   qIdx: number;
   /** Time on task banked before a reload. */
   ms?: number;
+  /** Part by part: the furthest part he had on screen. */
+  seen?: number;
 };
 
 function isReadingSaved(v: unknown): v is ReadingSaved {
@@ -98,12 +105,17 @@ function isReadingSaved(v: unknown): v is ReadingSaved {
   const o = v as Partial<ReadingSaved>;
   return (
     typeof o.at === "string" &&
-    (o.phase === "mode" || o.phase === "read" || o.phase === "questions" || o.phase === "done") &&
+    (o.phase === "words" ||
+      o.phase === "mode" ||
+      o.phase === "read" ||
+      o.phase === "questions" ||
+      o.phase === "done") &&
     (o.mode === "listen" || o.mode === "alone" || o.mode === "echo") &&
     Array.isArray(o.qStates) &&
     o.qStates.every((q) => typeof q === "object" && q !== null && typeof q.done === "boolean") &&
     typeof o.qIdx === "number" &&
-    (o.ms === undefined || typeof o.ms === "number")
+    (o.ms === undefined || typeof o.ms === "number") &&
+    (o.seen === undefined || typeof o.seen === "number")
   );
 }
 
@@ -113,6 +125,11 @@ function isReadingSaved(v: unknown): v is ReadingSaved {
  * between came back to a locked question with no button: stuck on every visit.
  * Skip past answered questions instead.
  */
+/** A passage opens on its words when it has any to teach. */
+function startPhase(reading: CurrentReading | null): Phase {
+  return reading && reading.vocabGlosses.length > 0 ? "words" : "mode";
+}
+
 function resumeQuestion(qStates: readonly QState[], qIdx: number): number {
   let i = Math.max(0, qIdx);
   while (i < qStates.length && qStates[i].done) i++;
@@ -120,7 +137,9 @@ function resumeQuestion(qStates: readonly QState[], qIdx: number): number {
 }
 
 export default function ReadingRunner(props: ReadingRunnerProps) {
-  const key = resumeKey("reading", props.list._id, "current");
+  // "parts": questions are asked in the order of the parts they belong to, so
+  // a position saved against the old order must not be resumed.
+  const key = resumeKey("reading", props.list._id, "parts");
   const saved = useSavedRun(key, isReadingSaved);
   const current = props.stale ? null : props.list.currentReading;
   const initial = saved && current && saved.at === current.generatedAt ? saved : null;
@@ -151,10 +170,18 @@ function ReadingRunnerInner({
   // is spent — an old story is far better than an empty screen. Hiding it was
   // only ever meant to stop it being served as today's.
   const shelved = stale ? list.currentReading : null;
-  const questions: ReadingQuestion[] = useMemo(
-    () => reading?.questions ?? [],
-    [reading]
+  // The passage in parts of about three sentences, and each question moved
+  // to just after the part its answer is in (see partPlan).
+  const parts = useMemo(() => (reading ? splitParts(reading.paragraph) : []), [reading]);
+  const plan = useMemo(
+    () => partPlan(parts, reading?.questions ?? []),
+    [parts, reading]
   );
+  const questions: ReadingQuestion[] = useMemo(
+    () => plan.order.map((i) => reading?.questions[i]).filter((q): q is ReadingQuestion => !!q),
+    [plan, reading]
+  );
+  const partOfQ = useMemo(() => plan.order.map((i) => plan.partOf[i]), [plan]);
   const resumedQStates =
     initial && initial.qStates.length === questions.length ? initial.qStates : null;
   const resumedIdx = initial && resumedQStates ? resumeQuestion(resumedQStates, initial.qIdx) : 0;
@@ -163,7 +190,11 @@ function ReadingRunnerInner({
     initial?.phase === "questions" && questions.length > 0 && resumedIdx >= questions.length;
   // A finished passage never resumes as finished; he picks a mode again.
   const [phase, setPhase] = useState<Phase>(
-    resumedAllDone ? "done" : initial && initial.phase !== "done" ? initial.phase : "mode"
+    resumedAllDone
+      ? "done"
+      : initial && initial.phase !== "done"
+        ? initial.phase
+        : startPhase(stale ? null : list.currentReading)
   );
   const [mode, setMode] = useState<Mode>(initial?.mode ?? "listen");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
@@ -173,6 +204,8 @@ function ReadingRunnerInner({
     () => resumedQStates ?? freshQ(questions.length)
   );
   const [qIdx, setQIdx] = useState(Math.min(resumedIdx, Math.max(0, questions.length - 1)));
+  // Part by part ("Read alone"): the furthest part on screen.
+  const [seenPart, setSeenPart] = useState(() => initial?.seen ?? 0);
 
   // Time on task, not time on the clock. His longest logged reading was 2.5
   // hours of an open tab — see lib/time-on-task.ts.
@@ -198,8 +231,9 @@ function ReadingRunnerInner({
       qStates,
       qIdx,
       ms: watch.current?.read() ?? 0,
+      seen: seenPart,
     });
-  }, [reading, phase, mode, qStates, qIdx, saveKey]);
+  }, [reading, phase, mode, qStates, qIdx, seenPart, saveKey]);
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
   /**
@@ -284,6 +318,8 @@ function ReadingRunnerInner({
    */
   const installReading = useCallback((next: CurrentReading | null) => {
     setReading(next);
+    setPhase(startPhase(next));
+    setSeenPart(0);
     setEcho(null);
     setQStates(freshQ(next?.questions.length ?? 0));
     setQIdx(0);
@@ -449,9 +485,11 @@ function ReadingRunnerInner({
   }
 
   useEffect(() => {
-    if (phase !== "questions") return;
+    // Part by part scrolls the new part into view instead (Passage follows
+    // it); putting the question at the top would push the part off screen.
+    if (phase !== "questions" || mode === "alone") return;
     scrollIntoViewIfNeeded(questionRef.current, "start");
-  }, [phase, qIdx]);
+  }, [phase, qIdx, mode]);
 
   const advance = useCallback(() => {
     watch.current?.mark();
@@ -461,11 +499,13 @@ function ReadingRunnerInner({
     setTried([]);
     if (qIdx + 1 < questions.length) {
       setQIdx(qIdx + 1);
+      // Part by part: the part just asked about is read, so open the next.
+      if ((partOfQ[qIdx + 1] ?? 0) > seenPart) setSeenPart((p) => p + 1);
     } else {
       setElapsedMs(watch.current?.read() ?? 0);
       setPhase("done");
     }
-  }, [qIdx, questions.length]);
+  }, [qIdx, questions.length, partOfQ, seenPart]);
 
   // ── Saving ──────────────────────────────────────────────────────────────
 
@@ -569,7 +609,8 @@ function ReadingRunnerInner({
           onClick: () => {
             void (async () => {
               const fresh = await generate();
-              if (fresh) setPhase("mode");
+              // A new passage opens on its words; installReading set that.
+              if (!fresh) return;
             })();
           },
         }}
@@ -679,6 +720,41 @@ function ReadingRunnerInner({
     </div>
   ) : null;
 
+  // (a0) Words first: the hardest few, heard and understood before he meets
+  // them in the story. Vocabulary is where he gets stuck.
+  if (phase === "words") {
+    const first = wordsFirst(reading.vocabGlosses, reading.paragraph);
+    return (
+      <div className="space-y-4 px-4 py-8">
+        <h1 className="font-display text-2xl font-bold">
+          {first.length} {first.length === 1 ? "word" : "words"} in this story
+        </h1>
+        <p className="text-base" style={{ color: "var(--color-muted)" }}>
+          Tap to hear each one. Then read the story.
+        </p>
+        <ul className="space-y-3">
+          {first.map((g) => (
+            <li key={g.word}>
+              <Card>
+                <div className="flex items-center gap-3">
+                  <AudioButton text={g.word} size={52} color="green" label={`Hear ${g.word}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display text-2xl font-bold">{g.word}</p>
+                    {g.meaning ? <p className="mt-1 text-base">{g.meaning}</p> : null}
+                  </div>
+                </div>
+                {g.arabic ? <ArabicChip arabic={g.arabic} className="mt-3" /> : null}
+              </Card>
+            </li>
+          ))}
+        </ul>
+        <Button fullWidth size="lg" color="green" onClick={() => setPhase("mode")}>
+          Read the story
+        </Button>
+      </div>
+    );
+  }
+
   // (a) Mode choice
   if (phase === "mode") {
     return (
@@ -750,12 +826,14 @@ function ReadingRunnerInner({
           onClick={() => {
             setMode("alone");
             setEcho(null);
+            setSeenPart(0);
             startedAtRef.current = Date.now();
             watch.current = startStopwatch();
-            setPhase("read");
+            // Part by part: a few sentences, the question on them, the next few.
+            setPhase("questions");
           }}
         >
-          Read alone
+          Read it part by part
         </Button>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           <strong>Read after me</strong> plays one sentence at a time and listens
@@ -907,9 +985,51 @@ function ReadingRunnerInner({
     );
   }
 
-  // (c) Questions
+  // (c) Questions. Part by part, the passage grows one part at a time, and
+  // each question comes when the part with its answer is on screen.
   const q = questions[qIdx];
   if (!q) return null;
+  const byPart = mode === "alone" && parts.length > 1;
+  const needPart = partOfQ[qIdx] ?? parts.length - 1;
+  // "What does the word X mean?" must not be answered by tapping X.
+  const askedGlosses =
+    q.type === "vocab"
+      ? reading.vocabGlosses.filter((g) => !q.q.toLowerCase().includes(g.word.toLowerCase()))
+      : reading.vocabGlosses;
+  const shownText = byPart
+    ? parts.slice(0, Math.max(seenPart, needPart) + 1).join("\n\n")
+    : reading.paragraph;
+
+  if (byPart && seenPart < needPart) {
+    return (
+      <div className="px-4 pb-40 pt-4">
+        <ProgressBar
+          value={(seenPart + 1) / parts.length}
+          color="green"
+          label={`Part ${seenPart + 1} of ${parts.length}`}
+          className="mb-4"
+        />
+        <Passage
+          text={parts.slice(0, seenPart + 1).join("\n\n")}
+          glosses={reading.vocabGlosses}
+          activeParagraph={seenPart}
+          follow
+          onGlossTap={(g) => {
+            setGloss(g);
+            setShowArabic(false);
+          }}
+        />
+        <div className="mt-5 flex items-center gap-3">
+          <AudioButton text={parts[seenPart]} size={56} color="green" label="Hear this part" />
+          <Button size="lg" color="green" className="flex-1" onClick={() => setSeenPart(seenPart + 1)}>
+            Next part
+          </Button>
+        </div>
+        {glossPanel}
+      </div>
+    );
+  }
+
   const state = qStates[qIdx] ?? { wrong: 0, hints: 0, revealed: false, done: false };
   const isMcq = q.options.length > 0 && q.answerIndex >= 0;
   const revealAnswer = isMcq
@@ -938,9 +1058,16 @@ function ReadingRunnerInner({
         className="mb-4"
       />
 
+      {byPart ? (
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+          Part {needPart + 1} of {parts.length}
+        </p>
+      ) : null}
       <Passage
-        text={reading.paragraph}
-        glosses={reading.vocabGlosses}
+        text={shownText}
+        glosses={askedGlosses}
+        activeParagraph={byPart ? needPart : null}
+        follow={byPart}
         highlight={markSource ? q.source : undefined}
         onGlossTap={(g) => {
           setGloss(g);

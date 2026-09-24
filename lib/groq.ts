@@ -292,10 +292,15 @@ FORMAT "mcq" (tap one option):
 BAD:  q "What is this about?" → acceptable ["what is it about", "tell me about it"]
 GOOD: q "What is this about?" → acceptable ["a girl and her goat", "layla and her goat", "a goat that got out"]
 
-⚠ "author" questions are about the WRITER'S MEANING, tied to this passage:
-GOOD: "What is the writer showing us about Layla here?"
-GOOD: "The writer said the soil was dry. Does the flood fit that?"
+⚠ Word every question the way a Grade 4 school reading test does, about THIS
+passage, naming its people, places and things:
+GOOD: "According to the passage, why did Layla climb the ladder?"
+GOOD: "What does the word \"stubborn\" mean in this passage?"
+GOOD: "How does Layla feel when the goat will not come down?"
+GOOD: "Which sentence from the story best shows that Layla is patient?"
+BAD:  "What is the writer telling us in the first part?"  (not how a test asks)
 BAD:  "What is the author's purpose?"  (a strategy label, not a question about the text)
+Never ask a question whose own words give the answer away.
 
 ═══ GLOSSARY ═══
 "glossary": at most 6 entries, one per hard word in the passage.
@@ -319,14 +324,14 @@ Copy the SHAPE, not the values:
   ],
   "questions": [
     {
-      "q": "What is the writer showing us about Layla here?",
-      "type": "author",
-      "format": "text",
-      "acceptable": ["she is patient", "patient", "layla is patient with her goat"],
-      "options": [],
-      "answerIndex": -1,
-      "hints": ["She waits and tries again instead of shouting",
-                "Layla stays patient with the goat"],
+      "q": "How does Layla feel when the goat will not come down?",
+      "type": "inference",
+      "format": "mcq",
+      "acceptable": ["patient"],
+      "options": ["angry", "patient", "scared", "bored"],
+      "answerIndex": 1,
+      "hints": ["She does not shout; she waits and tries again",
+                "Waiting calmly means being patient"],
       "source": "Layla waited by the ladder and tried again."
     },
     {
