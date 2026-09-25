@@ -74,6 +74,19 @@ function play(tones: Tone[]): void {
   }
 }
 
+/**
+ * A short buzz with the sound, on phones that have one (Android Chrome; iOS
+ * ignores it). Muting the sound mutes this too.
+ */
+function buzz(pattern: number | number[]): void {
+  if (isMuted() || typeof navigator === "undefined") return;
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    // Not allowed before the first tap, or not supported.
+  }
+}
+
 export const sfx = {
   tap(): void {
     play([{ freq: 520, dur: 0.06, gain: 0.07, type: "triangle" }]);
@@ -83,12 +96,14 @@ export const sfx = {
       { freq: 660, dur: 0.11 },
       { freq: 990, at: 0.09, dur: 0.16 },
     ]);
+    buzz(18);
   },
   wrong(): void {
     play([
       { freq: 200, dur: 0.16, type: "sawtooth", gain: 0.09 },
       { freq: 150, at: 0.1, dur: 0.2, type: "sawtooth", gain: 0.08 },
     ]);
+    buzz([40, 60, 40]);
   },
   levelUp(): void {
     play([
@@ -97,6 +112,7 @@ export const sfx = {
       { freq: 784, at: 0.2, dur: 0.12 },
       { freq: 1047, at: 0.3, dur: 0.28 },
     ]);
+    buzz([30, 50, 30, 50, 80]);
   },
   chest(): void {
     play([
@@ -105,6 +121,7 @@ export const sfx = {
       { freq: 880, at: 0.16, dur: 0.3, gain: 0.12 },
       { freq: 1320, at: 0.24, dur: 0.34, gain: 0.09 },
     ]);
+    buzz([20, 40, 60]);
   },
   isMuted,
   setMuted,

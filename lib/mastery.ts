@@ -10,7 +10,13 @@
 // "words known" rested on a nine-year-old marking his own homework. The spacing
 // that clause was really buying is now enforced objectively in scheduleSkill.
 
-import { SKILL_IDS, type ClientWord, type SkillId, type SkillState } from "@/lib/models/WordList";
+import {
+  SKILL_IDS,
+  type ClientWord,
+  type SkillId,
+  type SkillState,
+  type WordSkills,
+} from "@/lib/models/WordList";
 import { KNOWN_STREAK, MASTERED_STREAK, dueAfterDays, skillGapDays } from "@/lib/spacing";
 
 export { KNOWN_STREAK, MASTERED_STREAK } from "@/lib/spacing";
@@ -112,13 +118,18 @@ function touched(word: ClientWord): boolean {
  * review windows. scheduleSkill is what makes those windows real.
  */
 export function wordKnowledge(word: ClientWord): Knowledge {
-  const produced = word.skills.spell.correct >= 1 || word.skills.use.correct >= 1;
-  const known =
-    produced && SKILL_IDS.every((id) => word.skills[id].streak >= KNOWN_STREAK);
-  if (!known) return touched(word) ? "learning" : "new";
+  return skillsKnowledge(word.skills) ?? (touched(word) ? "learning" : "new");
+}
 
-  const mastered = SKILL_IDS.every((id) => word.skills[id].streak >= MASTERED_STREAK);
-  return mastered ? "mastered" : "known";
+/**
+ * "known" or "mastered" from the four skills alone, else null. For callers
+ * that hold only the skills (list summaries), not the whole word.
+ */
+export function skillsKnowledge(skills: WordSkills): "known" | "mastered" | null {
+  const produced = skills.spell.correct >= 1 || skills.use.correct >= 1;
+  const known = produced && SKILL_IDS.every((id) => skills[id].streak >= KNOWN_STREAK);
+  if (!known) return null;
+  return SKILL_IDS.every((id) => skills[id].streak >= MASTERED_STREAK) ? "mastered" : "known";
 }
 
 export type KnowledgeCounts = Record<Knowledge, number>;

@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
+import FamilyScoreboard from "@/components/me/FamilyScoreboard";
 import ProfileSettings from "@/components/ProfileSettings";
 import ReadingProgressCard from "@/components/reading/ReadingProgressCard";
 import SignOutButton from "@/components/SignOutButton";
@@ -17,7 +18,10 @@ import { toClientProfile } from "@/lib/models/Profile";
 import { toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
 import { allFactKeys, factFromRow } from "@/lib/tables";
-import { getProfile } from "@/lib/profile";
+import { currentLearner } from "@/lib/auth";
+import { LEARNER_NAMES } from "@/lib/learners";
+import { getFamilyProfiles, getProfile } from "@/lib/profile";
+import { weekDaysPlayed, weekXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +87,15 @@ export default async function MePage() {
   const week = lastSevenDays(today);
   const activeDays = new Set(profile.activity.map((a) => todayKey(new Date(a.at))));
   const streak = shownStreak(profile.streak, today);
+
+  const [me, family] = await Promise.all([currentLearner(), getFamilyProfiles()]);
+  const scoreRows = family.map(({ learner, state: s }) => ({
+    learner,
+    name: s.name || LEARNER_NAMES[learner],
+    xp: weekXp(s.activity, today),
+    days: weekDaysPlayed(s.activity, today),
+    isMe: learner === me,
+  }));
 
   const earned = new Map(profile.badges.map((b) => [b.id, b.earnedAt]));
 
@@ -198,6 +211,8 @@ export default async function MePage() {
           })}
         </div>
       </Card>
+
+      <FamilyScoreboard rows={scoreRows} />
 
       <ReadingProgressCard progress={readingProgress(profile.reading, now)} />
 

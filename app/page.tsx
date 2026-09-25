@@ -5,13 +5,18 @@ import TodayQuest, { type QuestBeat } from "@/components/learn/TodayQuest";
 import { currentLesson } from "@/lib/math/iready";
 import { getSkill } from "@/lib/math";
 import UnitCard from "@/components/learn/UnitCard";
+import PetCard from "@/components/pet/PetCard";
 import AppShell from "@/components/ui/AppShell";
 import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import TopBar from "@/components/ui/TopBar";
+import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
+import { db } from "@/lib/db";
 import { getListSummaries } from "@/lib/lists";
+import { skillsKnowledge } from "@/lib/mastery";
+import { growthPoints, mathLevelsUp, petMood, type Growth } from "@/lib/pet";
 import { getProfile } from "@/lib/profile";
 import { shownStreak } from "@/lib/rewards";
 
@@ -20,8 +25,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Learn" };
 
 export default async function LearnPage() {
-  const profile = await getProfile();
-  const lists = await getListSummaries();
+  const { MathProgress } = await db();
+  const [profile, lists, learner, mathRows] = await Promise.all([
+    getProfile(),
+    getListSummaries(),
+    currentLearner(),
+    MathProgress.find().select("level").lean(),
+  ]);
 
   // The unit in play: the list the parent touched last.
   const unit = lists.find((l) => l.words.length > 0) ?? lists[0] ?? null;
@@ -40,6 +50,15 @@ export default async function LearnPage() {
   const schoolSkill = getSkill(
     lesson.skills[dayIndex % Math.max(1, lesson.skills.length)] ?? "place-value"
   );
+
+  // Sparky grows with words known and math levels gained, never with XP.
+  const knowledge = lists.flatMap((l) => l.words.map((w) => skillsKnowledge(w.skills)));
+  const growth: Growth = {
+    wordsKnown: knowledge.filter(Boolean).length,
+    wordsMastered: knowledge.filter((k) => k === "mastered").length,
+    mathLevelsUp: mathLevelsUp(mathRows.map((r) => Number(r.level) || 1)),
+  };
+  const lessonsToday = profile.today.day === today ? profile.today.lessons : 0;
 
   const beats: QuestBeat[] = [
     {
@@ -108,6 +127,12 @@ export default async function LearnPage() {
       />
 
       <div className="space-y-3">
+        <PetCard
+          learner={learner}
+          growth={growth}
+          points={growthPoints(growth)}
+          mood={petMood(lessonsToday, profile.dailyGoal)}
+        />
         <TodayQuest beats={beats} />
         <SchoolStrip href={unit ? `/learn/${unit._id}` : "/me/lists"} />
 

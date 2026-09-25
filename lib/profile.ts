@@ -1,6 +1,6 @@
 import { currentLearner } from "@/lib/auth";
 import { db, learnerModels } from "@/lib/db";
-import { LEARNER_NAMES } from "@/lib/learners";
+import { LEARNER_IDS, LEARNER_NAMES, type LearnerId } from "@/lib/learners";
 import { PROFILE_KEY, toProfileState } from "@/lib/models/Profile";
 import type { ProfileState } from "@/lib/types";
 
@@ -43,6 +43,21 @@ async function readProfileDoc() {
     { $setOnInsert: { key: PROFILE_KEY, name: LEARNER_NAMES[learner] } },
     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   ).lean();
+}
+
+/**
+ * Each child's profile, for the family scoreboard. Read-only: a child who has
+ * never played (or has no PIN set) is left out rather than created.
+ */
+export async function getFamilyProfiles(): Promise<{ learner: LearnerId; state: ProfileState }[]> {
+  const out: { learner: LearnerId; state: ProfileState }[] = [];
+  for (const learner of LEARNER_IDS) {
+    if (learner === "wissam" && !process.env.WISSAM_PIN) continue;
+    const { Profile } = await learnerModels(learner);
+    const doc = await Profile.findOne({ key: PROFILE_KEY }).lean();
+    if (doc) out.push({ learner, state: toProfileState(doc) });
+  }
+  return out;
 }
 
 /** A profile write that keeps losing the race is a bug, not bad luck: one boy, one app. */
