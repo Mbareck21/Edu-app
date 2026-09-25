@@ -15,8 +15,8 @@ import {
   type MathMode,
 } from "@/components/drill/options";
 import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Icon from "@/components/ui/Icon";
+import DrillFoldTitle from "@/components/drill/DrillFoldTitle";
+import Fold from "@/components/ui/Fold";
 
 export type MathDrillCardProps = {
   skills: { id: string; name: string }[];
@@ -51,16 +51,17 @@ export default function MathDrillCard({ skills, bests, autoLevels }: MathDrillCa
   }
 
   return (
-    <Card className="mt-4">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-9 w-9 items-center justify-center rounded-full"
-          style={{ background: "var(--color-purple-soft)", color: "var(--color-purple)" }}
-        >
-          <Icon name="math" size={20} />
-        </span>
-        <h2 className="font-display text-xl font-bold">Math drills</h2>
-      </div>
+    <Fold
+      className="mt-4"
+      title={
+        <DrillFoldTitle
+          icon="math"
+          color="purple"
+          title="Math drills"
+          line={`${skills.length} skills · relaxed or against the clock`}
+        />
+      }
+    >
 
       <ChoiceRow
         label="Skill"
@@ -120,7 +121,7 @@ export default function MathDrillCard({ skills, bests, autoLevels }: MathDrillCa
       >
         Start
       </Button>
-    </Card>
+    </Fold>
   );
 }
 

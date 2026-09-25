@@ -56,11 +56,13 @@ export default function QuestionPad({
 }: QuestionPadProps) {
   return (
     <>
-      {/* min-h-0 lets this area shrink and scroll, so the keypad and Check
-          stay on screen on a small phone instead of the page growing. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-3">
+      {/* The card fills the space above the keypad, and the picture in it
+          grows or shrinks to what is left under the prompt, so the whole
+          figure stays in view. The area still scrolls as a last resort on a
+          very short screen, so the keypad and Check never leave it. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-1 pb-2">
         {header}
-        <Card className="min-h-[140px]">
+        <Card className="flex flex-1 flex-col">
           {question ? (
             <>
               {/* A new question closes any open word: keyed on the prompt. */}
@@ -75,39 +77,40 @@ export default function QuestionPad({
         </Card>
       </div>
 
-      <div className="px-4 pb-4" style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
-        <div
-          key={shakeKey}
-          className={`mb-3 flex h-16 items-center justify-center rounded-card border-2 font-display text-3xl font-bold ${
-            flash === "wrong" ? "q-shake" : ""
-          }`}
-          style={{
-            background:
-              flash === "correct"
-                ? "var(--color-green-soft)"
-                : flash === "wrong"
-                  ? "var(--color-coral-soft)"
-                  : "#fff",
-            borderColor:
-              flash === "correct"
-                ? "var(--color-green)"
-                : flash === "wrong"
-                  ? "var(--color-coral)"
-                  : "var(--color-purple)",
-            color:
-              flash === "correct"
-                ? "var(--color-green-dark)"
-                : flash === "wrong"
-                  ? "var(--color-coral-dark)"
-                  : "var(--color-ink)",
-          }}
-          aria-live="polite"
-          aria-label="Your answer"
-        >
-          {reveal !== null ? reveal : input || <span style={{ color: "var(--color-faint)" }}>?</span>}
-        </div>
-
+      <div className="px-4" style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
         <NumberPad
+          display={
+            <div
+              key={shakeKey}
+              className={`flex h-14 items-center justify-center rounded-card border-2 font-display text-3xl font-bold ${
+                flash === "wrong" ? "q-shake" : ""
+              }`}
+              style={{
+                background:
+                  flash === "correct"
+                    ? "var(--color-green-soft)"
+                    : flash === "wrong"
+                      ? "var(--color-coral-soft)"
+                      : "#fff",
+                borderColor:
+                  flash === "correct"
+                    ? "var(--color-green)"
+                    : flash === "wrong"
+                      ? "var(--color-coral)"
+                      : "var(--color-purple)",
+                color:
+                  flash === "correct"
+                    ? "var(--color-green-dark)"
+                    : flash === "wrong"
+                      ? "var(--color-coral-dark)"
+                      : "var(--color-ink)",
+              }}
+              aria-live="polite"
+              aria-label="Your answer"
+            >
+              {reveal !== null ? reveal : input || <span style={{ color: "var(--color-faint)" }}>?</span>}
+            </div>
+          }
           onInput={(d) => setInput((v) => (v.length >= MAX_DIGITS ? v : v === "0" ? d : v + d))}
           onBackspace={() => setInput((v) => v.slice(0, -1))}
           onCheck={onCheck}
@@ -128,11 +131,14 @@ export default function QuestionPad({
 function Prompt({ prompt }: { prompt: string }) {
   const [open, setOpen] = useState<MathTerm | null>(null);
   const segments = termSegments(prompt);
+  // A long word problem in the big type runs to five or six lines on a phone
+  // and pushes the picture off the card.
+  const size = prompt.length > 40 ? "text-xl" : "text-2xl";
   return (
-    <div>
+    <div className="shrink-0">
       <div className="flex items-start gap-3">
         <AudioButton text={speakable(prompt)} size={44} color="purple" label="Hear the question" />
-        <p className="min-w-0 flex-1 font-display text-2xl leading-snug font-bold">
+        <p className={`min-w-0 flex-1 font-display ${size} leading-snug font-bold`}>
           {segments.map((s, i) =>
             s.term ? (
               <button

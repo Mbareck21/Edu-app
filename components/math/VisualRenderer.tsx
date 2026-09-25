@@ -40,9 +40,21 @@ export default function VisualRenderer({ visual, op }: VisualRendererProps) {
   }
 }
 
+/**
+ * Takes the room left on the card under the prompt. A drawn figure (FIGURE)
+ * grows and shrinks with it; the rest keep their own size.
+ */
 function Frame({ children }: { children: ReactNode }) {
-  return <div className="mt-4 flex w-full justify-center">{children}</div>;
+  return <div className="mt-2 flex w-full flex-1 flex-col items-center justify-center">{children}</div>;
 }
+
+/**
+ * For the SVG figures: a zero basis so the figure never pushes the card
+ * taller than the screen, a floor so it stays readable (the area scrolls
+ * below that), and a ceiling so it does not blow up on a tall phone. The
+ * viewBox keeps its shape; the drawing centres in whatever box it gets.
+ */
+const FIGURE = "w-full max-w-[320px] min-h-[100px] max-h-[260px] flex-1 basis-0";
 
 // ------------------------------------------------------------------- groups
 
@@ -172,8 +184,7 @@ function RectShape({
   return (
     <svg
       viewBox={`0 0 200 ${rh + 60}`}
-      width="100%"
-      style={{ maxWidth: 260 }}
+      className={FIGURE}
       role="img"
       aria-label={unknown === "h" ? `Rectangle ${w} by an unknown side` : `Rectangle ${w} by ${h}`}
     >
@@ -212,10 +223,10 @@ function DataTable({ rows }: { rows: readonly DataRow[] }) {
     <table className="w-full max-w-[260px] overflow-hidden rounded-tile border-2" style={{ borderColor: LINE }}>
       <thead>
         <tr style={{ background: PURPLE_SOFT }}>
-          <th className="px-3 py-1.5 text-left font-display text-sm" style={{ color: "var(--color-purple-dark)" }}>
+          <th className="px-3 py-1 text-left font-display text-sm" style={{ color: "var(--color-purple-dark)" }}>
             Color
           </th>
-          <th className="px-3 py-1.5 text-right font-display text-sm" style={{ color: "var(--color-purple-dark)" }}>
+          <th className="px-3 py-1 text-right font-display text-sm" style={{ color: "var(--color-purple-dark)" }}>
             Kids
           </th>
         </tr>
@@ -223,8 +234,8 @@ function DataTable({ rows }: { rows: readonly DataRow[] }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.label} style={{ borderTop: `1px solid ${LINE}` }}>
-            <td className="px-3 py-1.5 text-left text-sm font-bold">{r.label}</td>
-            <td className="px-3 py-1.5 text-right font-display text-base font-bold">{r.value}</td>
+            <td className="px-3 py-1 text-left text-sm font-bold">{r.label}</td>
+            <td className="px-3 py-1 text-right font-display text-base font-bold">{r.value}</td>
           </tr>
         ))}
       </tbody>
@@ -295,9 +306,16 @@ function AngleWedge({ total, known }: { total: number; known: number }) {
   const restMid = known + rest / 2;
   const knownLabel = onCircle(cx, cy, r * 0.6, knownMid);
   const restLabel = onCircle(cx, cy, r * 0.6, restMid);
+  // Crop the viewBox to the drawing (a quarter turn only uses the right half)
+  // so the wedge draws as big as the space allows.
+  const top = cy - r - 12;
+  const left = total <= 90 ? cx - 40 : cx - r - 12;
+  const right = cx + r + 12;
+  const labelY = (total === 360 ? cy + r : cy) + 24;
+  const box = `${left} ${top} ${right - left} ${labelY + 8 - top}`;
 
   return (
-    <svg viewBox="0 0 200 170" width="100%" style={{ maxWidth: 240 }} role="img" aria-label={`${total} degrees, ${known} known`}>
+    <svg viewBox={box} className={FIGURE} role="img" aria-label={`${total} degrees, ${known} known`}>
       <path d={sector(cx, cy, r, 0, known)} fill={PURPLE_SOFT} />
       <path d={sector(cx, cy, r, known, total)} fill="#fff" />
       {total === 360 ? (
@@ -322,7 +340,7 @@ function AngleWedge({ total, known }: { total: number; known: number }) {
           ?
         </text>
       ) : null}
-      <text x={100} y={162} textAnchor="middle" fontSize={12} fontWeight={700} fill={MUTED}>
+      <text x={(left + right) / 2} y={labelY} textAnchor="middle" fontSize={12} fontWeight={700} fill={MUTED}>
         {total}° in all
       </text>
     </svg>
@@ -477,7 +495,7 @@ function PlaneShape({ name }: { name: ShapeName }) {
   });
 
   return (
-    <svg viewBox="0 0 200 132" width="100%" style={{ maxWidth: 240 }} role="img" aria-label={name}>
+    <svg viewBox="0 0 200 132" className={FIGURE} role="img" aria-label={name}>
       <polygon
         points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
         fill={PURPLE_SOFT}
