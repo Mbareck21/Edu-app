@@ -23,6 +23,13 @@ export type CollectionBadge = {
 export default function CreatureCollection({ badges }: { badges: CollectionBadge[] }) {
   const [open, setOpen] = useState<CollectionBadge | null>(null);
   const found = badges.filter((b) => b.earnedAt).length;
+  const sets = [badges.slice(0, SET_ONE_SIZE), badges.slice(SET_ONE_SIZE)];
+  // One set at a time, starting on the first one still to finish.
+  const [tab, setTab] = useState(() => {
+    const i = sets.findIndex((set) => set.some((b) => !b.earnedAt));
+    return i === -1 ? 0 : i;
+  });
+  const set = sets[tab];
 
   return (
     <Card className="mt-3">
@@ -30,52 +37,61 @@ export default function CreatureCollection({ badges }: { badges: CollectionBadge
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {found} of {badges.length} found. Tap one to meet it.
       </p>
-      {[badges.slice(0, SET_ONE_SIZE), badges.slice(SET_ONE_SIZE)].map((set, n) => (
-        <section key={n}>
-          <h3 className="mt-4 font-display text-sm font-bold">
-            {n === 0 ? "Set 1" : "Set 2: bigger goals"}
-            <span className="ml-2 font-normal" style={{ color: "var(--color-muted)" }}>
-              {set.filter((b) => b.earnedAt).length} of {set.length}
-            </span>
-          </h3>
-          <ul className="mt-2 grid grid-cols-3 gap-2">
-            {set.map((badge, i) => {
-              const got = Boolean(badge.earnedAt);
-              return (
-                <li key={badge.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (got) sfx.chest();
-                      else sfx.tap();
-                      setOpen(badge);
-                    }}
-                    className="press-3d flex w-full flex-col items-center rounded-card border-2 px-1 pt-2 pb-2"
-                    style={{
-                      background: got ? "var(--color-gold-soft)" : "var(--color-sand)",
-                      borderColor: got ? "var(--color-gold)" : "var(--color-line)",
-                      ["--btn-shade" as string]: got ? "var(--color-gold)" : "var(--color-line)",
-                    }}
-                  >
-                    <span
-                      className={got ? "q-float block" : "block"}
-                      style={got ? { animationDelay: `${(i % 3) * 0.4}s` } : undefined}
-                    >
-                      <Creature badgeId={badge.id} locked={!got} size={72} />
-                    </span>
-                    <span className="mt-1 font-display text-xs font-bold leading-tight">
-                      {got ? creatureFor(badge.id).name.split(" ")[0] : "???"}
-                    </span>
-                    <span className="text-[11px] leading-tight" style={{ color: "var(--color-muted)" }}>
-                      {badge.name}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+      <div className="mt-3 grid grid-cols-2 gap-2" role="tablist">
+        {sets.map((s, n) => (
+          <button
+            key={n}
+            type="button"
+            role="tab"
+            aria-selected={tab === n}
+            onClick={() => {
+              sfx.tap();
+              setTab(n);
+            }}
+            className="rounded-full px-3 py-1.5 font-display text-sm font-bold"
+            style={{
+              background: tab === n ? "var(--color-gold-soft)" : "var(--color-sand)",
+              color: tab === n ? "var(--color-gold-ink)" : "var(--color-muted)",
+            }}
+          >
+            {n === 0 ? "Set 1" : "Set 2"} · {s.filter((b) => b.earnedAt).length}/{s.length}
+          </button>
+        ))}
+      </div>
+      <ul className="mt-3 grid grid-cols-4 gap-2">
+        {set.map((badge, i) => {
+          const got = Boolean(badge.earnedAt);
+          return (
+            <li key={badge.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (got) sfx.chest();
+                  else sfx.tap();
+                  setOpen(badge);
+                }}
+                aria-label={got ? creatureFor(badge.id).name : `Mystery creature: ${badge.name}`}
+                className="press-3d flex w-full flex-col items-center rounded-card border-2 px-1 pt-1.5 pb-1.5"
+                style={{
+                  background: got ? "var(--color-gold-soft)" : "var(--color-sand)",
+                  borderColor: got ? "var(--color-gold)" : "var(--color-line)",
+                  ["--btn-shade" as string]: got ? "var(--color-gold)" : "var(--color-line)",
+                }}
+              >
+                <span
+                  className={got ? "q-float block" : "block"}
+                  style={got ? { animationDelay: `${(i % 4) * 0.4}s` } : undefined}
+                >
+                  <Creature badgeId={badge.id} locked={!got} size={52} />
+                </span>
+                <span className="mt-0.5 font-display text-[11px] font-bold leading-tight">
+                  {got ? creatureFor(badge.id).name.split(" ")[0] : "???"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
       {open ? <CreatureSheet badge={open} onClose={() => setOpen(null)} /> : null}
     </Card>
   );
