@@ -506,7 +506,7 @@ function ItemRunnerInner({
           accuracy={accuracy}
           perfect={outcome.answered > 0 && outcome.correct === outcome.answered}
           leveledUp={outcome.gained?.leveledUp}
-          newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
+          newBadge={badge ? { id: badge.id, name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={primary}
           secondary={secondary}
           note={outcome.note}

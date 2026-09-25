@@ -42,18 +42,17 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
   // already been sorted to the bottom, instead of looking untouched.
   const listChoices: Choice[] = lists.map((l) => ({
     value: `list:${l.listId}`,
-    label: l.name,
+    // "School: " opens most names; on a phone it only pushed the rest off the line.
+    label: l.name.replace(/^School:\s*/i, ""),
     note: l.toGo === 0 ? "done" : `${l.toGo} to go`,
     disabled: l.total === 0,
   }));
-  const sourceChoices: Choice[] = oneList
-    ? listChoices
-    : [
-        { value: "all", label: "All words", note: all === 0 ? "all done" : `${all} to go`, disabled: total === 0 },
-        ...listChoices,
-        { value: "weak", label: "Weak", note: String(weak), disabled: weak === 0 },
-        { value: "due", label: "Due now", note: String(due), disabled: due === 0 },
-      ];
+  // The mixes are short, so they stay chips; the lists get a row each.
+  const mixChoices: Choice[] = [
+    { value: "all", label: "All words", note: all === 0 ? "all done" : `${all} to go`, disabled: total === 0 },
+    { value: "weak", label: "Weak", note: String(weak), disabled: weak === 0 },
+    { value: "due", label: "Due now", note: String(due), disabled: due === 0 },
+  ];
 
   // "Remember" only works on one list, so switching to it moves the source.
   function chooseMode(next: string) {
@@ -94,7 +93,16 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
         </p>
       ) : (
         <>
-          <ChoiceRow label="Words" choices={sourceChoices} value={src} onChange={setSrc} />
+          {oneList ? null : (
+            <ChoiceRow label="Words" choices={mixChoices} value={src} onChange={setSrc} />
+          )}
+          <ChoiceRow
+            label={oneList ? "Words" : "Or one list"}
+            choices={listChoices}
+            value={src}
+            onChange={setSrc}
+            layout="list"
+          />
           <ChoiceRow
             label="Drill"
             choices={VOCAB_MODES.map((m) => ({ value: m, label: VOCAB_MODE_LABEL[m] }))}

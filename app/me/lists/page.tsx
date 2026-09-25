@@ -5,6 +5,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import DeleteListButton from "@/components/words/DeleteListButton";
+import LockButton from "@/components/words/LockButton";
 import NewListForm from "@/components/words/NewListForm";
 import SchoolLists, { type SeedOption } from "@/components/words/SchoolLists";
 import { WORD_PACKS } from "@/lib/word-packs";
@@ -14,6 +15,7 @@ import {
   scienceUnitForWeek,
   themeForWeek,
 } from "@/lib/curriculum";
+import { adultLockOn } from "@/lib/adult";
 import { currentLearner } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { LEARNER_NAMES } from "@/lib/learners";
@@ -128,7 +130,10 @@ export default async function WordsPage() {
   return (
     <AppShell>
       <header className="pt-4 pb-5">
-        <h1 className="font-display text-3xl font-bold">Word lists</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-display text-3xl font-bold">Word lists</h1>
+          {adultLockOn() ? <LockButton /> : null}
+        </div>
         <p className="mt-1 text-base" style={{ color: "var(--color-muted)" }}>
           Build the lists he learns from, and print worksheets. He never sees this page.
         </p>

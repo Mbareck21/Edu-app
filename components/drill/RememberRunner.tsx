@@ -207,7 +207,7 @@ export default function RememberRunner({
           accuracy={words.length === 0 ? 0 : found.length / words.length}
           perfect={words.length > 0 && found.length === words.length}
           leveledUp={outcome.gained?.leveledUp}
-          newBadge={badge ? { name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
+          newBadge={badge ? { id: badge.id, name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
           primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
           secondary={{ label: "All drills", href: "/drill" }}
           note={outcome.note}

@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
+import CreatureCollection from "@/components/badges/CreatureCollection";
 import FamilyScoreboard from "@/components/me/FamilyScoreboard";
 import ProfileSettings from "@/components/ProfileSettings";
 import ReadingProgressCard from "@/components/reading/ReadingProgressCard";
@@ -247,37 +248,14 @@ export default async function MePage() {
         </dl>
       </Card>
 
-      {/* Badges */}
-      <Card className="mt-3">
-        <h2 className="font-display text-lg font-bold">Badges</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          {earned.size} of {BADGES.length}
-        </p>
-        <ul className="mt-3 grid grid-cols-3 gap-3">
-          {BADGES.map((badge) => {
-            const got = earned.has(badge.id);
-            return (
-              <li key={badge.id} className="text-center">
-                <span
-                  className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
-                  style={{
-                    background: got ? "var(--color-gold-soft)" : "var(--color-sand)",
-                    color: got ? "var(--color-gold-ink)" : "var(--color-faint)",
-                  }}
-                >
-                  <Icon name={got ? badge.icon : "lock"} size={30} />
-                </span>
-                <p className="mt-1 font-display text-xs font-bold leading-tight">
-                  {badge.name}
-                </p>
-                <p className="text-[11px] leading-tight" style={{ color: "var(--color-muted)" }}>
-                  {badge.blurb}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
+      <CreatureCollection
+        badges={BADGES.map((b) => ({
+          id: b.id,
+          name: b.name,
+          blurb: b.blurb,
+          earnedAt: earned.get(b.id),
+        }))}
+      />
 
       {/* Word lists — grown-up work, moved off the Words tab so the tab a
           nine-year-old taps hands him something to do instead of an editor. */}

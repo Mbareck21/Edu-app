@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import Creature from "@/components/badges/Creature";
 import Button, { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import { fireConfetti } from "@/components/ui/Confetti";
 import { clock } from "@/components/ui/time";
+import { creatureFor } from "@/lib/creatures";
 import { sfx } from "@/lib/sfx";
 
 export type CompleteAction =
@@ -25,7 +27,7 @@ export type LessonCompleteProps = {
   perfect?: boolean;
   leveledUp?: boolean;
   /** Shown as a callout under the tiles. */
-  newBadge?: { name: string; blurb: string; icon: IconName } | null;
+  newBadge?: { id?: string; name: string; blurb: string; icon: IconName } | null;
   primary: CompleteAction;
   secondary?: CompleteAction;
   /** "Saved later" note when the post was queued offline. */
@@ -138,14 +140,23 @@ export default function LessonComplete({
             className="q-pop mt-4 flex w-full items-center gap-3 rounded-card px-4 py-3 text-left"
             style={{ background: "var(--color-gold-soft)" }}
           >
-            <span style={{ color: "var(--color-gold-ink)" }}>
-              <Icon name={newBadge.icon} size={30} />
-            </span>
+            {newBadge.id ? (
+              <span className="q-bounce-in shrink-0">
+                <Creature badgeId={newBadge.id} size={64} />
+              </span>
+            ) : (
+              <span style={{ color: "var(--color-gold-ink)" }}>
+                <Icon name={newBadge.icon} size={30} />
+              </span>
+            )}
             <div className="min-w-0">
               <p className="font-display text-base font-bold" style={{ color: "var(--color-gold-ink)" }}>
-                New badge: {newBadge.name}
+                {newBadge.id ? `You found ${creatureFor(newBadge.id).name}!` : `New badge: ${newBadge.name}`}
               </p>
-              <p className="text-sm">{newBadge.blurb}</p>
+              <p className="text-sm">
+                {newBadge.blurb}
+                {newBadge.id ? " See it on Me." : ""}
+              </p>
             </div>
           </div>
         ) : null}

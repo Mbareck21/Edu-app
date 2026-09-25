@@ -17,6 +17,11 @@ export type ChoiceRowProps = {
   value: string;
   onChange: (value: string) => void;
   color?: AccentColor;
+  /**
+   * "wrap" = chips side by side (short labels). "list" = one full-width row
+   * each, count on the right: long names stay readable instead of crammed.
+   */
+  layout?: "wrap" | "list";
 };
 
 /**
@@ -29,15 +34,21 @@ export default function ChoiceRow({
   value,
   onChange,
   color = "blue",
+  layout = "wrap",
 }: ChoiceRowProps) {
   const t = tone(color);
+  const list = layout === "list";
 
   return (
     <div className="mt-3">
       <p className="mb-1.5 font-display text-sm font-bold" style={{ color: "var(--color-muted)" }}>
         {label}
       </p>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={label}>
+      <div
+        className={list ? "grid gap-2" : "flex flex-wrap gap-2"}
+        role="radiogroup"
+        aria-label={label}
+      >
         {choices.map((choice) => {
           const on = choice.value === value;
           return (
@@ -52,17 +63,21 @@ export default function ChoiceRow({
                 sfx.tap();
                 onChange(choice.value);
               }}
-              className="press-3d flex min-h-[48px] items-center gap-1.5 rounded-full border-2 px-4 font-display text-[15px] font-bold disabled:opacity-40"
+              className={
+                list
+                  ? "press-3d flex min-h-[48px] w-full items-center justify-between gap-3 rounded-tile border-2 px-4 py-2 text-left font-display text-[15px] font-bold leading-tight disabled:opacity-40"
+                  : "press-3d flex min-h-[48px] items-center gap-1.5 rounded-full border-2 px-4 font-display text-[15px] font-bold disabled:opacity-40"
+              }
               style={{
                 background: on ? t.soft : "#fff",
                 borderColor: on ? t.base : "var(--color-line)",
                 color: on ? t.onSoft : "var(--color-ink)",
               }}
             >
-              {choice.label}
+              <span className={list ? "min-w-0 flex-1" : undefined}>{choice.label}</span>
               {choice.note ? (
                 <span
-                  className="text-xs font-bold"
+                  className="shrink-0 whitespace-nowrap text-xs font-bold"
                   style={{ color: on ? t.onSoft : "var(--color-muted)" }}
                 >
                   {choice.note}
