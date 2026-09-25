@@ -1,5 +1,6 @@
 import ChainRunner from "@/components/stuck/ChainRunner";
 import RememberRunner from "@/components/drill/RememberRunner";
+import RescueRunner from "@/components/drill/RescueRunner";
 import VocabDrillRunner from "@/components/drill/VocabDrillRunner";
 import {
   VOCAB_MODE_LABEL,
@@ -14,6 +15,7 @@ import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
 import { db } from "@/lib/db";
+import { rescuable } from "@/lib/rescue";
 import { getPractice } from "@/lib/word-source";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,7 @@ const DONE_TITLE: Record<VocabMode, string> = {
   use: "You used them!",
   write: "Spelling test done!",
   remember: "Time!",
+  rescue: "Rescue done!",
   mixed: "Drill done!",
 };
 
@@ -72,6 +75,26 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   }
 
   const picked = pickWords(lists, source, now);
+
+  if (mode === "rescue") {
+    // The words he most needs, one of each, as long as each makes a fair puzzle.
+    const seen = new Set<string>();
+    const words = orderWords(picked, now, rng)
+      .map((p) => p.word)
+      .filter((w) => rescuable(w.word) && !seen.has(w.word) && Boolean(seen.add(w.word)))
+      .slice(0, count)
+      .map((w) => ({ word: w.word, clue: w.clue, arabic: w.arabic }));
+    return (
+      <RescueRunner
+        key={runKey}
+        words={words}
+        seed={seed}
+        sessionRef={sessionRef}
+        listId={listId}
+        againHref={againHref}
+      />
+    );
+  }
 
   if (mode === "flashcards") {
     // Was a flip card rated Easy or Hard by the child himself, which is not

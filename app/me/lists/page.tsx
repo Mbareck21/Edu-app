@@ -3,8 +3,6 @@ import Link from "next/link";
 import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
-import { buttonClass, buttonStyle } from "@/components/ui/Button";
-import DeleteListButton from "@/components/words/DeleteListButton";
 import LockButton from "@/components/words/LockButton";
 import NewListForm from "@/components/words/NewListForm";
 import SchoolLists, { type SeedOption } from "@/components/words/SchoolLists";
@@ -64,23 +62,6 @@ function StateBar({ list }: { list: ClientWordList }) {
   );
 }
 
-function PrintLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="press-3d inline-flex h-11 items-center rounded-full border-2 px-4 font-display text-sm font-bold"
-      style={{
-        borderColor: "var(--color-line)",
-        background: "#fff",
-        color: "var(--color-ink)",
-        ["--btn-shade" as string]: "var(--color-line)",
-      }}
-    >
-      {label}
-    </Link>
-  );
-}
-
 function seedOptions(lists: ClientWordList[]): SeedOption[] {
   const byName = new Map(lists.map((l) => [l.name, l._id]));
   const todayISO = todayKey();
@@ -135,7 +116,7 @@ export default async function WordsPage() {
           {adultLockOn() ? <LockButton /> : null}
         </div>
         <p className="mt-1 text-base" style={{ color: "var(--color-muted)" }}>
-          Build the lists he learns from, and print worksheets. He never sees this page.
+          Build the lists the children learn from. Tap a list to edit it.
         </p>
       </header>
 
@@ -154,56 +135,33 @@ export default async function WordsPage() {
             <ul className="space-y-3">
               {lists.map((list) => (
                 <li key={list._id}>
-                  <Card>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                  {/* The whole card opens the list: one big target, no row of
+                      small buttons to miss on a phone. Delete lives inside. */}
+                  <Link
+                    href={`/me/lists/${list._id}`}
+                    className="press-3d block rounded-card border bg-white p-4"
+                    style={{ borderColor: "var(--color-line)", ["--btn-shade" as string]: "var(--color-line)" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
                         <h3 className="font-display text-lg font-bold leading-tight">
-                          {list.name}
+                          {list.name.replace(/^School:\s*/i, "")}
                         </h3>
-                        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                          {list.words.length} words · reading level {list.readingLevel}
+                        <p className="mt-0.5 text-sm" style={{ color: "var(--color-muted)" }}>
+                          {list.words.length} words
                           {list.kind !== "pool" && list.addedBy !== me
                             ? ` · added by ${LEARNER_NAMES[list.addedBy]}`
                             : ""}
                         </p>
                       </div>
                       <span style={{ color: "var(--color-faint)" }}>
-                        <Icon name="words" size={24} />
+                        <Icon name="arrowRight" size={24} />
                       </span>
                     </div>
-
                     <div className="mt-3">
                       <StateBar list={list} />
                     </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Link
-                        href={`/me/lists/${list._id}`}
-                        className={buttonClass({ size: "md", color: "green" })}
-                        style={buttonStyle({ color: "green" })}
-                      >
-                        <Icon name="edit" size={18} />
-                        Edit
-                      </Link>
-                      {list.kind === "pool" || list.addedBy === me ? (
-                        <DeleteListButton id={list._id} name={list.name} />
-                      ) : null}
-                    </div>
-
-                    <div className="mt-3">
-                      <p
-                        className="mb-2 text-xs font-bold uppercase tracking-wide"
-                        style={{ color: "var(--color-muted)" }}
-                      >
-                        Print
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <PrintLink href={`/lists/${list._id}/crossword`} label="Crossword" />
-                        <PrintLink href={`/lists/${list._id}/scramble`} label="Scramble" />
-                        <PrintLink href={`/lists/${list._id}/wordsearch`} label="Word search" />
-                      </div>
-                    </div>
-                  </Card>
+                  </Link>
                 </li>
               ))}
             </ul>

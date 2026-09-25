@@ -23,7 +23,7 @@ export default async function EditListPage({ params }: { params: Promise<{ id: s
       </nav>
       <header className="mb-6">
         <h1 className="text-2xl font-bold">{list.name}</h1>
-        <p className="text-sm text-slate-500">Edit words and clues, then open a worksheet to print.</p>
+        <p className="text-sm text-slate-500">Edit words and clues.</p>
       </header>
       <ListEditor list={list} />
     </main>

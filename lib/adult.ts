@@ -44,7 +44,7 @@ export async function isAdultToken(token: string | undefined): Promise<boolean> 
 /** Pages only a grown-up opens: the list manager and the list editors. */
 export function isAdultPage(pathname: string): boolean {
   if (pathname === "/me/lists" || pathname.startsWith("/me/lists/")) return true;
-  // /lists/<id> is the old editor; its games (crossword, scramble…) stay open.
+  // /lists/<id> is the old editor; /lists/<id>/flashcards stays open.
   return /^\/lists\/[^/]+\/?$/.test(pathname);
 }
 

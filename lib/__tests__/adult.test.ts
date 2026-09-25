@@ -8,11 +8,10 @@ test("the lock is on only when ADULT_PIN is set", () => {
   assert.equal(adultLockOn({}), false);
 });
 
-test("the list manager and editors are grown-up pages; the games are not", () => {
+test("the list manager and editors are grown-up pages; flashcards are not", () => {
   assert.equal(isAdultPage("/me/lists"), true);
   assert.equal(isAdultPage("/me/lists/abc123"), true);
   assert.equal(isAdultPage("/lists/abc123"), true);
-  assert.equal(isAdultPage("/lists/abc123/crossword"), false);
   assert.equal(isAdultPage("/lists/abc123/flashcards"), false);
   assert.equal(isAdultPage("/me"), false);
   assert.equal(isAdultPage("/"), false);

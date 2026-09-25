@@ -20,6 +20,7 @@ export const VOCAB_MODES = [
   "use",
   "write",
   "remember",
+  "rescue",
   "mixed",
 ] as const;
 
@@ -38,6 +39,7 @@ export const VOCAB_MODE_LABEL: Record<VocabMode, string> = {
   use: "Use",
   write: "Spelling test",
   remember: "Remember",
+  rescue: "Word rescue",
   mixed: "Mixed",
 };
 
@@ -50,6 +52,7 @@ export const VOCAB_MODE_BLURB: Record<VocabMode, string> = {
   use: "Put the word in a sentence.",
   write: "Hear it, then write it. No help.",
   remember: "90 seconds. Write every word you remember.",
+  rescue: "Save the falling words! Tap the missing letters.",
   mixed: "A bit of everything.",
 };
 

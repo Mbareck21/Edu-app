@@ -5,7 +5,16 @@ import { useState } from "react";
 
 import Icon from "@/components/ui/Icon";
 
-export default function DeleteListButton({ id, name }: { id: string; name: string }) {
+/** `leaveTo`: where to go after deleting, when the page showed the list itself. */
+export default function DeleteListButton({
+  id,
+  name,
+  leaveTo,
+}: {
+  id: string;
+  name: string;
+  leaveTo?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
@@ -29,6 +38,8 @@ export default function DeleteListButton({ id, name }: { id: string; name: strin
           if (!res.ok) {
             const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
             alert(typeof data?.error === "string" ? data.error : "Could not delete the list.");
+          } else if (leaveTo) {
+            router.replace(leaveTo);
           }
           router.refresh();
         } finally {

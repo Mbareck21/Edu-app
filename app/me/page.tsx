@@ -262,7 +262,7 @@ export default async function MePage() {
       <Card className="mt-3">
         <h2 className="mb-1 font-display text-lg font-bold">Word lists</h2>
         <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
-          Add school units, edit words, print a crossword or a word search.
+          Add school units and edit words. Grown-ups only.
         </p>
         <Link
           href="/me/lists"

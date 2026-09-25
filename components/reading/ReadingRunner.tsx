@@ -16,6 +16,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import ArabicChip from "@/components/items/ArabicChip";
 import AudioButton from "@/components/items/AudioButton";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
+import FluencyReader from "@/components/reading/FluencyReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
 import { postReadingDone, postSession, saveNote } from "@/lib/offline-queue";
@@ -68,7 +69,7 @@ export type ReadingRunnerProps = {
 };
 
 type Phase = "words" | "mode" | "read" | "questions" | "done";
-type Mode = "listen" | "alone" | "echo";
+type Mode = "listen" | "alone" | "echo" | "aloud";
 
 const HINTS_BEFORE_REVEAL = 2;
 
@@ -111,7 +112,7 @@ function isReadingSaved(v: unknown): v is ReadingSaved {
       o.phase === "read" ||
       o.phase === "questions" ||
       o.phase === "done") &&
-    (o.mode === "listen" || o.mode === "alone" || o.mode === "echo") &&
+    (o.mode === "listen" || o.mode === "alone" || o.mode === "echo" || o.mode === "aloud") &&
     Array.isArray(o.qStates) &&
     o.qStates.every((q) => typeof q === "object" && q !== null && typeof q.done === "boolean") &&
     typeof o.qIdx === "number" &&
@@ -829,6 +830,26 @@ function ReadingRunnerInner({
           // story, and his answers, out from under him.
           disabled={busy !== null}
           onClick={() => {
+            setMode("aloud");
+            setEcho(null);
+            setWpm(null);
+            startedAtRef.current = Date.now();
+            watch.current = startStopwatch();
+            setPhase("read");
+          }}
+        >
+          <Icon name="mic" size={22} />
+          Read it out loud to me
+        </Button>
+        <Button
+          fullWidth
+          size="lg"
+          variant="secondary"
+          color="green"
+          // Not while a new passage is being written: it would swap the
+          // story, and his answers, out from under him.
+          disabled={busy !== null}
+          onClick={() => {
             setMode("alone");
             setEcho(null);
             setSeenPart(0);
@@ -842,7 +863,8 @@ function ReadingRunnerInner({
         </Button>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           <strong>Read after me</strong> plays one sentence at a time and listens
-          while you say it back.
+          while you say it back. <strong>Read it out loud to me</strong> counts
+          your words a minute. Can you beat your record?
         </p>
         {/* He must never be stuck with a passage he does not want. Before this
             the only way to a new one was to finish every question first. */}
@@ -887,6 +909,27 @@ function ReadingRunnerInner({
           }}
         />
         {glossPanel}
+      </div>
+    );
+  }
+
+  if (phase === "read" && mode === "aloud") {
+    return (
+      <div className="pt-5">
+        <div className="mb-3 flex items-center justify-between gap-2 px-4">
+          <h1 className="font-display text-2xl font-bold">{reading.title}</h1>
+          <Pill color="green" size="sm">
+            L{level}
+          </Pill>
+        </div>
+        <FluencyReader
+          text={reading.paragraph}
+          onFinish={(wcpm) => {
+            // His best read today goes into the reading record, like a timed read.
+            setWpm(wcpm);
+            setPhase("questions");
+          }}
+        />
       </div>
     );
   }

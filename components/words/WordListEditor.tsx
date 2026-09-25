@@ -63,7 +63,8 @@ export default function WordListEditor({
 }) {
   const router = useRouter();
   const [name, setName] = useState(list.name);
-  const [hiddenMessage, setHiddenMessage] = useState(list.hiddenMessage);
+  // The word search that used it is gone; the saved value is kept as it is.
+  const hiddenMessage = list.hiddenMessage;
   const [rows, setRows] = useState<Row[]>(() => toRows(list.words, states));
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -207,32 +208,18 @@ export default function WordListEditor({
           onChange={(e) => setName(e.target.value)}
         />
 
-        <label className="mt-4 block font-display text-sm font-bold" htmlFor="list-hm">
-          Hidden message
-        </label>
-        <input
-          id="list-hm"
-          className="mt-2 min-h-[52px] w-full rounded-tile border-2 px-3 text-base"
-          style={{ borderColor: "var(--color-line)", background: "#fff" }}
-          placeholder="great job"
-          value={hiddenMessage}
-          onChange={(e) => setHiddenMessage(e.target.value)}
-        />
-        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          Letters only, up to about 30. It hides inside the word search.
-        </p>
       </Card>
 
       <Card>
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-bold">Words</h2>
+          <h2 className="font-display text-lg font-bold">Words ({rows.length})</h2>
           <Button size="md" variant="secondary" color="green" onClick={addRow} disabled={busy !== null}>
             <Icon name="plus" size={18} />
             Add
           </Button>
         </div>
 
-        <ul className="mt-4 space-y-4">
+        <ul className="mt-4 space-y-3">
           {rows.map((r, i) => {
             // Someone else's word on a shared list: its meaning can be fixed,
             // but only they can take it out (or respell it, which is the same).
@@ -243,28 +230,28 @@ export default function WordListEditor({
               className="rounded-tile border p-3"
               style={{ borderColor: "var(--color-line)" }}
             >
+              <div className="mb-2 flex items-center gap-2">
+                <StateChip state={r.state} />
+                {locked && r.owner ? (
+                  <span className="text-xs font-bold" style={{ color: "var(--color-muted)" }}>
+                    {LEARNER_NAMES[r.owner]}&rsquo;s word
+                  </span>
+                ) : null}
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   aria-label="word"
-                  className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 px-3 font-display text-base font-bold"
+                  className="min-h-[48px] min-w-0 flex-1 rounded-tile border-2 px-3 font-display text-lg font-bold"
                   style={{ borderColor: "var(--color-line)", background: "#fff" }}
                   placeholder="word"
                   value={r.word}
                   readOnly={locked}
                   onChange={(e) => update(i, { word: e.target.value })}
                 />
-                <StateChip state={r.state} />
-                {locked && r.owner ? (
-                  <span
-                    className="shrink-0 text-xs font-bold"
-                    style={{ color: "var(--color-muted)" }}
-                  >
-                    {LEARNER_NAMES[r.owner]}&rsquo;s
-                  </span>
-                ) : (
+                {locked ? null : (
                   <button
                     type="button"
-                    aria-label="Remove word"
+                    aria-label={`Remove ${r.word || "word"}`}
                     onClick={() => removeRow(i)}
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
                     style={{ color: "var(--color-muted)" }}
@@ -273,28 +260,44 @@ export default function WordListEditor({
                   </button>
                 )}
               </div>
-              <input
-                aria-label="clue"
-                className="mt-2 min-h-[48px] w-full rounded-tile border-2 px-3 text-base"
-                style={{ borderColor: "var(--color-line)", background: "#fff" }}
-                placeholder="clue"
-                value={r.clue}
-                onChange={(e) => update(i, { clue: e.target.value })}
-              />
-              <input
-                aria-label="arabic"
-                lang="ar"
-                dir="rtl"
-                className="mt-2 min-h-[48px] w-full rounded-tile border-2 px-3 text-base"
-                style={{ borderColor: "var(--color-line)", background: "#fff" }}
-                placeholder="الترجمة"
-                value={r.arabic}
-                onChange={(e) => update(i, { arabic: e.target.value })}
-              />
+              <label className="mt-2 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Meaning
+                <input
+                  className="mt-1 min-h-[44px] w-full rounded-tile border-2 px-3 text-base font-normal normal-case tracking-normal"
+                  style={{ borderColor: "var(--color-line)", background: "#fff", color: "var(--color-ink)" }}
+                  placeholder="What it means, in easy words"
+                  value={r.clue}
+                  onChange={(e) => update(i, { clue: e.target.value })}
+                />
+              </label>
+              <label className="mt-2 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+                Arabic
+                <input
+                  lang="ar"
+                  dir="rtl"
+                  className="mt-1 min-h-[44px] w-full rounded-tile border-2 px-3 text-base font-normal normal-case tracking-normal"
+                  style={{ borderColor: "var(--color-line)", background: "#fff", color: "var(--color-ink)" }}
+                  placeholder="الترجمة"
+                  value={r.arabic}
+                  onChange={(e) => update(i, { arabic: e.target.value })}
+                />
+              </label>
             </li>
             );
           })}
         </ul>
+        <Button
+          className="mt-4"
+          fullWidth
+          size="md"
+          variant="secondary"
+          color="green"
+          onClick={addRow}
+          disabled={busy !== null}
+        >
+          <Icon name="plus" size={18} />
+          Add a word
+        </Button>
       </Card>
 
       <Card variant="soft" color="green">
@@ -336,9 +339,19 @@ export default function WordListEditor({
         </p>
       ) : null}
 
-      <Button fullWidth size="lg" color="green" onClick={onSave} disabled={busy !== null}>
-        {busy === "saving" ? "Saving…" : "Save list"}
-      </Button>
+      {/* Pinned above the tab bar: on a long list, Save is never a long scroll away. */}
+      <div
+        className="sticky z-10 -mx-4 px-4 py-3"
+        style={{
+          // The tab bar is 60px plus its 1px top border.
+          bottom: "calc(61px + env(safe-area-inset-bottom))",
+          background: "var(--color-bg)",
+        }}
+      >
+        <Button fullWidth size="lg" color="green" onClick={onSave} disabled={busy !== null}>
+          {busy === "saving" ? "Saving…" : "Save list"}
+        </Button>
+      </div>
     </div>
   );
 }

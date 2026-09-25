@@ -172,9 +172,6 @@ export default function ListEditor({ list }: { list: ClientWordList }) {
         <button type="button" className="btn-primary" onClick={save} disabled={busy !== null}>
           {busy === "saving" ? "Saving…" : "Save"}
         </button>
-        <a className="btn-secondary" href={`/lists/${list._id}/crossword`}>Open Crossword</a>
-        <a className="btn-secondary" href={`/lists/${list._id}/scramble`}>Open Scramble</a>
-        <a className="btn-secondary" href={`/lists/${list._id}/wordsearch`}>Open Word Search</a>
         <a className="btn-secondary" href={`/learn/${list._id}/read`}>Open Reading</a>
         <a className="btn-secondary" href={`/lists/${list._id}/flashcards`}>Open Flashcards</a>
       </div>
