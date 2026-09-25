@@ -15,8 +15,8 @@ import {
   type VocabMode,
 } from "@/components/drill/options";
 import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Icon from "@/components/ui/Icon";
+import DrillFoldTitle from "@/components/drill/DrillFoldTitle";
+import Fold from "@/components/ui/Fold";
 
 export type WordDrillCardProps = {
   lists: { listId: string; name: string; total: number; toGo: number }[];
@@ -74,16 +74,17 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
   }
 
   return (
-    <Card className="mt-4">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-9 w-9 items-center justify-center rounded-full"
-          style={{ background: "var(--color-blue-soft)", color: "var(--color-blue)" }}
-        >
-          <Icon name="words" size={20} />
-        </span>
-        <h2 className="font-display text-xl font-bold">Word drills</h2>
-      </div>
+    <Fold
+      className="mt-4"
+      title={
+        <DrillFoldTitle
+          icon="words"
+          color="blue"
+          title="Word drills"
+          line={total === 0 ? "No words yet" : all > 0 ? `${all} words to go · ${weak} weak` : "Every word known. Keep them sharp!"}
+        />
+      }
+    >
 
       {/* `all` is only what is left to learn; once every word is known it hits
           zero, and the picker must stay so he can still drill them. */}
@@ -132,7 +133,7 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
           </Button>
         </>
       )}
-    </Card>
+    </Fold>
   );
 }
 
