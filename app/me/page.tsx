@@ -14,7 +14,7 @@ import SignOutButton from "@/components/SignOutButton";
 import { lastSevenDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { buildDigest } from "@/lib/digest";
-import { countKnowledge } from "@/lib/mastery";
+import { countKnowledge, uniqueWords } from "@/lib/mastery";
 import { toClientProfile } from "@/lib/models/Profile";
 import { toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
@@ -68,7 +68,7 @@ export default async function MePage() {
   const { WordList, SpellChain, TimesFact } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } }).lean();
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
-  const counts = countKnowledge(words);
+  const counts = countKnowledge(uniqueWords(words));
   const wordsKnown = counts.known + counts.mastered;
 
   const now = new Date();

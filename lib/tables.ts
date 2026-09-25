@@ -114,7 +114,8 @@ export function isDue(f: FactState, nowIso: string): boolean {
 /**
  * Apply one answer. Same shape as scheduleSkill for words: a right answer
  * before the fact is due is practice, not progress; the streak holds and the
- * due date stays. A miss zeroes the streak and makes it due now.
+ * due date stays. A miss zeroes the streak and makes it due now; a miss before
+ * the fact was due only halves it.
  */
 export function applyFactAnswer(
   f: FactState,
@@ -122,11 +123,12 @@ export function applyFactAnswer(
   ms: number,
   nowIso: string
 ): FactState {
+  const early = !isDue(f, nowIso);
   if (!correct) {
-    return { ...f, streak: 0, wrong: f.wrong + 1, lastFast: false, dueAt: nowIso, lastAt: nowIso };
+    const streak = early ? Math.floor(f.streak / 2) : 0;
+    return { ...f, streak, wrong: f.wrong + 1, lastFast: false, dueAt: nowIso, lastAt: nowIso };
   }
   const fast = ms >= 0 && ms < FAST_MS;
-  const early = !isDue(f, nowIso);
   const streak = early ? f.streak : f.streak + 1;
   const days = skillGapDays(Math.max(1, streak));
   return {

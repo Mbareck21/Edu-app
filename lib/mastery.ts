@@ -57,7 +57,9 @@ export function skillDue(skill: SkillState, now: Date): boolean {
 /**
  * One answer for one skill.
  * Right → streak + 1 and the next review moves out along the day ladder.
- * Wrong → streak back to 0 and the word is due again straight away.
+ * Wrong → streak back to 0 and the word is due again straight away. A slip in
+ * extra practice, before the word was due, only halves the streak: one wrong
+ * tile should not wipe out weeks of spaced reviews.
  *
  * A right answer given BEFORE the word was due keeps the streak where it is.
  * He practises the same list several times a day on purpose, and that repetition
@@ -66,17 +68,17 @@ export function skillDue(skill: SkillState, now: Date): boolean {
  * call a word known.
  */
 export function scheduleSkill(state: SkillState, correct: boolean, now: Date): SkillState {
+  // Practice before it was due still counts as practice, just not as progress.
+  const early = now.getTime() < new Date(state.dueAt).getTime();
   if (!correct) {
     return {
       correct: state.correct,
       wrong: state.wrong + 1,
-      streak: 0,
+      streak: early ? Math.floor(state.streak / 2) : 0,
       lastAt: now.toISOString(),
       dueAt: now.toISOString(),
     };
   }
-  // Practice before it was due still counts as practice, just not as progress.
-  const early = now.getTime() < new Date(state.dueAt).getTime();
   const streak = early ? state.streak : state.streak + 1;
   const days = skillGapDays(Math.max(1, streak));
   return {
@@ -97,10 +99,12 @@ export const STUCK_WINDOW_DAYS = 7;
  * misses are frequent, and every slip would flood the tab. `prev` is the
  * skill before this answer; a miss leaves streak 0 and the next right answer
  * always lifts it, so streak 0 with a miss on record means the last answer
- * was a miss.
+ * was a miss. An early miss only halves the streak, but it is the only answer
+ * that makes the skill due the moment it was given (dueAt equal to lastAt).
  */
 export function isStuckMiss(prev: SkillState, correct: boolean, now: Date): boolean {
-  if (correct || prev.wrong === 0 || prev.streak !== 0 || !prev.lastAt) return false;
+  const lastWasMiss = prev.streak === 0 || prev.dueAt === prev.lastAt;
+  if (correct || prev.wrong === 0 || !lastWasMiss || !prev.lastAt) return false;
   return now.getTime() - new Date(prev.lastAt).getTime() <= STUCK_WINDOW_DAYS * 86_400_000;
 }
 
@@ -133,6 +137,20 @@ export function skillsKnowledge(skills: WordSkills): "known" | "mastered" | null
 }
 
 export type KnowledgeCounts = Record<Knowledge, number>;
+
+/**
+ * One entry per word. The same word on two lists keeps its own progress on
+ * each; for counting, the one he knows best stands for both.
+ */
+export function uniqueWords(words: ClientWord[]): ClientWord[] {
+  const best = new Map<string, ClientWord>();
+  for (const w of words) {
+    const key = w.word.trim().toLowerCase();
+    const seen = best.get(key);
+    if (!seen || knowledgeRank(wordKnowledge(w)) > knowledgeRank(wordKnowledge(seen))) best.set(key, w);
+  }
+  return [...best.values()];
+}
 
 export function countKnowledge(words: ClientWord[]): KnowledgeCounts {
   const counts: KnowledgeCounts = { new: 0, learning: 0, known: 0, mastered: 0 };

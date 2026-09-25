@@ -12,7 +12,8 @@ function Bars({ values, max, good }: { values: number[]; max: number; good: (v: 
           className="w-6 rounded-t-md"
           style={{
             height: `${Math.max(8, Math.round((v / max) * 100))}%`,
-            background: good(v) ? "var(--color-green)" : "var(--color-gold)",
+            // Grey, not gold: gold reads as a prize, and these are the ones to beat.
+            background: good(v) ? "var(--color-green)" : "var(--color-faint)",
             opacity: i === values.length - 1 ? 1 : 0.75,
           }}
         />

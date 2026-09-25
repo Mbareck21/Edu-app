@@ -10,6 +10,7 @@ import {
   scheduleSkill,
   skillDue,
   skillGapDays,
+  uniqueWords,
   wordKnowledge,
 } from "@/lib/mastery";
 import { SKILL_IDS, type ClientWord, type SkillState } from "@/lib/models/WordList";
@@ -103,11 +104,16 @@ test("the next day counts at any time of day, not only after the same clock time
   assert.equal(s.streak, 2);
 });
 
-test("an early miss still resets the streak", () => {
+test("an early miss halves the streak instead of resetting it", () => {
   let s: SkillState = newSkillState(NOW);
   s = scheduleSkill(s, true, NOW);
   s = scheduleSkill(s, false, new Date(NOW.getTime() + 60_000));
-  assert.equal(s.streak, 0, "getting it wrong counts whenever it happens");
+  assert.equal(s.streak, 0, "half of 1 is still 0");
+  // A mastered word, slipped in extra practice before its review was due.
+  const mastered = { ...newSkillState(NOW), streak: 4, correct: 4, dueAt: dueAfterDays(NOW, 30).toISOString() };
+  s = scheduleSkill(mastered, false, NOW);
+  assert.equal(s.streak, 2);
+  assert.equal(s.dueAt, NOW.toISOString(), "due again straight away");
 });
 
 test("the review gap stops growing at 90 days", () => {
@@ -159,6 +165,11 @@ test("mastered needs 4 streaks of 4", () => {
   assert.equal(wordKnowledge(withStreaks(3, 16)), "known");
   assert.equal(wordKnowledge(withStreaks(4, 0)), "mastered");
   assert.equal(wordKnowledge(withStreaks(4, 16)), "mastered");
+});
+
+test("a word on two lists counts once, at its best", () => {
+  const counts = countKnowledge(uniqueWords([word(), { ...withStreaks(4), word: " Brave" }, word({ word: "calm" })]));
+  assert.deepEqual(counts, { new: 1, learning: 0, known: 0, mastered: 1 });
 });
 
 test("counts split the list and words known covers known + mastered", () => {
@@ -318,4 +329,8 @@ test("a word is stuck on a second miss in a row within a week", () => {
   assert.equal(isStuckMiss(missed(2), true, now), false, "a right answer is not a miss");
   assert.equal(isStuckMiss({ ...missed(2), streak: 1 }, false, now), false, "last answer was right");
   assert.equal(isStuckMiss({ ...missed(2), wrong: 0 }, false, now), false, "first miss ever");
+  // An early miss halved a streak of 4 to 2; a second miss is still stuck.
+  const halved = scheduleSkill({ ...missed(2), streak: 4, dueAt: now.toISOString() }, false, new Date(now.getTime() - 86_400_000));
+  assert.equal(halved.streak, 2);
+  assert.equal(isStuckMiss(halved, false, now), true);
 });
