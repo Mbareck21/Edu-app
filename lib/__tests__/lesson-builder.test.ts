@@ -18,6 +18,7 @@ import {
   LESSON_SIZE,
   buildLesson,
   buildProductionSession,
+  REVIEW_MIN,
   buildReviewSession,
   countForWord,
   isNewWord,
@@ -260,6 +261,26 @@ test("review pulls due skills from every list and caps the size", () => {
   assert.equal(items.every((i) => i.kind !== "learn-card"), true);
 });
 
+test("a review with one or two things due is topped up, due ones included", () => {
+  const due = (w: string) =>
+    word(w, {
+      srs: { interval: 1, dueAt: NOW.toISOString(), lastReviewed: NOW.toISOString(), reviewCount: 1, easyCount: 0, hardCount: 0 },
+      skills: skills({
+        recognize: { correct: 1, streak: 1, dueAt: new Date(NOW.getTime() - DAY).toISOString() },
+        listen: { correct: 1, streak: 1, dueAt: new Date(NOW.getTime() + 3 * DAY).toISOString() },
+        spell: { correct: 1, streak: 1, dueAt: new Date(NOW.getTime() + 3 * DAY).toISOString() },
+        use: { correct: 1, streak: 1, dueAt: new Date(NOW.getTime() + 3 * DAY).toISOString() },
+      }),
+    });
+  const items = buildReviewSession({
+    lists: [{ listId: "aaa", words: [due("river"), ...SEEN_LIST] }],
+    now: NOW,
+    rng: mulberry32(2),
+  });
+  assert.equal(items.length, REVIEW_MIN);
+  assert.ok(items.some((i) => i.word === "river" && i.skill === "recognize"), "the due skill is in");
+});
+
 test("review still has work when nothing is due", () => {
   const items = buildReviewSession({
     lists: [{ listId: "aaa", words: SEEN_LIST }],
@@ -407,10 +428,12 @@ test("a due recognize skill at streak 2+ is asked, and recorded, as recognize", 
     now: NOW,
     rng: mulberry32(3),
   });
-  assert.equal(items.length, 1);
+  // One skill due, topped up to REVIEW_MIN with what is due soonest.
+  assert.equal(items.length, REVIEW_MIN);
+  const gather = items.filter((i) => i.word === "gather" && i.skill === "recognize");
+  assert.equal(gather.length, 1);
   // Still the harder rung (the word in a sentence), but it feeds "recognize".
-  assert.equal(items[0].kind, "use-cloze");
-  assert.equal(items[0].skill, "recognize");
+  assert.equal(gather[0].kind, "use-cloze");
 
   const match = buildLesson({
     words: SEEN_LIST.map((s) => seen(s.word, 3)),

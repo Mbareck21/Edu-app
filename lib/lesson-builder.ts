@@ -34,6 +34,8 @@ import type { StepId } from "@/lib/types";
 export const LESSON_SIZE = 12;
 export const CHALLENGE_SIZE = 15;
 export const REVIEW_CAP = 30;
+/** Fewest items in a review: one or two due skills used to be the whole beat. */
+export const REVIEW_MIN = 8;
 export const PRODUCTION_SIZE = 6;
 /** Items per new word, after its learn card. */
 export const NEW_BLOCK_ITEMS = 3;
@@ -242,8 +244,9 @@ export type BuildReviewArgs = {
 
 /**
  * The Review beat: every due skill across every list, interleaved, weakest
- * first. When nothing is due it falls back to what is due soonest, so the beat
- * is never an empty screen.
+ * first. When little or nothing is due it tops up with what is due soonest,
+ * so the beat is never an empty screen nor a one-tap tick on the daily quest.
+ * Practice before a skill is due never moves its streak (see scheduleSkill).
  */
 export function buildReviewSession({
   lists,
@@ -268,12 +271,12 @@ export function buildReviewSession({
     }
   }
 
-  const chosen = due.length > 0 ? due : soon;
-  // `chosen` is already filtered to what is owed, so every task counts as due.
-  const sorted = orderByNeed(chosen, rng, (t) => ({ due: true, streak: t.streak }));
-  const limit = due.length > 0 ? cap : Math.min(cap, 12);
-  const items = sorted
-    .slice(0, limit)
+  // Each group is already filtered to what is owed, so every task counts as due.
+  const sortedDue = orderByNeed(due, rng, (t) => ({ due: true, streak: t.streak }));
+  const topUp = Math.max(0, (due.length > 0 ? REVIEW_MIN : 12) - due.length);
+  const sortedSoon = orderByNeed(soon, rng, (t) => ({ due: true, streak: t.streak })).slice(0, topUp);
+  const items = [...sortedDue, ...sortedSoon]
+    .slice(0, cap)
     .map((t) => itemForSkill(t.word, t.skill, t.pool, rng, isHard(t.word, t.skill)));
   return interleave(items);
 }
