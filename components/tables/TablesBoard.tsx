@@ -89,7 +89,12 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
 
   if (voice) {
     return (
-      <div className="-mx-4">
+      // Over the whole screen: in the page flow it sat under the heading,
+      // and the Start button fell below the bottom edge.
+      <div
+        className="fixed inset-0 z-50 mx-auto w-full max-w-app overflow-y-auto"
+        style={{ background: "var(--color-bg)" }}
+      >
         <VoiceTablesRunner
           facts={voice}
           onDone={() => {
@@ -104,7 +109,12 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
 
   if (running) {
     return (
-      <div className="-mx-4">
+      // Over the whole screen, like the spoken round: under the heading the
+      // keypad's bottom row fell off a small phone.
+      <div
+        className="fixed inset-0 z-50 mx-auto w-full max-w-app overflow-y-auto"
+        style={{ background: "var(--color-bg)" }}
+      >
         <TablesRunner
           facts={running.facts}
           label={running.label}

@@ -259,7 +259,7 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
   const answered = facts.length - queue.length;
 
   return (
-    <div className="safe-top flex min-h-dvh flex-col pb-8">
+    <div className="safe-top flex min-h-dvh flex-col" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom))" }}>
       <RunnerHeader href="/math/tables" value={answered / facts.length} color="purple" label="Facts said" />
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
         {phase === "ready" ? (
