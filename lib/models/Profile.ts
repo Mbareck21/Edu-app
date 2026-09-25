@@ -101,6 +101,7 @@ const ReadingSchema = new Schema(
   {
     level: { type: Number, default: 1, min: 1, max: 10 },
     recent: { type: [ReadingLogSchema], default: [] }, // newest first, cap 20
+    since: { type: Date, default: undefined }, // when the level last changed
   },
   { _id: false }
 );
@@ -232,6 +233,7 @@ export function toProfileState(doc: unknown): ProfileState {
             };
           })
         : [],
+      ...(reading.since ? { since: iso(reading.since) } : {}),
     },
   };
 }

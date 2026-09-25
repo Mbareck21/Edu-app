@@ -9,11 +9,13 @@ import {
   MAX_SESSION_COUNT,
   buildSession,
   gradeAnswer,
+  levelForGrade,
   mixedSession,
-  nextLevelFromHistory,
 } from "../session";
 
 const LEVELS: readonly Level[] = [1, 2, 3];
+/** Grade 4 (1-3) and Grade 5 (4-5). */
+const ALL_LEVELS: readonly Level[] = [1, 2, 3, 4, 5];
 const SAMPLES = 200;
 
 /** Biggest answer that still makes sense for each skill. */
@@ -34,10 +36,25 @@ const MAX_ANSWER: Record<MathSkillId, number> = {
   shapes: 12,
 };
 
-function checkQuestion(q: MathQuestion, id: MathSkillId): void {
+/** Grade 5 numbers run bigger: millions, 4-digit × 2-digit, volume, thousandths. */
+const MAX_ANSWER_G5: Record<MathSkillId, number> = {
+  ...MAX_ANSWER,
+  "place-value": 100_000_000,
+  "number-forms": 10_000_000,
+  "add-sub-big": 10_000_000,
+  "mul-facts": 144_000,
+  "mul-multi": 1_000_000,
+  "word-problems": 5000,
+  decimals: 10_000,
+  geometry: 2000,
+  shapes: 360,
+};
+
+function checkQuestion(q: MathQuestion, id: MathSkillId, level: Level = 1): void {
+  const max = level >= 4 ? MAX_ANSWER_G5[id] : MAX_ANSWER[id];
   assert.ok(Number.isInteger(q.answer), `${id}: answer not whole: ${q.answer}`);
   assert.ok(q.answer >= 0, `${id}: negative answer in "${q.prompt}"`);
-  assert.ok(q.answer <= MAX_ANSWER[id], `${id}: answer ${q.answer} too big in "${q.prompt}"`);
+  assert.ok(q.answer <= max, `${id}: answer ${q.answer} too big in "${q.prompt}"`);
 
   assert.ok(q.prompt.length > 0, `${id}: empty prompt`);
   assert.ok(q.prompt.length <= 80, `${id}: prompt too long (${q.prompt.length}): "${q.prompt}"`);
@@ -159,11 +176,11 @@ test("currentUnit finds the unit school is in", () => {
 });
 
 for (const skill of MATH_SKILLS) {
-  for (const level of LEVELS) {
+  for (const level of ALL_LEVELS) {
     test(`${skill.id} level ${level}: ${SAMPLES} good questions`, () => {
       const rng = mulberry32(level * 7919 + skill.id.length * 104729);
       for (let i = 0; i < SAMPLES; i++) {
-        checkQuestion(skill.generate(level, rng), skill.id);
+        checkQuestion(skill.generate(level, rng), skill.id, level);
       }
     });
   }
@@ -174,7 +191,7 @@ test("every answer is a whole number he can type, across many seeds", () => {
   // answer came out negative, the number pad could not enter it, and the
   // lesson never ended. gradeAnswer only accepts digits, so this holds for all.
   for (const skill of MATH_SKILLS) {
-    for (const level of LEVELS) {
+    for (const level of ALL_LEVELS) {
       for (let seed = 1; seed <= 500; seed++) {
         const rng = mulberry32(seed);
         for (let i = 0; i < 10; i++) {
@@ -209,7 +226,7 @@ test("finding the other side does not show that side in the picture", () => {
 
 test("word problems stay at Grade-3 reading level", () => {
   const skill = getSkill("word-problems");
-  for (const level of LEVELS) {
+  for (const level of ALL_LEVELS) {
     const rng = mulberry32(1234 + level);
     for (let i = 0; i < SAMPLES; i++) {
       const q = skill.generate(level, rng);
@@ -238,7 +255,7 @@ test("shape questions only use the eight named figures", () => {
     "obtuse triangle",
   ];
   const skill = getSkill("shapes");
-  for (const level of LEVELS) {
+  for (const level of ALL_LEVELS) {
     const rng = mulberry32(31 + level);
     const asked = new Set<string>();
     for (let i = 0; i < SAMPLES; i++) {
@@ -256,7 +273,7 @@ test("shape questions only use the eight named figures", () => {
 
 test("buildSession is seeded, sized and repeat-free", () => {
   for (const skill of MATH_SKILLS) {
-    for (const level of LEVELS) {
+    for (const level of ALL_LEVELS) {
       const qs = buildSession({ skillId: skill.id, level, seed: 42 });
       assert.equal(qs.length, 10);
       assert.equal(new Set(qs.map((q) => q.prompt)).size, 10, `${skill.id} L${level}: duplicate prompts`);
@@ -264,14 +281,14 @@ test("buildSession is seeded, sized and repeat-free", () => {
       const again = buildSession({ skillId: skill.id, level, seed: 42 });
       assert.deepEqual(again, qs, `${skill.id}: same seed must give the same session`);
 
-      for (const q of qs) checkQuestion(q, skill.id);
+      for (const q of qs) checkQuestion(q, skill.id, level);
     }
   }
 });
 
 test("buildSession takes counts up to 40 and never repeats twice in a row", () => {
   for (const skill of MATH_SKILLS) {
-    for (const level of LEVELS) {
+    for (const level of ALL_LEVELS) {
       const qs = buildSession({ skillId: skill.id, level, seed: 7, count: 40 });
       assert.equal(qs.length, 40);
       for (let i = 1; i < qs.length; i++) {
@@ -284,7 +301,7 @@ test("buildSession takes counts up to 40 and never repeats twice in a row", () =
 });
 
 test("mixedSession spreads over every skill", () => {
-  for (const level of LEVELS) {
+  for (const level of ALL_LEVELS) {
     const qs = mixedSession({ level, seed: 99, count: 13 });
     assert.equal(qs.length, 13);
     assert.equal(new Set(qs.map((q) => q.prompt)).size, 13);
@@ -312,17 +329,35 @@ test("gradeAnswer only accepts the whole number", () => {
   assert.equal(gradeAnswer(big, "43 207").correct, true);
 });
 
-test("nextLevelFromHistory moves on three strong sessions and drops after a weak one", () => {
-  assert.equal(nextLevelFromHistory(1, [90, 95, 100]), 2);
-  assert.equal(nextLevelFromHistory(2, [90, 90, 90]), 3);
-  assert.equal(nextLevelFromHistory(3, [100, 100, 100]), 3);
-  assert.equal(nextLevelFromHistory(2, [95, 95]), 2);
-  assert.equal(nextLevelFromHistory(2, [100, 100, 89]), 2);
-  assert.equal(nextLevelFromHistory(2, [70, 80, 85]), 2);
-  assert.equal(nextLevelFromHistory(3, [100, 100, 50]), 2);
-  assert.equal(nextLevelFromHistory(1, [10]), 1);
-  assert.equal(nextLevelFromHistory(2, []), 2);
-  assert.equal(nextLevelFromHistory(2, [95, 50, 95]), 2);
+test("Grade 5 levels stay valid across many seeds", () => {
+  for (const skill of MATH_SKILLS) {
+    for (const level of [4, 5] as const) {
+      for (let seed = 1; seed <= 300; seed++) {
+        const rng = mulberry32(seed * 31 + level);
+        for (let i = 0; i < 10; i++) checkQuestion(skill.generate(level, rng), skill.id, level);
+      }
+    }
+  }
+});
+
+test("levelForGrade: Grade 4 plays the stored level, Grade 5 starts at 4", () => {
+  for (const stored of [1, 2, 3, 4, 5]) {
+    assert.equal(levelForGrade(stored, 4, 4), stored, "Grade 4 is unchanged");
+    assert.equal(levelForGrade(stored, 4, null), stored);
+  }
+  // Saved in Grade 4, or never played: lifted to 4.
+  assert.equal(levelForGrade(1, 5, 4), 4);
+  assert.equal(levelForGrade(3, 5, 4), 4);
+  assert.equal(levelForGrade(1, 5, null), 4);
+  assert.equal(levelForGrade(5, 5, 4), 5);
+  // Saved in Grade 5: a support drop to 3 holds, nothing lower.
+  assert.equal(levelForGrade(3, 5, 5), 3);
+  assert.equal(levelForGrade(2, 5, 5), 3);
+  assert.equal(levelForGrade(4, 5, 5), 4);
+  // Garbage is clamped to 1..5.
+  assert.equal(levelForGrade(9, 4, 4), 5);
+  assert.equal(levelForGrade(0, 4, 4), 1);
+  assert.equal(levelForGrade(NaN, 5, null), 4);
 });
 
 test("rng helpers are seeded and in range", () => {

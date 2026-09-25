@@ -1,5 +1,11 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
+import { todayKey } from "@/lib/day";
+import { gradeOn, type Grade } from "@/lib/grade";
+import { MAX_LEVEL, levelForGrade } from "@/lib/math/session";
+import type { Level } from "@/lib/math/types";
+import { movesLevel, sessionPct, type Scorable } from "@/lib/session-score";
+
 // One document per math skill id (see lib/math/skills.ts, workstream C).
 // `level` adapts: 3 recent sessions at >= 90% level up, two in a row under 60%
 // level down. `recentPcts` keeps the last 3 scores that drive that.
@@ -7,7 +13,7 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 export const MathProgressSchema = new Schema(
   {
     skill: { type: String, required: true, unique: true, trim: true },
-    level: { type: Number, default: 1, min: 1, max: 3 },
+    level: { type: Number, default: 1, min: 1, max: MAX_LEVEL },
     attempts: { type: Number, default: 0 },
     correct: { type: Number, default: 0 },
     bestMs: { type: Number, default: 0 }, // 0 = no timed run yet
@@ -25,7 +31,7 @@ export const MathProgress: Model<MathProgressDoc> =
   (models.MathProgress as Model<MathProgressDoc>) ||
   model<MathProgressDoc>("MathProgress", MathProgressSchema);
 
-export const MAX_MATH_LEVEL = 3;
+export const MAX_MATH_LEVEL = MAX_LEVEL;
 export const RECENT_PCTS = 3;
 /** Sessions in a row at this mark or better to move up. */
 export const LEVEL_UP_PCT = 90;
@@ -62,9 +68,19 @@ export function toClientMathProgress(doc: unknown): ClientMathProgress {
   };
 }
 
+/** Grade the child was in on the day of `at`; null when never played. */
+export function gradeAt(at: Date | string | null | undefined): Grade | null {
+  return at ? gradeOn(todayKey(new Date(at))) : null;
+}
+
+/** The level a skill is played at on `today`, with the Grade 5 floor; see levelForGrade. */
+export function servedLevel(p: Pick<ClientMathProgress, "level" | "lastAt"> | null, today: string): Level {
+  return levelForGrade(p?.level ?? 1, gradeOn(today), gradeAt(p?.lastAt));
+}
+
 /**
  * Pure level rule, shared by the API and any UI preview.
- * Up when the last 3 sessions are all >= 90%. Down when this one is < 60%.
+ * Up when the last 3 sessions are all >= 90%. Down when the last 2 are both < 60%.
  *
  * The caller clears `recentPcts` on every level change, so this window only
  * ever holds scores earned at the current level. An empty window means the
@@ -114,6 +130,26 @@ export function scoreRound(
   // Without this, three good level-1 sessions promoted to 2, and then the very
   // next good session saw the same window again and jumped him straight to 3.
   return { level: next, recentPcts: next !== level ? [] : recent };
+}
+
+/**
+ * One finished round applied to a skill's stored progress on `today`.
+ *
+ * A level below the Grade 5 floor is lifted first, and the window from the old
+ * level is dropped with it. Then the round is scored — unless it is a timed run
+ * too short to judge (see movesLevel) — and a Grade 5 result never goes below 3.
+ */
+export function applyRound(
+  stored: { level: number; recentPcts: readonly number[]; lastAt: Date | string | null | undefined },
+  run: Scorable & { playedLevel?: number },
+  today: string
+): { level: number; recentPcts: number[] } {
+  const grade = gradeOn(today);
+  const level = levelForGrade(stored.level, grade, gradeAt(stored.lastAt));
+  const recentPcts = level === stored.level ? [...stored.recentPcts] : [];
+  if (!movesLevel(run)) return { level, recentPcts };
+  const scored = scoreRound(level, recentPcts, sessionPct(run), run.playedLevel);
+  return { level: levelForGrade(scored.level, grade, grade), recentPcts: scored.recentPcts };
 }
 
 /**

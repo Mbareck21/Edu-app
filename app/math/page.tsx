@@ -20,6 +20,7 @@ import {
   LEVEL_UP_RUN,
   MAX_MATH_LEVEL,
   cleanRounds,
+  servedLevel,
   toClientMathProgress,
 } from "@/lib/models/MathProgress";
 import { allFactKeys, factFromRow, isLit } from "@/lib/tables";
@@ -48,8 +49,8 @@ function shortDate(iso: string): string {
 
 function Stars({ level }: { level: number }) {
   return (
-    <span className="inline-flex gap-0.5" aria-label={`Level ${level} of 3`}>
-      {[1, 2, 3].map((n) => (
+    <span className="inline-flex gap-0.5" aria-label={`Level ${level} of ${MAX_MATH_LEVEL}`}>
+      {[1, 2, 3, 4, 5].map((n) => (
         <span key={n} style={{ color: n <= level ? "var(--color-gold)" : "var(--color-line)" }}>
           <Icon name="star" size={16} filled={n <= level} />
         </span>
@@ -113,22 +114,25 @@ export default async function MathPage() {
   // card said "Light up the grid" to a boy who had lit nearly all of it.
   const tablesLit = factRows.filter((r) => isLit(factFromRow(r.key, r))).length;
   const tablesTotal = allFactKeys().length;
+  const today = todayKey();
   const stats = new Map<string, Stat>();
   for (const doc of docs) {
     const p = toClientMathProgress(doc);
+    const level = servedLevel(p, today);
+    // Lifted to the Grade 5 floor: the window was earned at the old level.
+    const recent = level === p.level ? p.recentPcts : [];
     stats.set(p.skill, {
-      level: p.level,
+      level,
       // The window empties on every level change, so it cannot say whether he
       // has played; right after moving up, the card claimed he never had.
       played: p.attempts > 0,
-      best: p.recentPcts.length > 0 ? Math.max(...p.recentPcts) : null,
-      clean: cleanRounds(p.recentPcts),
+      best: recent.length > 0 ? Math.max(...recent) : null,
+      clean: cleanRounds(recent),
     });
   }
   const statFor = (id: string): Stat =>
-    stats.get(id) ?? { level: 1, played: false, best: null, clean: 0 };
+    stats.get(id) ?? { level: servedLevel(null, today), played: false, best: null, clean: 0 };
 
-  const today = todayKey();
   const unit = currentUnit(today);
   const lesson = currentLesson(today);
   // The lesson his class is on this week comes first, then the rest of the unit.

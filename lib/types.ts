@@ -184,7 +184,12 @@ export type ReadingLog = {
 };
 
 /** One reading ladder for the whole app, 1..10. */
-export type ReadingState = { level: number; recent: ReadingLog[] };
+export type ReadingState = {
+  level: number;
+  recent: ReadingLog[];
+  /** When the level last changed. Readings before it do not count toward the next move. */
+  since?: string;
+};
 
 /** Plain, serialisable profile. What rewards.ts reads and returns. */
 export type ProfileState = {

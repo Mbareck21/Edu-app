@@ -162,9 +162,9 @@ export default async function MePage() {
           {(
             [
               { label: "New", n: counts.new, color: "var(--color-muted)" },
-              { label: "Learning", n: counts.learning, color: "var(--color-blue)" },
-              { label: "Known", n: counts.known, color: "var(--color-green)" },
-              { label: "Mastered", n: counts.mastered, color: "var(--color-purple)" },
+              { label: "Learning", n: counts.learning, color: "var(--color-gold-dark)" },
+              { label: "Known", n: counts.known, color: "var(--color-blue)" },
+              { label: "Mastered", n: counts.mastered, color: "var(--color-green)" },
             ] as const
           ).map((b) => (
             <div key={b.label} className="rounded-tile py-2" style={{ background: "var(--color-sand)" }}>

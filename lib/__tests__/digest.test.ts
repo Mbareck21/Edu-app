@@ -73,6 +73,7 @@ test("words known this week need known status and recent practice", () => {
 test("due tomorrow counts words, met facts and finished chains", () => {
   const dueWord = word("d", 2, 1, 0.5);
   const laterWord = word("e", 2, 1, 3);
+  const untouched = word("f", 0, null, 0);
   const met: FactState = { ...newFact(7, 8), correct: 1, streak: 1, dueAt: iso(-0.5), lastAt: iso(1) };
   const never = newFact(6, 7);
   const known: FactState = { ...newFact(2, 3), streak: 3, correct: 3, dueAt: iso(-10) };
@@ -86,7 +87,7 @@ test("due tomorrow counts words, met facts and finished chains", () => {
   const learning = newChain("eighty");
   const d = buildDigest({
     activity: [],
-    words: [dueWord, laterWord],
+    words: [dueWord, laterWord, untouched],
     facts: [met, never, known],
     chains: [finished, learning],
     now,

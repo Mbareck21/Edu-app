@@ -16,8 +16,8 @@ export type MathSkillId =
   | "angles"
   | "shapes";
 
-/** 1 = start of Grade 4, 3 = end of Grade 4. */
-export type Level = 1 | 2 | 3;
+/** 1 = start of Grade 4, 3 = end of Grade 4, 4 = early Grade 5, 5 = later Grade 5. */
+export type Level = 1 | 2 | 3 | 4 | 5;
 
 /** Any function that returns a float in [0, 1). Inject it so questions are reproducible. */
 export type Rng = () => number;

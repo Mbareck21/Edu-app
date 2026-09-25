@@ -24,7 +24,23 @@ export const CREATURES: Record<string, CreatureInfo> = {
   "right-500": { name: "Sage the Wise Owl", hint: "Get 500 right answers." },
   "math-star": { name: "Cubit the Robot", hint: "Finish 10 math games." },
   "unit-done": { name: "Shelly the Turtle", hint: "Beat a whole unit." },
+  // Set 2: bigger goals.
+  "streak-60": { name: "Blaze the Dragon", hint: "Play 60 days in a row." },
+  "streak-100": { name: "Sol the Phoenix", hint: "Play 100 days in a row." },
+  "speed-500": { name: "Whirl the Hummingbird", hint: "Give 500 fast answers." },
+  "perfect-25": { name: "Pebble the Penguin", hint: "Get 25 lessons all right." },
+  "perfect-50": { name: "Leo the Lion King", hint: "Get 50 lessons all right." },
+  "right-1000": { name: "Inky the Octopus", hint: "Get 1,000 right answers." },
+  "right-2500": { name: "Tide the Whale", hint: "Get 2,500 right answers." },
+  "math-50": { name: "Honey the Bee", hint: "Finish 50 math games." },
+  "reading-5": { name: "Wiggle the Bookworm", hint: "Get to reading level 5." },
+  "reading-10": { name: "Bao the Panda", hint: "Get to reading level 10." },
+  "level-10": { name: "Rexy the Dino", hint: "Get to level 10." },
+  "level-20": { name: "Cosmo the Alien", hint: "Get to level 20." },
 };
+
+/** The first 12 badges are Set 1; the rest are Set 2, the bigger goals. */
+export const SET_ONE_SIZE = 12;
 
 export function creatureFor(badgeId: string): CreatureInfo {
   return CREATURES[badgeId] ?? { name: "Mystery Friend", hint: "Keep learning to find me." };

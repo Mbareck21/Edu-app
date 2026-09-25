@@ -29,6 +29,6 @@ export {
   MAX_SESSION_COUNT,
   buildSession,
   gradeAnswer,
+  levelForGrade,
   mixedSession,
-  nextLevelFromHistory,
 } from "./session";

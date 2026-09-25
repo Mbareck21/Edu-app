@@ -13,7 +13,7 @@ import {
   wordKnowledge,
 } from "@/lib/mastery";
 import { SKILL_IDS, type ClientWord, type SkillState } from "@/lib/models/WordList";
-import { applyReading, emptyProfile, nextReadingLevel } from "@/lib/rewards";
+import { applyReading, emptyProfile, nextReadingLevel, readingProgress } from "@/lib/rewards";
 import { STEPS, stepById, type ProfileState, type ReadingLog } from "@/lib/types";
 import { dueAfterDays } from "@/lib/spacing";
 
@@ -209,6 +209,33 @@ test("only readings taken at the current level move it", () => {
   assert.equal(nextReadingLevel(2, recent), 2);
   // Two weak readings at the new level do move him back.
   assert.equal(nextReadingLevel(2, [log(30, 2), log(30, 2), log(95)]), 1);
+});
+
+test("an easier passage left from before a promotion does not reset the run", () => {
+  let p: ProfileState = emptyProfile();
+  const at = (min: number) => ({ at: new Date(NOW.getTime() + min * 60_000), today: "2026-08-19" });
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(i));
+  assert.equal(p.reading.level, 2);
+  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(3));
+  // A level-1 passage still open on another list.
+  p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(4));
+  assert.equal(readingProgress(p.reading, NOW).goodInARow, 1);
+  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(5));
+  assert.equal(readingProgress(p.reading, NOW).goodInARow, 2);
+});
+
+test("after dropping a level and climbing back, old weak readings do not count", () => {
+  let p: ProfileState = emptyProfile();
+  const at = (min: number) => ({ at: new Date(NOW.getTime() + min * 60_000), today: "2026-08-19" });
+  let t = 0;
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(t++));
+  for (let i = 0; i < 2; i++) p = applyReading(p, { level: 2, pct: 25, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 1);
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 2);
+  // One weak reading back at level 2 is not two in a row.
+  p = applyReading(p, { level: 2, pct: 25, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 2);
 });
 
 test("applyReading logs newest first and caps at 20", () => {

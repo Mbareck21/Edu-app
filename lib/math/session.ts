@@ -1,3 +1,4 @@
+import type { Grade } from "@/lib/grade";
 import type { Level, MathQuestion, MathSkill, MathSkillId, Rng } from "./types";
 import { mulberry32, shuffle } from "./rng";
 import { MATH_SKILLS, getSkill } from "./skills";
@@ -73,20 +74,17 @@ export function gradeAnswer(q: MathQuestion, input: string): { correct: boolean;
   return { correct, answer: q.answer };
 }
 
+/** Top math level: 1-3 are Grade 4, 4-5 are Grade 5. */
+export const MAX_LEVEL = 5;
+
 /**
- * Level after a session. `recentPcts` is oldest first, newest last (0..100) —
- * the opposite order to nextLevel in lib/models/MathProgress, which is why the
- * name says where the history comes from.
- * Last 3 sessions all 90+ -> up (max 3). Last session under 60 -> down (min 1).
+ * The level a skill is played at. Grade 4 plays the stored level. In Grade 5 a
+ * level last saved in Grade 4 (or never saved, `savedIn` null) starts at 4 at
+ * least. Once saved in Grade 5 it may sit at 3 for support, never lower —
+ * without `savedIn` that support drop would be lifted straight back to 4.
  */
-export function nextLevelFromHistory(current: Level, recentPcts: readonly number[]): Level {
-  const last3 = recentPcts.slice(-3);
-  if (last3.length === 3 && last3.every((p) => p >= 90)) {
-    return current === 1 ? 2 : 3;
-  }
-  const last = recentPcts[recentPcts.length - 1];
-  if (recentPcts.length > 0 && last < 60) {
-    return current === 3 ? 2 : 1;
-  }
-  return current;
+export function levelForGrade(stored: number, grade: Grade, savedIn: Grade | null): Level {
+  const level = Math.min(MAX_LEVEL, Math.max(1, Math.floor(stored) || 1));
+  if (grade === 4) return level as Level;
+  return Math.max(level, savedIn === 5 ? 3 : 4) as Level;
 }
