@@ -230,7 +230,7 @@ export function questionPlan(
       type: "cause_effect",
       format: "text",
       brief:
-        `A short written answer, like the school's short response: "Why did …?". The reason is in the passage; he types it in a few words.`,
+        `A short written answer, like the school's short response: "Why did …?". Ask only about a reason the passage states in words ("because", "so", "to …"); the answer is that reason, never the question said again. He types it in a few words.`,
     },
   ];
 
