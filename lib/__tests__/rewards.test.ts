@@ -8,6 +8,7 @@ import {
   XP,
   applySession,
   emptyProfile,
+  estimateXp,
   levelFloor,
   levelFor,
   shownStreak,
@@ -443,4 +444,17 @@ test("reading progress counts good readings in a row at this level", () => {
   assert.equal(p.thisWeek, 2);
   // A reading from another level does not count toward this one.
   assert.equal(readingProgress({ level: 2, recent: [log(100, 1)] }, now).goodInARow, 0);
+});
+
+test("the offline XP estimate matches what the server pays, bar the day bonus", () => {
+  const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
+  const cases: SessionResult[] = [
+    { kind: "math", ref: "math:fractions", answered: 10, correct: 8, fastCount: 0, ms: 1, perfect: false, mathLevel: 4 },
+    { kind: "math", ref: "drill:math:mixed:timed#25", answered: 25, correct: 25, fastCount: 9, ms: 1, perfect: false, timed: true, mathLevel: 2 },
+    { kind: "vocab", ref: "drill:vocab:mixed", answered: 2, correct: 2, fastCount: 2, ms: 1, perfect: false },
+  ];
+  for (const r of cases) {
+    const { gained } = applySession(emptyProfile(), r, at);
+    assert.equal(estimateXp(r), gained.xp - XP.streakDay, r.ref);
+  }
 });

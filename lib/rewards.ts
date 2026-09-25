@@ -82,6 +82,23 @@ export function rightXp(
   return result.timed || result.ref.startsWith("tables:") ? rate / 2 : rate;
 }
 
+/**
+ * What a session is worth before the server has seen it: offline, the runners
+ * show this instead of "+0". Counts it as the first play today, with no new
+ * streak day and no perfect bonus, so it never promises more than it pays.
+ */
+export function estimateXp(result: SessionResult): number {
+  const answered = Math.max(0, Math.floor(result.answered) || 0);
+  const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
+  const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
+  const paidRight = result.timed ? Math.min(correct, TIMED_PAID) : correct;
+  return (
+    Math.round(paidRight * rightXp(result, true)) +
+    Math.min(fast, FAST_PAID) * XP.fast +
+    (answered >= BONUS_MIN_ANSWERED ? XP.lessonDone : 0)
+  );
+}
+
 export const ACTIVITY_CAP = 200;
 
 /**

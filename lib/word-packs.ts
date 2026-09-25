@@ -35,6 +35,8 @@ export type WordPack = {
   /** One line under the name. */
   blurb: string;
   words: readonly PackWord[];
+  /** Set on packs for a later grade: they only lead the list once he is in it. */
+  grade?: 5;
 };
 
 export const WORD_PACKS: readonly WordPack[] = [
@@ -197,6 +199,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   // early is no harm. No word here repeats one from a Grade 4 pack.
   {
     id: "g5-matter",
+    grade: 5,
     name: "Grade 5 Matter",
     blurb: "Science words for what everything is made of.",
     words: [
@@ -222,6 +225,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   },
   {
     id: "g5-ecosystems",
+    grade: 5,
     name: "Grade 5 Ecosystems",
     blurb: "Science words for how food and energy move through living things.",
     words: [
@@ -247,6 +251,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   },
   {
     id: "g5-earth-systems",
+    grade: 5,
     name: "Grade 5 Earth Systems",
     blurb: "Science words for land, water, air, and life on Earth.",
     words: [
@@ -270,6 +275,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   },
   {
     id: "g5-space",
+    grade: 5,
     name: "Grade 5 Space",
     blurb: "Science words for the sun, the stars, and gravity.",
     words: [
@@ -293,6 +299,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   },
   {
     id: "g5-math-words",
+    grade: 5,
     name: "Grade 5 Math Words",
     blurb: "Math words for volume, the coordinate plane, and decimals.",
     words: [
@@ -318,6 +325,7 @@ export const WORD_PACKS: readonly WordPack[] = [
   },
   {
     id: "g5-reading-words",
+    grade: 5,
     name: "Grade 5 Reading Words",
     blurb: "The words your teacher uses to talk about stories and poems.",
     words: [

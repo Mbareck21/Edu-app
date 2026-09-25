@@ -21,7 +21,7 @@ import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import { XP, type Gained, type GainedBadge } from "@/lib/rewards";
+import { XP, estimateXp, type Gained, type GainedBadge } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import { stepById, type SessionResult, type StepId, type WordResult } from "@/lib/types";
 
@@ -305,7 +305,8 @@ function ItemRunnerInner({
       const badges: GainedBadge[] = [];
       let saved = true;
       let note: string | undefined;
-      for (const result of payloads(post, all, ms)) {
+      const results = payloads(post, all, ms);
+      for (const result of results) {
         const res = await postSession(result);
         if (!res.saved) {
           saved = false;
@@ -322,7 +323,7 @@ function ItemRunnerInner({
       sum.newBadges = badges;
       // Offline the server never scored it. Show what the work is worth, the
       // way the math runners already do, instead of a flat "+0".
-      if (!saved) sum.xp = correct * XP.correct + XP.lessonDone;
+      if (!saved) sum.xp = results.reduce((xp, r) => xp + estimateXp(r), 0);
       setOutcome({
         gained: sum,
         saved,
