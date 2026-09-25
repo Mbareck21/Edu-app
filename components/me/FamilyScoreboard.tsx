@@ -2,20 +2,21 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
+import { nudge } from "@/lib/scoreboard";
 
 export type ScoreRow = {
   learner: string;
   name: string;
   xp: number;
-  days: number;
   isMe: boolean;
 };
 
 const COLORS: AccentColor[] = ["blue", "purple"];
 
 /**
- * Both children's XP this week. Friendly, not a ranking: the rows keep the
- * same order every week, and the headline is what they made together.
+ * Both children's XP today, a fresh race every day. The rows keep the same
+ * order, each gets a nudge to catch up or stay ahead, and the headline is
+ * what they made together.
  */
 export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
   if (rows.length < 2) return null;
@@ -35,7 +36,7 @@ export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
         </span>
       </div>
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-        This week, since Monday.
+        Today. A new race starts at midnight.
       </p>
       <ul className="mt-3 space-y-3">
         {rows.map((r, i) => {
@@ -63,7 +64,7 @@ export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
                 </div>
                 <ProgressBar value={r.xp / top} color={color} height={10} className="mt-1" />
                 <p className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>
-                  {r.days === 0 ? "Not played yet this week" : `Played ${r.days} ${r.days === 1 ? "day" : "days"}`}
+                  {nudge(r, rows)}
                 </p>
               </div>
             </li>

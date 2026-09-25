@@ -22,7 +22,7 @@ import { allFactKeys, factFromRow } from "@/lib/tables";
 import { currentLearner } from "@/lib/auth";
 import { LEARNER_NAMES } from "@/lib/learners";
 import { getFamilyProfiles, getProfile } from "@/lib/profile";
-import { weekDaysPlayed, weekXp } from "@/lib/scoreboard";
+import { dayXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -93,8 +93,7 @@ export default async function MePage() {
   const scoreRows = family.map(({ learner, state: s }) => ({
     learner,
     name: s.name || LEARNER_NAMES[learner],
-    xp: weekXp(s.activity, today),
-    days: weekDaysPlayed(s.activity, today),
+    xp: dayXp(s.activity, today),
     isMe: learner === me,
   }));
 
