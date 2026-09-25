@@ -181,6 +181,8 @@ export type ProfileStats = {
   fastAnswers: number;
   mathSessions: number;
   perfectSessions: number;
+  /** XP earned in drills, all time. What the drill ranks count. */
+  drillXp: number;
 };
 
 export type EarnedBadge = { id: string; earnedAt: string };
