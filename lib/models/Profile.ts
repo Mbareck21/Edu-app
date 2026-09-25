@@ -1,5 +1,6 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 
+import { drillXpOf } from "@/lib/drill-rank";
 import {
   DEFAULT_DAILY_GOAL,
   MAX_DAILY_GOAL,
@@ -50,6 +51,7 @@ const StatsSchema = new Schema(
     fastAnswers: { type: Number, default: 0 },
     mathSessions: { type: Number, default: 0 },
     perfectSessions: { type: Number, default: 0 },
+    drillXp: { type: Number, default: undefined },
   },
   { _id: false }
 );
@@ -178,6 +180,9 @@ export function toProfileState(doc: unknown): ProfileState {
   const today = record(d.today);
   const stats = record(d.stats);
   const reading = record(d.reading);
+  const activity = Array.isArray(d.activity)
+    ? d.activity.map((a) => ({ ref: String(record(a).ref ?? ""), xp: num(record(a).xp) }))
+    : [];
   return {
     name: String(d.name ?? "Nour") || "Nour",
     xp: num(d.xp),
@@ -204,6 +209,11 @@ export function toProfileState(doc: unknown): ProfileState {
       fastAnswers: num(stats.fastAnswers),
       mathSessions: num(stats.mathSessions),
       perfectSessions: num(stats.perfectSessions),
+      // Before the total was kept, the log is the best record there is.
+      drillXp:
+        stats.drillXp === undefined || stats.drillXp === null
+          ? drillXpOf(activity)
+          : num(stats.drillXp),
     },
     activity: Array.isArray(d.activity)
       ? d.activity.map((a): ActivityEntry => {

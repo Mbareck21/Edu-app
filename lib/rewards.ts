@@ -3,6 +3,7 @@
 // be unit tested without a database.
 
 import { previousDay, todayKey } from "@/lib/day";
+import { isDrillRef } from "@/lib/drill-rank";
 import { gradeOn, type Grade } from "@/lib/grade";
 import { maxReadingLevel } from "@/lib/reading";
 import type {
@@ -430,6 +431,7 @@ export function emptyProfile(name = "Nour"): ProfileState {
       fastAnswers: 0,
       mathSessions: 0,
       perfectSessions: 0,
+      drillXp: 0,
     },
     activity: [],
     reading: { level: 1, recent: [] },
@@ -635,6 +637,7 @@ export function applySession(
       fastAnswers: profile.stats.fastAnswers + fast,
       mathSessions: profile.stats.mathSessions + (result.kind === "math" ? 1 : 0),
       perfectSessions: profile.stats.perfectSessions + (perfect ? 1 : 0),
+      drillXp: profile.stats.drillXp + (isDrillRef(result.ref) ? xpGained : 0),
     },
     activity: [entry, ...profile.activity].slice(0, ACTIVITY_CAP),
   };

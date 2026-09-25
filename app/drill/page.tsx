@@ -1,3 +1,5 @@
+import DrillDuel from "@/components/drill/DrillDuel";
+import DrillRankCard from "@/components/drill/DrillRankCard";
 import MathDrillCard from "@/components/drill/MathDrillCard";
 import WordDrillCard from "@/components/drill/WordDrillCard";
 import {
@@ -11,12 +13,15 @@ import { sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
-import { todayKey } from "@/lib/day";
+import { currentLearner } from "@/lib/auth";
+import { addDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
+import { weekDrillXp, weekStart } from "@/lib/drill-rank";
+import { LEARNER_NAMES } from "@/lib/learners";
 import { MATH_SKILLS } from "@/lib/math";
 import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
 import { getPractice } from "@/lib/word-source";
-import { getProfile } from "@/lib/profile";
+import { getFamilyProfiles, getProfile } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +29,12 @@ export const metadata = { title: "Drill" };
 
 export default async function DrillPage() {
   const { MathProgress } = await db();
-  const [practice, mathDocs, profile] = await Promise.all([
+  const [practice, mathDocs, profile, me, family] = await Promise.all([
     getPractice(),
     MathProgress.find().lean(),
     getProfile(),
+    currentLearner(),
+    getFamilyProfiles(),
   ]);
 
   const now = new Date();
@@ -49,6 +56,20 @@ export default async function DrillPage() {
     [MIXED_SKILL]: mixedAutoLevel(levels.size > 0 ? [...levels.values()] : [servedLevel(null, today)]),
   };
   for (const skill of MATH_SKILLS) autoLevels[skill.id] = levels.get(skill.id) ?? servedLevel(null, today);
+
+  const monday = weekStart(today);
+  const duel = family.map(({ learner, state: s }) => ({
+    learner,
+    name: s.name || LEARNER_NAMES[learner],
+    points: weekDrillXp(s.activity, monday),
+    isMe: learner === me,
+  }));
+  // Last week's champion: most drill points, and only if nobody tied.
+  const lastWeek = family
+    .map(({ learner, state: s }) => ({ name: s.name || LEARNER_NAMES[learner], points: weekDrillXp(s.activity, addDays(monday, -7)) }))
+    .sort((a, b) => b.points - a.points);
+  const lastWinner =
+    lastWeek.length > 1 && lastWeek[0].points > 0 && lastWeek[0].points > lastWeek[1].points ? lastWeek[0].name : null;
 
   const bests: Record<string, Record<MathMode, number | null>> = {};
   for (const id of [MIXED_SKILL, ...MATH_SKILLS.map((s) => s.id)]) {
@@ -74,6 +95,9 @@ export default async function DrillPage() {
           Free practice. Pick what you want, then go. Every drill still counts.
         </p>
       </Card>
+
+      <DrillRankCard points={profile.stats.drillXp} learner={me} />
+      <DrillDuel rows={duel} lastWinner={lastWinner} />
 
       <WordDrillCard
         lists={counts.lists}
