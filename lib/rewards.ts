@@ -2,7 +2,7 @@
 // Everything the app awards (XP, levels, streak, badges) lives here so it can
 // be unit tested without a database.
 
-import { previousDay } from "@/lib/day";
+import { previousDay, todayKey } from "@/lib/day";
 import type {
   ActivityEntry,
   EarnedBadge,
@@ -400,6 +400,14 @@ export function shownStreak(streak: Streak, today: string): number {
   return last && (last === today || last === previousDay(today)) ? streak.current : 0;
 }
 
+/** Days in a row, ending on `last`, with a session in the log. */
+function runEndingOn(last: string, activity: readonly Pick<ActivityEntry, "at">[]): number {
+  const days = new Set(activity.map((a) => todayKey(new Date(a.at))));
+  let run = 0;
+  for (let day = last; days.has(day); day = previousDay(day)) run++;
+  return run;
+}
+
 /**
  * Fold one finished session into the profile. Returns a brand new profile
  * object (the input is never mutated) plus what the kid just gained.
@@ -429,8 +437,13 @@ export function applySession(
     : last && previousDay(now.today) === last
       ? profile.streak.current + 1
       : 1;
+  // A late session may fill a gap that broke the streak (Tuesday offline,
+  // Wednesday sent first), so it counts the run again from the activity log.
+  const mended = late
+    ? Math.max(profile.streak.current, runEndingOn(last, [{ at: now.at.toISOString() }, ...profile.activity]))
+    : current;
   const streak = late
-    ? profile.streak
+    ? { ...profile.streak, current: mended, best: Math.max(profile.streak.best, mended) }
     : {
         current,
         best: Math.max(profile.streak.best, current),
