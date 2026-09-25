@@ -7,6 +7,7 @@ import LockButton from "@/components/words/LockButton";
 import NewListForm from "@/components/words/NewListForm";
 import SchoolLists, { type SeedOption } from "@/components/words/SchoolLists";
 import { WORD_PACKS } from "@/lib/word-packs";
+import { gradeOn } from "@/lib/grade";
 import {
   READING_THEMES,
   SCIENCE_UNITS,
@@ -69,14 +70,15 @@ function seedOptions(lists: ClientWordList[]): SeedOption[] {
   const currentTheme = themeForWeek(todayISO);
 
   const all: SeedOption[] = [
-    // Skill packs first and always "current": these are the words he is missing
-    // right now, not a unit that comes round on the calendar.
+    // Skill packs first and "current": these are the words he is missing right
+    // now, not a unit that comes round on the calendar. A later grade's pack
+    // waits at the bottom until he is in that grade.
     ...WORD_PACKS.map((p) => ({
       kind: "pack" as const,
       id: p.id,
       title: p.name,
       wordCount: p.words.length,
-      current: true,
+      current: !p.grade || p.grade <= gradeOn(todayISO),
       existingListId: byName.get(`School: ${p.name}`) ?? null,
     })),
     ...SCIENCE_UNITS.map((u) => ({

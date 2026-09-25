@@ -15,7 +15,7 @@ import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import { XP, type Gained } from "@/lib/rewards";
+import { estimateXp, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
 
@@ -29,7 +29,7 @@ export type MathSessionProps = {
 };
 
 type Run = { seed: number; queue: number[] };
-type Outcome = { gained: Gained | null; saved: boolean; note?: string; ms: number; correct: number };
+type Outcome = { gained: Gained | null; saved: boolean; note?: string; ms: number; correct: number; offlineXp: number };
 
 function freshRun(seed: number): Run {
   return { seed, queue: Array.from({ length: COUNT }, (_, i) => i) };
@@ -161,6 +161,7 @@ function MathSessionInner({
         note: saveNote(res),
         ms,
         correct,
+        offlineXp: estimateXp(result),
       });
     });
   }, [done, questions.length, skillId, level, saveKey]);
@@ -267,7 +268,7 @@ function MathSessionInner({
       );
     }
     const total = questions.length;
-    const offlineXp = outcome.correct * XP.correct + XP.lessonDone;
+    const { offlineXp } = outcome;
     return (
       <LessonComplete
         title={outcome.correct === total ? "All right!" : "Math done!"}

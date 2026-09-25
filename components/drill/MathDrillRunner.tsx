@@ -18,7 +18,7 @@ import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import { sessionPerfect } from "@/lib/session-score";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import { XP, type Gained } from "@/lib/rewards";
+import { estimateXp, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
 
@@ -48,6 +48,7 @@ type Outcome = {
   ms: number;
   answered: number;
   correct: number;
+  offlineXp: number;
 };
 
 function drawQuestions(
@@ -193,6 +194,7 @@ function MathDrillRunnerInner({
         ms,
         answered,
         correct,
+        offlineXp: estimateXp(result),
       });
     });
   }, [done, timed, tally, questions.length, skill, level, mode, saveKey]);
@@ -278,7 +280,7 @@ function MathDrillRunnerInner({
         </main>
       );
     }
-    const offlineXp = outcome.correct * XP.correct + XP.lessonDone;
+    const { offlineXp } = outcome;
     return (
       <div className="safe-top safe-bottom">
         <LessonComplete
