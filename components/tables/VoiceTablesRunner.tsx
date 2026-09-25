@@ -81,20 +81,26 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
   const hear = useCallback(async (answer: number): Promise<{ alternatives: string[]; ms: number } | "blocked"> => {
     const started = performance.now();
     if (canListen()) {
+      // A guess on the way counts ("4" before it settles on "floor"), except
+      // for an answer like 50, which is also the start of "fifty six".
+      const onlyFinal = answer % 10 === 0;
       let acceptedAt = 0;
       const l = listenOnce({
         maxMs: 8000,
-        accept: (guesses) => {
-          const ok = judgeSpoken(guesses, answer).correct;
+        accept: (guesses, isFinal) => {
+          const ok = (isFinal || !onlyFinal) && judgeSpoken(guesses, answer).correct;
           if (ok && !acceptedAt) acceptedAt = performance.now();
           return ok;
         },
       });
       stopListening.current = l.cancel;
-      const { alternatives, blocked } = await l.promise;
+      const { alternatives, final, blocked } = await l.promise;
       stopListening.current = null;
       if (blocked) return "blocked";
-      return { alternatives, ms: (acceptedAt || performance.now()) - started };
+      // What to judge: the finished guesses first, so "I heard" shows what he
+      // ended up saying; every guess too, unless the answer ends in zero.
+      const judged = onlyFinal && final.length > 0 ? final : [...final, ...alternatives];
+      return { alternatives: judged, ms: (acceptedAt || performance.now()) - started };
     }
     // No recogniser on this phone: record until he stops, then transcribe.
     try {
@@ -274,19 +280,26 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
             <p className="font-display text-6xl font-bold tracking-tight">
               {fact.a} × {fact.b}
             </p>
-            <div className="mt-6 flex h-28 items-center justify-center">
+            <div className="mt-6 flex min-h-36 items-center justify-center">
               {phase === "asking" ? (
                 <p className="font-display text-lg font-bold" style={{ color: "var(--color-muted)" }}>
                   Listen…
                 </p>
               ) : phase === "listening" || phase === "checking" ? (
-                <span
-                  className="q-node-pulse flex h-24 w-24 items-center justify-center rounded-full"
-                  style={{ background: "var(--color-purple)", color: "#fff" }}
-                  aria-label="Listening"
-                >
-                  <Icon name="mic" size={44} />
-                </span>
+                <div className="flex flex-col items-center gap-3">
+                  <span
+                    className="q-node-pulse flex h-24 w-24 items-center justify-center rounded-full"
+                    style={{ background: "var(--color-purple)", color: "#fff" }}
+                    aria-label="Listening"
+                  >
+                    <Icon name="mic" size={44} />
+                  </span>
+                  {/* One short word is the hardest thing to recognise; the
+                      whole fact is easy, and the number at its end counts. */}
+                  <p className="text-sm" style={{ color: "var(--color-muted)" }}>
+                    {`Say it all: “${fact.a} times ${fact.b} is …”`}
+                  </p>
+                </div>
               ) : phase === "right" ? (
                 <div className="q-bounce-in">
                   <p className="font-display text-5xl font-bold" style={{ color: "var(--color-green-dark)" }}>
@@ -354,7 +367,7 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
                 void ask(head, true);
               }}
             >
-              Hear it again
+              Say it again
             </Button>
             <Button
               className="flex-1"

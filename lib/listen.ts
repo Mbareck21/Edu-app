@@ -32,9 +32,16 @@ export function canListen(): boolean {
   return ctor() !== null;
 }
 
+export type Heard = {
+  /** Every guess heard, interim ones too, in the order they came. */
+  alternatives: string[];
+  /** Only the recogniser's finished guesses for what he said. */
+  final: string[];
+  blocked: boolean;
+};
+
 export type Listening = {
-  /** Every guess heard, best first; empty when nothing was said. */
-  promise: Promise<{ alternatives: string[]; blocked: boolean }>;
+  promise: Promise<Heard>;
   cancel: () => void;
 };
 
@@ -43,9 +50,12 @@ export type Listening = {
  * it returns true the listening stops at once instead of waiting for him to
  * go quiet, which is what makes a fast answer feel fast.
  */
-export function listenOnce(opts: { accept?: (alternatives: string[]) => boolean; maxMs?: number }): Listening {
+export function listenOnce(opts: {
+  accept?: (alternatives: string[], final: boolean) => boolean;
+  maxMs?: number;
+}): Listening {
   const Ctor = ctor();
-  if (!Ctor) return { promise: Promise.resolve({ alternatives: [], blocked: false }), cancel: () => {} };
+  if (!Ctor) return { promise: Promise.resolve({ alternatives: [], final: [], blocked: false }), cancel: () => {} };
 
   const rec = new Ctor();
   rec.lang = "en-US";
@@ -53,16 +63,19 @@ export function listenOnce(opts: { accept?: (alternatives: string[]) => boolean;
   rec.maxAlternatives = 5;
   rec.continuous = false;
 
-  let heard: string[] = [];
+  // Every guess, interim ones too. The recogniser changes its mind while he
+  // speaks ("4", then "for", then "floor"); a right guess along the way counts.
+  const heard: string[] = [];
+  const final: string[] = [];
   let blocked = false;
   let settled = false;
-  let resolve!: (v: { alternatives: string[]; blocked: boolean }) => void;
-  const promise = new Promise<{ alternatives: string[]; blocked: boolean }>((r) => (resolve = r));
+  let resolve!: (v: Heard) => void;
+  const promise = new Promise<Heard>((r) => (resolve = r));
   const finish = () => {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
-    resolve({ alternatives: heard, blocked });
+    resolve({ alternatives: heard, final, blocked });
   };
   const timer = setTimeout(() => {
     try {
@@ -74,10 +87,12 @@ export function listenOnce(opts: { accept?: (alternatives: string[]) => boolean;
 
   rec.onresult = (e) => {
     const last = e.results[e.results.length - 1];
-    const guesses: string[] = [];
-    for (let i = 0; i < last.length; i++) guesses.push(last[i].transcript);
-    heard = guesses;
-    if (opts.accept?.(guesses)) {
+    for (let i = 0; i < last.length; i++) {
+      const t = last[i].transcript;
+      if (t && !heard.includes(t)) heard.push(t);
+      if (t && last.isFinal && !final.includes(t)) final.push(t);
+    }
+    if (opts.accept?.(last.isFinal ? final : heard, last.isFinal)) {
       finish();
       try {
         rec.abort();
@@ -98,7 +113,8 @@ export function listenOnce(opts: { accept?: (alternatives: string[]) => boolean;
   return {
     promise,
     cancel: () => {
-      heard = [];
+      heard.length = 0;
+      final.length = 0;
       finish();
       try {
         rec.abort();
