@@ -48,3 +48,11 @@ test("a quick 'four' misheard as a word still counts", () => {
   assert.equal(judgeSpoken(["eat"], 8).correct, true);
   assert.equal(judgeSpoken(["nine"], 4).correct, false);
 });
+
+test("the twelves: answers past a hundred, with or without \"and\"", () => {
+  assert.equal(lastNumber("144"), 144);
+  assert.equal(lastNumber("one hundred forty four"), 144);
+  assert.equal(lastNumber("one hundred and forty four"), 144);
+  assert.equal(lastNumber("twelve times twelve is one hundred and forty four"), 144);
+  assert.equal(lastNumber("eleven times ten is one hundred and ten"), 110);
+});

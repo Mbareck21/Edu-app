@@ -470,4 +470,194 @@ const DRAWINGS: Record<string, () => ReactNode> = {
       </g>
     </g>
   ),
+
+  // ── Set 3: mastery ───────────────────────────────────────────────────────
+
+  // Mossy the Frog — hops from word to word, like lily pads.
+  "words-25": () => (
+    <g>
+      <ellipse cx="60" cy="106" rx="42" ry="7" fill="#22a06b" />
+      <path d="M60 106 l-8 -7" stroke="#187a50" strokeWidth="2" strokeLinecap="round" />
+      <Feet color="#3f9e3a" y={102} />
+      <circle cx="42" cy="44" r="15" fill="#6fcf5b" />
+      <circle cx="78" cy="44" r="15" fill="#6fcf5b" />
+      <ellipse cx="60" cy="74" rx="42" ry="30" fill="#6fcf5b" />
+      <ellipse cx="60" cy="86" rx="26" ry="16" fill="#d9f5c8" />
+      <Face y={44} gap={18} r={9} mouth="none" />
+      <path d="M40 66 q20 16 40 0" stroke={INK} strokeWidth="3" fill="none" strokeLinecap="round" />
+      <circle cx="54" cy="58" r="1.8" fill="#3f9e3a" />
+      <circle cx="66" cy="58" r="1.8" fill="#3f9e3a" />
+    </g>
+  ),
+  // Kiki the Parrot — says every word she knows.
+  "words-50": () => (
+    <g>
+      <rect x="14" y="100" width="92" height="7" rx="3.5" fill="#a0703c" />
+      <path d="M50 96 l-12 18 l10 -4 l4 8 z" fill="#3b7de0" />
+      <path d="M62 96 l4 20 l6 -8 l6 6 z" fill="#ffd23f" />
+      <path d="M50 30 q-10 -16 -2 -24 q2 12 8 16 M58 28 q0 -18 10 -22 q-4 12 -2 20 M64 30 q10 -12 20 -10 q-10 6 -12 14" fill="#ffd23f" stroke="#f5b800" strokeWidth="2" strokeLinejoin="round" />
+      <ellipse cx="56" cy="66" rx="32" ry="38" fill="#ef4b4b" />
+      <ellipse cx="80" cy="76" rx="12" ry="24" fill="#3b7de0" transform="rotate(-15 80 76)" />
+      <path d="M74 86 q6 8 12 4 M76 94 q5 6 10 2" stroke="#ffd23f" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <Face y={54} cx={52} gap={12} r={7} mouth="none" />
+      <path d="M46 62 h14 q0 14 -9 16 q3 -8 -5 -16 z" fill="#ffd23f" stroke="#b07e00" strokeWidth="2" strokeLinejoin="round" />
+      <ellipse cx="46" cy="102" rx="5" ry="3" fill="#f4b400" />
+      <ellipse cx="64" cy="102" rx="5" ry="3" fill="#f4b400" />
+      <path d="M86 12 h26 a6 6 0 0 1 6 6 v12 a6 6 0 0 1 -6 6 h-16 l-8 8 v-8 h-2 a6 6 0 0 1 -6 -6 v-12 a6 6 0 0 1 6 -6 z" fill="#fff" stroke="var(--color-line)" strokeWidth="2" />
+      <text x="101" y="29" textAnchor="middle" fontFamily="var(--font-display)" fontWeight="700" fontSize="12" fill={INK}>
+        hi!
+      </text>
+    </g>
+  ),
+  // Atlas the Elephant — an elephant never forgets a word.
+  "words-100": () => (
+    <g>
+      <Feet color="#7d8fb8" />
+      <circle cx="24" cy="62" r="22" fill="#a3b3d6" />
+      <circle cx="96" cy="62" r="22" fill="#a3b3d6" />
+      <circle cx="26" cy="64" r="13" fill="#ffc0cb" />
+      <circle cx="94" cy="64" r="13" fill="#ffc0cb" />
+      <circle cx="60" cy="64" r="34" fill="#a3b3d6" />
+      <path d="M50 88 l-4 10 M70 88 l4 10" stroke="#fff" strokeWidth="5" strokeLinecap="round" />
+      <path d="M60 74 v18 q0 12 10 12 q8 0 8 -8" stroke="#a3b3d6" strokeWidth="12" fill="none" strokeLinecap="round" />
+      <path d="M54 80 h12 M54 88 h12" stroke="#7d8fb8" strokeWidth="2" strokeLinecap="round" />
+      <Face y={58} gap={15} r={7} mouth="none" />
+      <path d="M52 30 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" fill="#f4b400" />
+    </g>
+  ),
+  // Webby the Spider — eight legs, and a whole table by heart.
+  "table-one": () => (
+    <g>
+      <path d="M60 0 v40" stroke="var(--color-line)" strokeWidth="2" />
+      <path
+        d="M36 62 q-14 -14 -26 -6 M34 72 q-18 -6 -28 6 M36 82 q-16 2 -22 18 M42 92 q-10 6 -12 18 M84 62 q14 -14 26 -6 M86 72 q18 -6 28 6 M84 82 q16 2 22 18 M78 92 q10 6 12 18"
+        stroke="#5b3fc4"
+        strokeWidth="5"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <circle cx="60" cy="74" r="30" fill="#7c5ce6" />
+      <circle cx="60" cy="44" r="6" fill="#7c5ce6" />
+      <ellipse cx="60" cy="92" rx="14" ry="8" fill="#b9a6ff" />
+      <text x="60" y="97" textAnchor="middle" fontFamily="var(--font-display)" fontWeight="700" fontSize="14" fill="#f4b400">
+        ×
+      </text>
+      <Face y={66} gap={11} r={6} />
+    </g>
+  ),
+  // Flicker the Firefly — lights the grid one cell at a time.
+  "grid-lit": () => (
+    <g>
+      <circle cx="60" cy="88" r="30" fill="#ffd23f" opacity="0.3" />
+      <ellipse cx="30" cy="54" rx="12" ry="22" fill="#dcebff" stroke="#8fd4ff" strokeWidth="2" transform="rotate(-40 30 54)" />
+      <ellipse cx="90" cy="54" rx="12" ry="22" fill="#dcebff" stroke="#8fd4ff" strokeWidth="2" transform="rotate(40 90 54)" />
+      <ellipse cx="60" cy="90" rx="20" ry="18" fill="#ffd23f" />
+      <path d="M44 84 h32 M42 92 h36" stroke="#f5b800" strokeWidth="2" strokeLinecap="round" />
+      <path d="M50 34 q-6 -14 -14 -16 M70 34 q6 -14 14 -16" stroke={INK} strokeWidth="3" fill="none" strokeLinecap="round" />
+      <circle cx="36" cy="18" r="4" fill="#ffd23f" />
+      <circle cx="84" cy="18" r="4" fill="#ffd23f" />
+      <circle cx="60" cy="56" r="26" fill="#3b7de0" />
+      <Face y={54} gap={10} r={6} />
+      <rect x="92" y="88" width="8" height="8" rx="2" fill="#ffd23f" />
+      <rect x="102" y="88" width="8" height="8" rx="2" fill="#ffd23f" />
+      <rect x="92" y="98" width="8" height="8" rx="2" fill="#ffd23f" />
+      <rect x="102" y="98" width="8" height="8" rx="2" fill="#f4b400" />
+    </g>
+  ),
+  // Quill the Hedgehog — every fact as sharp as a spike.
+  "grid-known": () => (
+    <g>
+      <Feet color="#7a5230" />
+      <path
+        d="M26 69 L16 62 L28 62 L19 53 L32 55 L25 44 L37 49 L32 37 L42 45 L41 32 L49 42 L50 29 L56 40 L60 28 L64 40 L70 29 L71 42 L79 32 L78 45 L88 37 L83 49 L95 44 L88 55 L101 53 L92 62 L104 62 L94 69 Z"
+        fill="#7a5230"
+        stroke="#7a5230"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="60" cy="74" r="36" fill="#7a5230" />
+      <ellipse cx="60" cy="82" rx="28" ry="26" fill="#e8cfa6" />
+      <Face y={74} gap={11} r={6} mouth="none" />
+      <ellipse cx="60" cy="87" rx="5" ry="4" fill={INK} />
+      <path d="M55 93 q5 4 10 0" stroke={INK} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <circle cx="46" cy="30" r="5" fill="#ef4b4b" />
+      <path d="M46 25 q2 -4 5 -4" stroke="#22a06b" strokeWidth="2" fill="none" strokeLinecap="round" />
+    </g>
+  ),
+  // Goldie the Goldfish — the whole grid turned gold.
+  "grid-gold": () => (
+    <g>
+      <rect x="36" y="100" width="48" height="8" rx="4" fill="#3b7de0" />
+      <circle cx="60" cy="62" r="44" fill="#8fd4ff" opacity="0.3" stroke="#8fd4ff" strokeWidth="3" />
+      <path d="M18 70 q42 -10 84 0 a42 42 0 0 1 -84 0 z" fill="#8fd4ff" opacity="0.35" />
+      <path d="M40 66 L20 50 L24 66 L20 82 Z" fill="#ff8a3d" stroke="#e8701f" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M58 48 q10 -14 22 -4 z" fill="#ff8a3d" />
+      <ellipse cx="64" cy="66" rx="28" ry="22" fill="#f4b400" />
+      <path d="M52 76 q6 8 14 4" stroke="#b07e00" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <Face y={60} cx={70} gap={9} r={5.5} />
+      <circle cx="96" cy="36" r="4" fill="#fff" stroke="#8fd4ff" strokeWidth="1.5" />
+      <circle cx="90" cy="24" r="3" fill="#fff" stroke="#8fd4ff" strokeWidth="1.5" />
+      <path d="M30 24 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 l5 -2 z" fill="#f4b400" />
+    </g>
+  ),
+  // Peak the Mountain Goat — climbed a skill to the very top.
+  "math-level-5": () => (
+    <g>
+      <path d="M4 110 L60 70 L116 110 Z" fill="#9aa9c9" />
+      <path d="M46 80 L60 70 L74 80 L66 84 L60 80 L54 84 Z" fill="#fff" />
+      <path d="M102 98 v-72" stroke="#7a5230" strokeWidth="3" strokeLinecap="round" />
+      <path d="M102 26 h16 l-5 8 l5 8 h-16 z" fill="#ef4b4b" />
+      <text x="108" y="39" textAnchor="middle" fontFamily="var(--font-display)" fontWeight="700" fontSize="12" fill="#fff">
+        5
+      </text>
+      <path d="M44 34 q-10 -20 -24 -18 q10 4 12 20 M76 34 q10 -20 24 -18 q-10 4 -12 20" fill="#a0703c" stroke="#7a5230" strokeWidth="2" strokeLinejoin="round" />
+      <ellipse cx="30" cy="48" rx="12" ry="6" fill="#fff" stroke="var(--color-line)" strokeWidth="2" transform="rotate(20 30 48)" />
+      <ellipse cx="90" cy="48" rx="12" ry="6" fill="#fff" stroke="var(--color-line)" strokeWidth="2" transform="rotate(-20 90 48)" />
+      <circle cx="60" cy="50" r="26" fill="#fff" stroke="var(--color-line)" strokeWidth="3" />
+      <path d="M54 74 l6 14 l6 -14 z" fill="#fff" stroke="var(--color-line)" strokeWidth="2" strokeLinejoin="round" />
+      <Face y={46} gap={10} r={6} mouth="none" />
+      <ellipse cx="60" cy="60" rx="4" ry="3" fill="#ffc0cb" />
+      <path d="M56 65 q4 3 8 0" stroke={INK} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    </g>
+  ),
+  // Koa the Koala — holds on to every skill.
+  "math-all-3": () => (
+    <g>
+      <path d="M4 100 L116 88" stroke="#a0703c" strokeWidth="8" strokeLinecap="round" />
+      <path d="M100 90 q8 -14 16 -12 q-4 10 -16 12 z M14 99 q-4 12 -12 12 q2 -10 12 -12 z" fill="#22a06b" />
+      <circle cx="30" cy="42" r="18" fill="#aab4c3" />
+      <circle cx="90" cy="42" r="18" fill="#aab4c3" />
+      <circle cx="30" cy="42" r="10" fill="#fff" opacity="0.8" />
+      <circle cx="90" cy="42" r="10" fill="#fff" opacity="0.8" />
+      <circle cx="60" cy="64" r="34" fill="#aab4c3" />
+      <Face y={58} gap={16} r={6} mouth="none" />
+      <ellipse cx="60" cy="70" rx="8" ry="11" fill={INK} />
+      <path d="M55 86 q5 4 10 0" stroke={INK} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <ellipse cx="38" cy="96" rx="11" ry="8" fill="#8b96a8" />
+      <ellipse cx="82" cy="92" rx="11" ry="8" fill="#8b96a8" />
+    </g>
+  ),
+  // Fern the Fawn — spotted, and reading far ahead.
+  "reading-8": () => (
+    <g>
+      <Feet color="#7a5230" />
+      <ellipse cx="26" cy="48" rx="18" ry="9" fill="#c98a4b" transform="rotate(-25 26 48)" />
+      <ellipse cx="94" cy="48" rx="18" ry="9" fill="#c98a4b" transform="rotate(25 94 48)" />
+      <ellipse cx="26" cy="48" rx="11" ry="4.5" fill="#ffc0cb" transform="rotate(-25 26 48)" />
+      <ellipse cx="94" cy="48" rx="11" ry="4.5" fill="#ffc0cb" transform="rotate(25 94 48)" />
+      <ellipse cx="60" cy="96" rx="26" ry="12" fill="#c98a4b" />
+      <circle cx="60" cy="62" r="32" fill="#c98a4b" />
+      <circle cx="48" cy="38" r="3" fill="#fff4e6" />
+      <circle cx="60" cy="34" r="3.5" fill="#fff4e6" />
+      <circle cx="72" cy="38" r="3" fill="#fff4e6" />
+      <circle cx="46" cy="98" r="3" fill="#fff4e6" />
+      <circle cx="74" cy="98" r="3" fill="#fff4e6" />
+      <ellipse cx="60" cy="80" rx="16" ry="12" fill="#fff4e6" />
+      <Face y={60} gap={12} r={7} mouth="none" />
+      <ellipse cx="60" cy="76" rx="5" ry="3.5" fill={INK} />
+      <path d="M55 82 q5 4 10 0" stroke={INK} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <path d="M72 32 q6 -14 18 -20" stroke="#22a06b" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      <path d="M76 24 l-6 -4 M80 20 l-4 -6 M84 16 l-2 -6 M80 26 l6 2 M84 21 l6 0" stroke="#22a06b" strokeWidth="3" strokeLinecap="round" />
+    </g>
+  ),
 };

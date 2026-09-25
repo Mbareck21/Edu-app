@@ -6,6 +6,7 @@ import {
   currentQuarter,
   isLaunchWeek,
   isReviewWeek,
+  SCHOOL_YEAR_END,
   scienceUnitForWeek,
   themeForWeek,
   weekInTheme,
@@ -25,6 +26,8 @@ function shortPlain(plain: string): string {
  */
 export default function SchoolStrip({ href }: { href: string }) {
   const today = todayKey();
+  // After the last school day the calendar would stop on the final unit.
+  if (today > SCHOOL_YEAR_END) return null;
   const quarter = currentQuarter(today);
   const ela = ELA_STANDARDS.filter(
     (s) => quarter !== "summer" && s.quarters.includes(quarter)

@@ -12,10 +12,13 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import TopBar from "@/components/ui/TopBar";
 import { currentLearner } from "@/lib/auth";
+import { SCHOOL_YEAR_END } from "@/lib/curriculum";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
-import { getListSummaries } from "@/lib/lists";
-import { skillsKnowledge } from "@/lib/mastery";
+import { isNewWord } from "@/lib/lesson-builder";
+import { getListSummaries, type SummaryWord } from "@/lib/lists";
+import { skillsKnowledge, uniqueWords } from "@/lib/mastery";
+import type { ClientWord } from "@/lib/models/WordList";
 import { growthPoints, mathLevelsUp, petMood, type Growth } from "@/lib/pet";
 import { getProfile } from "@/lib/profile";
 import { shownStreak } from "@/lib/rewards";
@@ -23,6 +26,15 @@ import { shownStreak } from "@/lib/rewards";
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Learn" };
+
+/**
+ * A summary carries a word's skills but not its SRS state. The whole-word
+ * helpers used here read only the skills plus reviewCount, and a word with no
+ * skill answered has no review either, so 0 stands in for it.
+ */
+function asWord(w: SummaryWord): ClientWord {
+  return { ...w, srs: { reviewCount: 0 } } as unknown as ClientWord;
+}
 
 export default async function LearnPage() {
   const { MathProgress } = await db();
@@ -33,9 +45,16 @@ export default async function LearnPage() {
     MathProgress.find().select("level").lean(),
   ]);
 
-  // The unit in play: the list the parent touched last.
-  const unit = lists.find((l) => l.words.length > 0) ?? lists[0] ?? null;
+  // The unit in play: the newest list that still has a word he has not met,
+  // so the quest does not stall on a list he has finished.
+  const unit =
+    lists.find((l) => l.words.some((w) => isNewWord(asWord(w)))) ??
+    lists.find((l) => l.words.length > 0) ??
+    lists[0] ??
+    null;
   const today = todayKey(new Date());
+  // After the last school day the calendar stops on the final Grade 4 unit.
+  const schoolOver = today > SCHOOL_YEAR_END;
   const doneToday = profile.activity.filter((a) => todayKey(new Date(a.at)) === today);
   const didRef = (ref: string) => doneToday.some((a) => a.ref === ref);
 
@@ -52,11 +71,14 @@ export default async function LearnPage() {
   );
 
   // Sparky grows with words known and math levels gained, never with XP.
-  const knowledge = lists.flatMap((l) => l.words.map((w) => skillsKnowledge(w.skills)));
+  // The same word on two lists counts once.
+  const knowledge = uniqueWords(lists.flatMap((l) => l.words.map(asWord))).map((w) =>
+    skillsKnowledge(w.skills)
+  );
   const growth: Growth = {
     wordsKnown: knowledge.filter(Boolean).length,
     wordsMastered: knowledge.filter((k) => k === "mastered").length,
-    mathLevelsUp: mathLevelsUp(mathRows.map((r) => Number(r.level) || 1)),
+    mathLevelsUp: mathLevelsUp(mathRows.map((r) => Number(r.level) || 1), today),
   };
   const lessonsToday = profile.today.day === today ? profile.today.lessons : 0;
 
@@ -100,9 +122,9 @@ export default async function LearnPage() {
     {
       id: "math",
       name: "Math",
-      blurb: schoolSkill.name,
+      blurb: schoolOver ? "Practice" : schoolSkill.name,
       icon: "math",
-      href: `/math/${schoolSkill.id}`,
+      href: schoolOver ? "/math" : `/math/${schoolSkill.id}`,
       // Any math counts: the skill page, a drill, whichever he opened.
       done: doneToday.some((a) => a.kind === "math"),
     },
@@ -159,9 +181,24 @@ export default async function LearnPage() {
         ) : (
           <>
             <h2 className="pt-2 font-display text-lg font-bold">Your units</h2>
-            {lists.map((list) => (
+            {lists.slice(0, 3).map((list) => (
               <UnitCard key={list._id} list={list} />
             ))}
+            {lists.length > 3 ? (
+              <details className="group">
+                <summary
+                  className="cursor-pointer list-none py-1 text-center font-display text-sm font-bold group-open:hidden [&::-webkit-details-marker]:hidden"
+                  style={{ color: "var(--color-blue-dark)" }}
+                >
+                  Show all {lists.length} units
+                </summary>
+                <div className="space-y-3">
+                  {lists.slice(3).map((list) => (
+                    <UnitCard key={list._id} list={list} />
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </>
         )}
       </div>

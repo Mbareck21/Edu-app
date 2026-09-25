@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import Icon, { type IconName } from "@/components/ui/Icon";
+import Fold from "@/components/ui/Fold";
+import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import ProgressRing from "@/components/ui/ProgressRing";
 import CreatureCollection from "@/components/badges/CreatureCollection";
@@ -31,36 +32,6 @@ export const metadata = { title: "Me" };
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-function Stat({
-  icon,
-  value,
-  label,
-  color,
-}: {
-  icon: IconName;
-  value: string | number;
-  label: string;
-  color: string;
-}) {
-  return (
-    <div
-      className="flex-1 rounded-card border px-2 py-3 text-center"
-      style={{ borderColor: "var(--color-line)", background: "#fff" }}
-    >
-      <span className="inline-flex justify-center" style={{ color }}>
-        <Icon name={icon} size={22} />
-      </span>
-      <p className="mt-1 font-display text-xl font-bold leading-none">{value}</p>
-      <p
-        className="mt-1 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--color-muted)" }}
-      >
-        {label}
-      </p>
-    </div>
-  );
-}
-
 export default async function MePage() {
   const state = await getProfile();
   const profile = toClientProfile(state);
@@ -75,7 +46,7 @@ export default async function MePage() {
   const [factRows, chainRows] = await Promise.all([TimesFact.find().lean(), SpellChain.find().lean()]);
   const digest = buildDigest({
     activity: profile.activity,
-    words,
+    words: uniqueWords(words),
     facts: factRows.map((r) => factFromRow(r.key, r)),
     chains: chainRows.map((r) => fromRow(r.word, r)),
     now,
@@ -131,26 +102,14 @@ export default async function MePage() {
             <Pill color="flame" icon="flame" variant="solid" size="sm">
               {streak} day
             </Pill>
+            <Pill color="green" icon="book" variant="solid" size="sm">
+              {wordsKnown} words
+            </Pill>
           </div>
         </div>
       </Card>
 
-      {/* Stats */}
-      <div className="mt-3 flex gap-2">
-        <Stat
-          icon="flame"
-          value={streak}
-          label="Streak"
-          color="var(--color-flame)"
-        />
-        <Stat icon="bolt" value={profile.xp} label="XP" color="var(--color-gold-ink)" />
-        <Stat
-          icon="book"
-          value={wordsKnown}
-          label="Words known"
-          color="var(--color-green)"
-        />
-      </div>
+      <FamilyScoreboard rows={scoreRows} />
 
       {/* Words breakdown */}
       <Card className="mt-3">
@@ -212,14 +171,11 @@ export default async function MePage() {
         </div>
       </Card>
 
-      <FamilyScoreboard rows={scoreRows} />
-
       <ReadingProgressCard progress={readingProgress(profile.reading, now)} />
 
       {/* The parent's week: every section's numbers in one place. See lib/digest.ts. */}
-      <Card className="mt-3">
-        <h2 className="font-display text-lg font-bold">For the grown-ups</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+      <Fold className="mt-3" title="For the grown-ups">
+        <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           The last seven days, and what comes due tomorrow.
         </p>
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -245,7 +201,7 @@ export default async function MePage() {
             </div>
           ))}
         </dl>
-      </Card>
+      </Fold>
 
       <CreatureCollection
         badges={BADGES.map((b) => ({
@@ -258,8 +214,7 @@ export default async function MePage() {
 
       {/* Word lists — grown-up work, moved off the Words tab so the tab a
           nine-year-old taps hands him something to do instead of an editor. */}
-      <Card className="mt-3">
-        <h2 className="mb-1 font-display text-lg font-bold">Word lists</h2>
+      <Fold className="mt-3" title="Word lists">
         <p className="mb-3 text-sm" style={{ color: "var(--color-muted)" }}>
           Add school units and edit words. Grown-ups only.
         </p>
@@ -271,16 +226,15 @@ export default async function MePage() {
           <Icon name="words" size={20} />
           Open word lists
         </Link>
-      </Card>
+      </Fold>
 
       {/* Settings */}
-      <Card className="mt-3 mb-4">
-        <h2 className="mb-3 font-display text-lg font-bold">Settings</h2>
+      <Fold className="mt-3 mb-4" title="Settings">
         <ProfileSettings name={profile.name} dailyGoal={profile.dailyGoal} />
         <div className="mt-5">
           <SignOutButton name={profile.name} />
         </div>
-      </Card>
+      </Fold>
     </AppShell>
   );
 }

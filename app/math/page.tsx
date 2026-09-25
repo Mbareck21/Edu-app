@@ -3,8 +3,10 @@ import Link from "next/link";
 import AppShell from "@/components/ui/AppShell";
 import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import Fold from "@/components/ui/Fold";
 import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
+import { SCHOOL_YEAR_END } from "@/lib/curriculum";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import {
@@ -75,8 +77,13 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
           <p className="mt-0.5 text-sm" style={{ color: "var(--color-muted)" }}>
             {skill.blurb}
           </p>
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Stars level={stat.level} />
+            {stat.level >= MAX_MATH_LEVEL ? (
+              <Pill color="gold" variant="soft" size="sm">
+                Top level
+              </Pill>
+            ) : null}
             <span className="text-xs font-bold" style={{ color: "var(--color-muted)" }}>
               {!stat.played
                 ? "Not played yet"
@@ -133,6 +140,9 @@ export default async function MathPage() {
   const statFor = (id: string): Stat =>
     stats.get(id) ?? { level: servedLevel(null, today), played: false, best: null, clean: 0 };
 
+  // After the last school day the calendar stops on the final Grade 4 unit,
+  // so the school card goes and every skill is open instead.
+  const schoolOver = today > SCHOOL_YEAR_END;
   const unit = currentUnit(today);
   const lesson = currentLesson(today);
   // The lesson his class is on this week comes first, then the rest of the unit.
@@ -157,26 +167,30 @@ export default async function MathPage() {
       </div>
 
       {/* At school now */}
-      <Card color="purple" variant="soft">
-        <p
-          className="text-[11px] font-bold uppercase tracking-wide"
-          style={{ color: "var(--color-purple-dark)" }}
-        >
-          At school now
-        </p>
-        <h2 className="mt-1 font-display text-xl font-bold">{unit.name}</h2>
-        <p className="mt-0.5 text-sm" style={{ color: "var(--color-purple-dark)" }}>
-          {shortDate(unit.start)} to {shortDate(unit.end)} · {unit.quarter}
-        </p>
-        <p className="mt-2 font-display text-base font-bold">
-          Lesson {lesson.lesson}: {lesson.title}
-        </p>
-        <p className="mt-1 text-sm">Play these first. They match your class.</p>
-      </Card>
+      {schoolOver ? null : (
+        <>
+          <Card color="purple" variant="soft">
+            <p
+              className="text-[11px] font-bold uppercase tracking-wide"
+              style={{ color: "var(--color-purple-dark)" }}
+            >
+              At school now
+            </p>
+            <h2 className="mt-1 font-display text-xl font-bold">{unit.name}</h2>
+            <p className="mt-0.5 text-sm" style={{ color: "var(--color-purple-dark)" }}>
+              {shortDate(unit.start)} to {shortDate(unit.end)} · {unit.quarter}
+            </p>
+            <p className="mt-2 font-display text-base font-bold">
+              Lesson {lesson.lesson}: {lesson.title}
+            </p>
+            <p className="mt-1 text-sm">Play these first. They match your class.</p>
+          </Card>
 
-      {unitSkills.map((skill) => (
-        <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} school />
-      ))}
+          {unitSkills.map((skill) => (
+            <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} school />
+          ))}
+        </>
+      )}
 
       {/* Times tables: a section of its own, because it is a grid to fill rather
           than a skill with a level, and because his father asked for it by name. */}
@@ -186,8 +200,10 @@ export default async function MathPage() {
             <p className="font-display text-lg font-bold">Times tables</p>
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
               {tablesLit === 0
-                ? "Two to nine. Light up the grid."
-                : `${tablesLit} of ${tablesTotal} facts lit`}
+                ? "Two to twelve. Light up the grid."
+                : tablesLit >= tablesTotal
+                  ? "Grid complete. Keep it gold!"
+                  : `${tablesLit} of ${tablesTotal} facts lit`}
             </p>
           </div>
           <Link
@@ -200,26 +216,27 @@ export default async function MathPage() {
         </div>
       </Card>
 
-      <h2 className="mt-6 mb-1 font-display text-lg font-bold">All skills</h2>
-      {MATH_UNITS.map((u) => {
-        const skills = MATH_SKILLS.filter((s) => s.unit === u.id);
-        if (skills.length === 0) return null;
-        return (
-          <section key={u.id} className="mt-4">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h3 className="font-display text-base font-bold">
-                Unit {u.id} · {u.name}
-              </h3>
-              <span className="text-xs font-bold" style={{ color: "var(--color-muted)" }}>
-                {u.quarter}
-              </span>
-            </div>
-            {skills.map((skill) => (
-              <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} />
-            ))}
-          </section>
-        );
-      })}
+      <Fold className="mt-4" title="All skills" open={schoolOver}>
+        {MATH_UNITS.map((u) => {
+          const skills = MATH_SKILLS.filter((s) => s.unit === u.id);
+          if (skills.length === 0) return null;
+          return (
+            <section key={u.id} className="mt-4">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h3 className="font-display text-base font-bold">
+                  Unit {u.id} · {u.name}
+                </h3>
+                <span className="text-xs font-bold" style={{ color: "var(--color-muted)" }}>
+                  {u.quarter}
+                </span>
+              </div>
+              {skills.map((skill) => (
+                <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} />
+              ))}
+            </section>
+          );
+        })}
+      </Fold>
 
       <div className="h-4" />
     </AppShell>

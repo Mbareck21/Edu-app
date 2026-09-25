@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Creature from "@/components/badges/Creature";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import { SET_ONE_SIZE, creatureFor } from "@/lib/creatures";
+import { SET_STARTS, creatureFor } from "@/lib/creatures";
 import { sfx } from "@/lib/sfx";
 
 export type CollectionBadge = {
@@ -23,7 +23,7 @@ export type CollectionBadge = {
 export default function CreatureCollection({ badges }: { badges: CollectionBadge[] }) {
   const [open, setOpen] = useState<CollectionBadge | null>(null);
   const found = badges.filter((b) => b.earnedAt).length;
-  const sets = [badges.slice(0, SET_ONE_SIZE), badges.slice(SET_ONE_SIZE)];
+  const sets = SET_STARTS.map((start, n) => badges.slice(start, SET_STARTS[n + 1]));
   // One set at a time, starting on the first one still to finish.
   const [tab, setTab] = useState(() => {
     const i = sets.findIndex((set) => set.some((b) => !b.earnedAt));
@@ -37,7 +37,12 @@ export default function CreatureCollection({ badges }: { badges: CollectionBadge
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {found} of {badges.length} found. Tap one to meet it.
       </p>
-      <div className="mt-3 grid grid-cols-2 gap-2" role="tablist">
+      {found === badges.length ? (
+        <p className="mt-1 font-display text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
+          Complete! You found every creature.
+        </p>
+      ) : null}
+      <div className="mt-3 grid grid-cols-3 gap-2" role="tablist">
         {sets.map((s, n) => (
           <button
             key={n}
@@ -48,13 +53,13 @@ export default function CreatureCollection({ badges }: { badges: CollectionBadge
               sfx.tap();
               setTab(n);
             }}
-            className="rounded-full px-3 py-1.5 font-display text-sm font-bold"
+            className="whitespace-nowrap rounded-full px-1 py-1.5 font-display text-sm font-bold"
             style={{
               background: tab === n ? "var(--color-gold-soft)" : "var(--color-sand)",
               color: tab === n ? "var(--color-gold-ink)" : "var(--color-muted)",
             }}
           >
-            {n === 0 ? "Set 1" : "Set 2"} · {s.filter((b) => b.earnedAt).length}/{s.length}
+            Set {n + 1} · {s.filter((b) => b.earnedAt).length}/{s.length}
           </button>
         ))}
       </div>

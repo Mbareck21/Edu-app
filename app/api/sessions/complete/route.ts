@@ -7,6 +7,7 @@ import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { LEARNER_IDS } from "@/lib/learners";
 import { isStuckMiss, scheduleSkill } from "@/lib/mastery";
+import { loadMasterySnapshot } from "@/lib/mastery-snapshot";
 import { addPoolWords, getPool } from "@/lib/word-source";
 import { applyRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
@@ -55,7 +56,7 @@ const Body = z.object({
     .optional(),
   reading: z
     .object({
-      level: z.number().int().min(1).max(10),
+      level: z.number().int().min(1).max(12),
       pct: z.number().min(0).max(100),
       wordsCount: z.number().int().min(0).max(5000),
       wpm: z.number().int().min(0).max(1000).optional(),
@@ -291,6 +292,9 @@ export async function POST(req: Request) {
     // another save got in first; the list and math writes happen once.
     await updateList(body, now, writes);
     await updateMath(body, now, writes);
+    // For the Set 3 badges, read after the writes above so this session counts.
+    // A failed read only means those badges wait for the next session.
+    result.mastery = await loadMasterySnapshot().catch(() => undefined);
     const { changed, saved } = await updateProfile((current) => {
       const applied = applySession(current, result, when);
       return {

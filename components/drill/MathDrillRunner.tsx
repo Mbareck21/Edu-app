@@ -181,8 +181,9 @@ function MathDrillRunnerInner({
       timed,
       perfect: sessionPerfect({ answered, correct, timed }),
       // The level rides along so a drill at a hand-picked level cannot move
-      // the level his skill is on.
-      ...(skill === "mixed" ? {} : { mathSkill: skill, mathLevel: level }),
+      // the level his skill is on, and so a harder drill pays more XP.
+      mathLevel: level,
+      ...(skill === "mixed" ? {} : { mathSkill: skill }),
     };
     void postSession(result).then((res) => {
       setOutcome({

@@ -116,3 +116,39 @@ test("the number pack covers the words from the graded worksheet", () => {
     assert.ok(words.has(word), `missing "${word}"`);
   }
 });
+
+const GRADE5 = ["g5-matter", "g5-ecosystems", "g5-earth-systems", "g5-space", "g5-math-words", "g5-reading-words"];
+
+test("the Grade 5 packs exist, each fifteen to twenty-four words", () => {
+  // The seed route keeps the first 24 words of a pack.
+  for (const id of GRADE5) {
+    const pack = packById(id);
+    assert.ok(pack, `${id} exists`);
+    assert.ok(pack.words.length >= 15 && pack.words.length <= 24, `${id}: ${pack.words.length} words`);
+    assert.ok(pack.name.trim() && pack.blurb.trim(), `${id}: name and blurb`);
+  }
+});
+
+test("no Grade 5 word repeats a word from any other pack", () => {
+  // One home per word, the same rule as the two Grade 4 math packs.
+  const seen = new Map<string, string>();
+  for (const pack of WORD_PACKS) {
+    for (const { word } of pack.words) {
+      const w = word.toLowerCase();
+      if (GRADE5.includes(pack.id)) {
+        assert.ok(!seen.has(w), `"${word}" in ${pack.id} is already in ${seen.get(w)}`);
+      }
+      seen.set(w, pack.id);
+    }
+  }
+});
+
+test("Grade 5 clues are one short sentence", () => {
+  for (const id of GRADE5) {
+    for (const { word, clue } of packById(id)!.words) {
+      assert.ok(clue.length <= 120, `${id}: clue for "${word}" is ${clue.length} chars`);
+      assert.match(clue, /^[A-Z].*\.$/, `${id}: clue for "${word}" is not one sentence`);
+      assert.equal(clue.split(/\.\s/).length, 1, `${id}: clue for "${word}" is more than one sentence`);
+    }
+  }
+});

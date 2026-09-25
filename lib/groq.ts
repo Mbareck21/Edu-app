@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import type { Grade } from "@/lib/grade";
 
 let _client: Groq | null = null;
 export function groq(): Groq {
@@ -195,11 +196,11 @@ Keys must echo each input entry EXACTLY as it was given (lowercase, preserving s
 //   • Mention a recurring character or his name if you want.
 //   • Note anything to avoid.
 // ────────────────────────────────────────────────────────────────────────────
-export const READING_SYSTEM_PROMPT = `
+export const readingSystemPrompt = (grade: Grade) => `
 You write READING PASSAGES with comprehension questions for a 9-year-old
-Arabic-native English learner in Grade 4, reading at a Grade 3 level.
+Arabic-native English learner in Grade ${grade}, reading below grade level.
 
-The user message gives you: a LEVEL (1-10) with its exact word/sentence
+The user message gives you: a LEVEL (1-12) with its exact word/sentence
 targets, a KIND ("story" or "info"), a TOPIC, TOPIC WORDS, the child's own
 STUDY WORDS, a QUESTION PLAN, and recent passages to avoid repeating.
 Follow all of them. The QUESTION PLAN is a contract: produce exactly those
@@ -292,7 +293,7 @@ FORMAT "mcq" (tap one option):
 BAD:  q "What is this about?" → acceptable ["what is it about", "tell me about it"]
 GOOD: q "What is this about?" → acceptable ["a girl and her goat", "layla and her goat", "a goat that got out"]
 
-⚠ Word every question the way a Grade 4 school reading test does, about THIS
+⚠ Word every question the way a Grade ${grade} school reading test does, about THIS
 passage, naming its people, places and things:
 GOOD: "According to the passage, why did Layla climb the ladder?"
 GOOD: "What does the word \"stubborn\" mean in this passage?"

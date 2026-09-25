@@ -1,11 +1,21 @@
 // Reading engine: pure helpers shared by the generator route and the runner.
 // No React, no Mongo — safe to import anywhere.
 
-import type { Quarter } from "@/lib/curriculum";
+import { FPS_QUARTERS, SCHOOL_YEAR_END, currentQuarter, type Quarter } from "@/lib/curriculum";
+import { todayKey } from "@/lib/day";
+import { gradeOn, type Grade } from "@/lib/grade";
 import type { ReadingQuestionType } from "@/lib/models/WordList";
 
-/** The profile's reading ladder runs 1..10 (see lib/rewards.ts). */
-export const MAX_READING_LEVEL = 10;
+/** The profile's reading ladder runs 1..12 (see lib/rewards.ts). */
+export const MAX_READING_LEVEL = 12;
+
+/** Top of the ladder in Grade 4. Levels 11-12 open in Grade 5. */
+const GRADE4_TOP_LEVEL = 10;
+
+/** The highest level the ladder climbs to in a grade. */
+export function maxReadingLevel(grade: Grade): number {
+  return grade === 5 ? MAX_READING_LEVEL : GRADE4_TOP_LEVEL;
+}
 
 /**
  * Hu & Nation 98% coverage: the most words a passage may carry that he will
@@ -43,10 +53,13 @@ export const CLASS_TEXT_LEXILE = { min: 760, max: 1030 } as const;
 
 export const LEXILE_LADDER = { start: 450, end: 940 } as const;
 
-/** Lexile target for a rung of the ladder. Level 1 = 450L, level 10 = 940L. */
+/**
+ * Lexile target for a rung of the ladder. Level 1 = 450L, level 10 = 940L;
+ * the Grade 5 rungs keep the same step (11 = 990L, 12 = 1050L).
+ */
 export function lexileForLevel(rawLevel: number): number {
   const level = clampLevel(rawLevel);
-  const step = (LEXILE_LADDER.end - LEXILE_LADDER.start) / (MAX_READING_LEVEL - 1);
+  const step = (LEXILE_LADDER.end - LEXILE_LADDER.start) / (GRADE4_TOP_LEVEL - 1);
   return Math.round((LEXILE_LADDER.start + step * (level - 1)) / 10) * 10;
 }
 
@@ -81,9 +94,9 @@ export type ReadingParams = {
   paragraphs: number;
 };
 
-export function clampLevel(level: number): number {
+export function clampLevel(level: number, max: number = MAX_READING_LEVEL): number {
   if (!Number.isFinite(level)) return 1;
-  return Math.max(1, Math.min(MAX_READING_LEVEL, Math.round(level)));
+  return Math.max(1, Math.min(max, Math.round(level)));
 }
 
 export function readingParams(rawLevel: number): ReadingParams {
@@ -137,6 +150,19 @@ function quarterReached(
 ): boolean {
   if (!now || now === "summer") return false;
   return QUARTER_ORDER.indexOf(now) >= QUARTER_ORDER.indexOf(opens);
+}
+
+/**
+ * The quarter to hand questionPlan for a YYYY-MM-DD day. On a break it is the
+ * last quarter already reached, so winter break keeps Q2's standards open and
+ * the summer after the year keeps them all open. currentQuarter says "summer"
+ * for both. Only the summer before the first quarter opens nothing.
+ */
+export function planQuarter(dayKey: string): Quarter["id"] | "summer" {
+  const now = currentQuarter(dayKey);
+  if (now !== "summer") return now;
+  const past = FPS_QUARTERS.filter((q) => q.end < dayKey.slice(0, 10));
+  return past.length > 0 ? past[past.length - 1].id : "summer";
 }
 
 /**
@@ -548,16 +574,21 @@ export function wordsPerMinute(wordsCount: number, ms: number): number {
 }
 
 /**
- * Hasbrouck & Tindal 2017, Grade 4 50th percentile, by term.
+ * Hasbrouck & Tindal 2017, Grade 4 and Grade 5 50th percentile, by term.
  * Only used to give the parent a "this is where he should be" number.
  */
 export const WPM_NORMS_GRADE4 = { fall: 94, winter: 120, spring: 133 } as const;
+export const WPM_NORMS_GRADE5 = { fall: 110, winter: 127, spring: 139 } as const;
 
 export function wpmNormForDate(date: Date = new Date()): number {
+  const key = todayKey(date);
+  const norms = gradeOn(key) === 5 ? WPM_NORMS_GRADE5 : WPM_NORMS_GRADE4;
   const m = date.getMonth(); // 0-11
-  if (m >= 7 && m <= 10) return WPM_NORMS_GRADE4.fall; // Aug-Nov
-  if (m === 11 || m <= 1) return WPM_NORMS_GRADE4.winter; // Dec-Feb
-  return WPM_NORMS_GRADE4.spring;
+  // The summer he moves up aims at the new grade's fall mark, not its spring.
+  const movedUp = key > SCHOOL_YEAR_END && key.slice(0, 4) === SCHOOL_YEAR_END.slice(0, 4) && m < 7;
+  if (movedUp || (m >= 7 && m <= 10)) return norms.fall; // Aug-Nov
+  if (m === 11 || m <= 1) return norms.winter; // Dec-Feb
+  return norms.spring;
 }
 
 // ── Multiple choice sanity ────────────────────────────────────────────────

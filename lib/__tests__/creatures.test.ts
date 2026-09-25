@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CREATURES, SET_ONE_SIZE, creatureFor } from "@/lib/creatures";
+import { CREATURES, SET_STARTS, creatureFor } from "@/lib/creatures";
 import { BADGES } from "@/lib/rewards";
 
 test("every badge has its own creature", () => {
@@ -22,8 +22,10 @@ test("no creature is left without a badge, and grid names are unique", () => {
   assert.equal(new Set(first).size, first.length);
 });
 
-test("set 1 is the first 12 badges and set 2 has 12 more", () => {
-  assert.equal(SET_ONE_SIZE, 12);
-  assert.equal(BADGES[SET_ONE_SIZE - 1].id, "unit-done");
-  assert.equal(BADGES.length - SET_ONE_SIZE, 12);
+test("sets of 12, 12 and 10, each ending where it should", () => {
+  assert.deepEqual(SET_STARTS, [0, 12, 24]);
+  assert.equal(BADGES[SET_STARTS[1] - 1].id, "unit-done");
+  assert.equal(BADGES[SET_STARTS[2] - 1].id, "level-20");
+  assert.equal(BADGES[SET_STARTS[2]].id, "words-25");
+  assert.equal(BADGES.length - SET_STARTS[2], 10);
 });

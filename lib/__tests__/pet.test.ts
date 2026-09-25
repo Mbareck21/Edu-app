@@ -9,8 +9,23 @@ test("growth counts known words, mastered words again, and math levels gained", 
 });
 
 test("math levels only count above level 1", () => {
-  assert.equal(mathLevelsUp([1, 2, 3]), 3);
-  assert.equal(mathLevelsUp([]), 0);
+  assert.equal(mathLevelsUp([1, 2, 3], "2026-09-25"), 3);
+  assert.equal(mathLevelsUp([], "2026-09-25"), 0);
+});
+
+test("the Grade 5 lift to level 4 neither adds growth nor takes Grade 4 growth away", () => {
+  const grade4 = "2027-05-20";
+  const grade5 = "2027-05-21";
+  // Last day of Grade 4: 1, 2 and 3 are all earned.
+  assert.equal(mathLevelsUp([1, 2, 3], grade4), 3);
+  // The switch day: the same levels still count, so Sparky never shrinks.
+  assert.equal(mathLevelsUp([1, 2, 3], grade5), 3);
+  // The lift to 4 counts no more than the Grade 4 top, level 3.
+  assert.equal(mathLevelsUp([3, 3, 3], grade4), mathLevelsUp([4, 4, 4], grade5));
+  // A support drop to 3 in Grade 5 keeps the Grade 4 credit.
+  assert.equal(mathLevelsUp([3, 4], grade5), 4);
+  // Earning level 5 in Grade 5 grows him by one.
+  assert.equal(mathLevelsUp([5, 4, 4], grade5), 7);
 });
 
 test("the pet starts as an egg and grows at each stage's mark", () => {

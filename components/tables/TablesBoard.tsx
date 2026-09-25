@@ -47,7 +47,7 @@ type Run = { facts: Fact[]; label: string; sessionRef: string };
 /**
  * The grid, and the way into a round.
  *
- * Eight rows by ten: a cell lights when he knows the fact, gold when he
+ * Eleven rows by twelve: a cell lights when he knows the fact, gold when he
  * knows it fast. 7x8 and 8x7 are one fact, so both cells light together.
  * Filling the grid is the whole game.
  */
@@ -81,6 +81,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
   const progress = TABLES.map((t) => tableProgress(t, facts));
   const lit = Object.values(facts).filter(isLit).length;
   const known = Object.values(facts).filter(isKnown).length;
+  const gold = Object.values(facts).filter((f) => isKnown(f) && f.lastFast).length;
   const total = new Set(
     TABLES.flatMap((t) => Array.from({ length: TABLE_UP_TO }, (_, i) => factKey(t, i + 1)))
   ).size;
@@ -156,10 +157,19 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
             {lit} of {total} lit{known > 0 ? ` · ${known} known` : ""}
           </p>
         </div>
+        {lit >= total ? (
+          <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-dark)" }}>
+            {gold >= total
+              ? "Every fact gold. You own this grid."
+              : known >= total
+                ? "Every fact known. Now make them all gold."
+                : "Grid complete — keep it gold"}
+          </p>
+        ) : null}
         <div className="mt-3 overflow-x-auto">
           <table
             className="w-full border-separate"
-            style={{ borderSpacing: 3 }}
+            style={{ borderSpacing: 2 }}
             aria-label="Times tables grid"
           >
             <thead>
@@ -185,7 +195,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                     return (
                       <td key={i} className="p-0">
                         <div
-                          className="flex h-7 w-full items-center justify-center rounded text-[10px] font-bold"
+                          className="flex h-6 w-full items-center justify-center rounded text-[10px] font-bold"
                           title={`${t} x ${i + 1} = ${c.value}`}
                           style={{
                             background: c.gold
@@ -251,10 +261,10 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                   <p className="text-sm" style={{ color: "var(--color-muted)" }}>
                     {done
                       ? p.fast === p.total
-                        ? "All ten, all fast."
-                        : `All ten known, ${p.fast} fast`
+                        ? `All ${p.total}, all fast.`
+                        : `All ${p.total} known, ${p.fast} fast`
                       : allLit
-                        ? `All ten right · ${p.known} known`
+                        ? `All ${p.total} right · ${p.known} known`
                         : `${p.lit} of ${p.total}${p.known > 0 ? ` · ${p.known} known` : ""}`}
                   </p>
                 </div>
