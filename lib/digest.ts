@@ -7,6 +7,7 @@
  * one card on the Me tab. Pure: hand it the rows, get the numbers.
  */
 
+import { isNewWord } from "@/lib/lesson-builder";
 import { wordKnowledge } from "@/lib/mastery";
 import type { ClientWord } from "@/lib/models/WordList";
 import { MS_PER_DAY } from "@/lib/spacing";
@@ -69,8 +70,11 @@ export function buildDigest({ activity, words, facts, chains, now }: DigestInput
     return last >= weekStart;
   }).length;
 
-  const dueWords = words.filter((w) =>
-    Object.values(w.skills).some((s) => new Date(s.dueAt).getTime() <= tomorrow.getTime())
+  // A word he has never started is new, not due.
+  const dueWords = words.filter(
+    (w) =>
+      !isNewWord(w) &&
+      Object.values(w.skills).some((s) => new Date(s.dueAt).getTime() <= tomorrow.getTime())
   ).length;
   const dueFacts = facts.filter((f) => f.correct + f.wrong > 0 && isDue(f, tomorrowIso)).length;
   const dueChecks = chains.filter((c) => isFinished(c) && checkDue(c, tomorrowIso)).length;

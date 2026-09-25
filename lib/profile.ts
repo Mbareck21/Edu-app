@@ -100,6 +100,7 @@ export async function updateProfile<T extends { profile: ProfileState }>(
           reading: {
             level: state.reading.level,
             recent: state.reading.recent.map((r) => ({ ...r, at: new Date(r.at) })),
+            ...(state.reading.since ? { since: new Date(state.reading.since) } : {}),
           },
         },
         $inc: { rev: 1 },

@@ -14,7 +14,7 @@ import SignOutButton from "@/components/SignOutButton";
 import { lastSevenDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { buildDigest } from "@/lib/digest";
-import { countKnowledge } from "@/lib/mastery";
+import { countKnowledge, uniqueWords } from "@/lib/mastery";
 import { toClientProfile } from "@/lib/models/Profile";
 import { toClient, type ClientWord } from "@/lib/models/WordList";
 import { fromRow } from "@/lib/spell-chain";
@@ -22,7 +22,7 @@ import { allFactKeys, factFromRow } from "@/lib/tables";
 import { currentLearner } from "@/lib/auth";
 import { LEARNER_NAMES } from "@/lib/learners";
 import { getFamilyProfiles, getProfile } from "@/lib/profile";
-import { weekDaysPlayed, weekXp } from "@/lib/scoreboard";
+import { dayXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +68,7 @@ export default async function MePage() {
   const { WordList, SpellChain, TimesFact } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } }).lean();
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
-  const counts = countKnowledge(words);
+  const counts = countKnowledge(uniqueWords(words));
   const wordsKnown = counts.known + counts.mastered;
 
   const now = new Date();
@@ -93,8 +93,7 @@ export default async function MePage() {
   const scoreRows = family.map(({ learner, state: s }) => ({
     learner,
     name: s.name || LEARNER_NAMES[learner],
-    xp: weekXp(s.activity, today),
-    days: weekDaysPlayed(s.activity, today),
+    xp: dayXp(s.activity, today),
     isMe: learner === me,
   }));
 
@@ -163,9 +162,9 @@ export default async function MePage() {
           {(
             [
               { label: "New", n: counts.new, color: "var(--color-muted)" },
-              { label: "Learning", n: counts.learning, color: "var(--color-blue)" },
-              { label: "Known", n: counts.known, color: "var(--color-green)" },
-              { label: "Mastered", n: counts.mastered, color: "var(--color-purple)" },
+              { label: "Learning", n: counts.learning, color: "var(--color-gold-dark)" },
+              { label: "Known", n: counts.known, color: "var(--color-blue)" },
+              { label: "Mastered", n: counts.mastered, color: "var(--color-green)" },
             ] as const
           ).map((b) => (
             <div key={b.label} className="rounded-tile py-2" style={{ background: "var(--color-sand)" }}>

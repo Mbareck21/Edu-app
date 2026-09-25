@@ -162,7 +162,103 @@ export const BADGES: readonly Badge[] = [
       r.answered > 0 &&
       Math.round((r.correct / r.answered) * 100) >= stepById("challenge").passPct,
   },
+  // Set 2: bigger goals.
+  {
+    id: "streak-60",
+    name: "Two Months",
+    blurb: "You played 60 days in a row.",
+    icon: "flame",
+    check: (p) => p.streak.current >= 60,
+  },
+  {
+    id: "streak-100",
+    name: "100 Days",
+    blurb: "You played 100 days in a row.",
+    icon: "flame",
+    check: (p) => p.streak.current >= 100,
+  },
+  {
+    id: "speed-500",
+    name: "Super Speed",
+    blurb: "You gave 500 fast answers.",
+    icon: "bolt",
+    check: (p) => p.stats.fastAnswers >= 500,
+  },
+  {
+    id: "perfect-25",
+    name: "Perfect 25",
+    blurb: "You got 25 lessons all right.",
+    icon: "trophy",
+    check: (p) => p.stats.perfectSessions >= 25,
+  },
+  {
+    id: "perfect-50",
+    name: "Perfect 50",
+    blurb: "You got 50 lessons all right.",
+    icon: "trophy",
+    check: (p) => p.stats.perfectSessions >= 50,
+  },
+  {
+    id: "right-1000",
+    name: "Answer Ace",
+    blurb: "You got 1,000 right answers.",
+    icon: "words",
+    check: (p) => p.stats.correct >= 1000,
+  },
+  {
+    id: "right-2500",
+    name: "Answer Hero",
+    blurb: "You got 2,500 right answers.",
+    icon: "sparkles",
+    check: (p) => p.stats.correct >= 2500,
+  },
+  {
+    id: "math-50",
+    name: "Math Wizard",
+    blurb: "You finished 50 math games.",
+    icon: "math",
+    check: (p) => p.stats.mathSessions >= 50,
+  },
+  {
+    id: "reading-5",
+    name: "Book Buddy",
+    blurb: "You got to reading level 5.",
+    icon: "book",
+    check: (p, r) => readingLevelAfter(p, r) >= 5,
+  },
+  {
+    id: "reading-10",
+    name: "Top Reader",
+    blurb: "You got to reading level 10, the top!",
+    icon: "book",
+    check: (p, r) => readingLevelAfter(p, r) >= MAX_READING_LEVEL,
+  },
+  {
+    id: "level-10",
+    name: "Level 10",
+    blurb: "You got to level 10.",
+    icon: "star",
+    check: (p) => levelFor(p.xp).level >= 10,
+  },
+  {
+    id: "level-20",
+    name: "Level 20",
+    blurb: "You got to level 20.",
+    icon: "star",
+    check: (p) => levelFor(p.xp).level >= 20,
+  },
 ];
+
+/**
+ * Badges are checked before the API folds this session's reading in (see
+ * app/api/sessions/complete/route.ts), so a reading badge looks one reading
+ * ahead. Only the level is read; the timestamp is a throwaway.
+ */
+function readingLevelAfter(p: ProfileState, r: SessionResult): number {
+  if (!r.reading) return p.reading.level;
+  // Logged as now: a time before the level last changed would not count.
+  return applyReading(p, r.reading, { at: new Date(), today: "" }).reading.level;
+}
 
 // ── Applying a session ────────────────────────────────────────────────────
 
@@ -226,16 +322,12 @@ export const READING_DOWN_RUN = 2;
  * step up; READING_DOWN_RUN in a row under READING_DOWN_PCT step down, and only
  * readings taken at the current level count. Pure — `recent` is newest first.
  */
-export function nextReadingLevel(level: number, recent: ReadingLog[]): number {
+export function nextReadingLevel(level: number, recent: ReadingLog[], since?: string): number {
   const cur = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(level) || 1));
   // Only readings taken AT this level can justify leaving it. Reading the whole
   // log meant one promotion cascaded into the next on the very next reading:
   // three good ones at L1 would have walked him L1 -> L4 in five sessions.
-  const atLevel: ReadingLog[] = [];
-  for (const r of recent) {
-    if (r.level !== cur) break;
-    atLevel.push(r);
-  }
+  const atLevel = readingsAtLevel(cur, recent, since);
   const runUp = atLevel.slice(0, READING_UP_RUN);
   if (runUp.length === READING_UP_RUN && runUp.every((r) => r.pct >= READING_UP_PCT)) {
     return Math.min(MAX_READING_LEVEL, cur + 1);
@@ -248,6 +340,24 @@ export function nextReadingLevel(level: number, recent: ReadingLog[]): number {
     return Math.max(1, cur - 1);
   }
   return cur;
+}
+
+/**
+ * The readings that count at `level`, newest first: the ones taken at it since
+ * he reached it (`since`). An easier passage left over from before a promotion
+ * is practice: it neither counts nor breaks the run. A log with no `since`,
+ * written before it existed, stops at the first reading off this level.
+ */
+function readingsAtLevel(level: number, recent: readonly ReadingLog[], since?: string): ReadingLog[] {
+  const from = since ? new Date(since).getTime() : null;
+  const out: ReadingLog[] = [];
+  for (const r of recent) {
+    if (from !== null && new Date(r.at).getTime() < from) break;
+    if (from !== null && r.level < level) continue;
+    if (r.level !== level) break;
+    out.push(r);
+  }
+  return out;
 }
 
 /** Log one finished reading and re-aim the ladder. Never mutates the input. */
@@ -266,9 +376,15 @@ export function applyReading(
       : {}),
   };
   const recent = [entry, ...profile.reading.recent].slice(0, READING_CAP);
+  const { level, since } = profile.reading;
+  const next = nextReadingLevel(level, recent, since);
   return {
     ...profile,
-    reading: { level: nextReadingLevel(profile.reading.level, recent), recent },
+    reading: {
+      level: next,
+      recent,
+      ...(next !== level ? { since: entry.at } : since ? { since } : {}),
+    },
   };
 }
 
@@ -406,14 +522,14 @@ export type ReadingProgress = {
 };
 
 export function readingProgress(
-  reading: { level: number; recent: readonly ReadingLog[] },
+  reading: { level: number; recent: readonly ReadingLog[]; since?: string },
   now: Date = new Date(),
   shown = 10
 ): ReadingProgress {
   const level = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(reading.level) || 1));
   let goodInARow = 0;
-  for (const r of reading.recent) {
-    if (r.level !== level || r.pct < READING_UP_PCT) break;
+  for (const r of readingsAtLevel(level, reading.recent, reading.since)) {
+    if (r.pct < READING_UP_PCT) break;
     goodInARow++;
   }
   goodInARow = Math.min(goodInARow, READING_UP_RUN);

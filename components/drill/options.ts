@@ -137,7 +137,7 @@ export function timedSeconds(mode: MathMode): number | null {
 export type LevelChoice = Level | "auto";
 
 export function parseLevelChoice(value: string | undefined): LevelChoice {
-  if (value === "1" || value === "2" || value === "3") return Number(value) as Level;
+  if (value === "1" || value === "2" || value === "3" || value === "4" || value === "5") return Number(value) as Level;
   return "auto";
 }
 
@@ -147,7 +147,7 @@ export const MIXED_SKILL = "mixed";
 export function mixedAutoLevel(levels: readonly number[]): Level {
   if (levels.length === 0) return 1;
   const mean = levels.reduce((sum, l) => sum + l, 0) / levels.length;
-  return Math.max(1, Math.min(3, Math.round(mean))) as Level;
+  return Math.max(1, Math.min(5, Math.round(mean))) as Level;
 }
 
 /** Leave `seed` out for a base URL the runner can re-seed on "Again". */

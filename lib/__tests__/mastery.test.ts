@@ -10,10 +10,11 @@ import {
   scheduleSkill,
   skillDue,
   skillGapDays,
+  uniqueWords,
   wordKnowledge,
 } from "@/lib/mastery";
 import { SKILL_IDS, type ClientWord, type SkillState } from "@/lib/models/WordList";
-import { applyReading, emptyProfile, nextReadingLevel } from "@/lib/rewards";
+import { applyReading, emptyProfile, nextReadingLevel, readingProgress } from "@/lib/rewards";
 import { STEPS, stepById, type ProfileState, type ReadingLog } from "@/lib/types";
 import { dueAfterDays } from "@/lib/spacing";
 
@@ -103,11 +104,16 @@ test("the next day counts at any time of day, not only after the same clock time
   assert.equal(s.streak, 2);
 });
 
-test("an early miss still resets the streak", () => {
+test("an early miss halves the streak instead of resetting it", () => {
   let s: SkillState = newSkillState(NOW);
   s = scheduleSkill(s, true, NOW);
   s = scheduleSkill(s, false, new Date(NOW.getTime() + 60_000));
-  assert.equal(s.streak, 0, "getting it wrong counts whenever it happens");
+  assert.equal(s.streak, 0, "half of 1 is still 0");
+  // A mastered word, slipped in extra practice before its review was due.
+  const mastered = { ...newSkillState(NOW), streak: 4, correct: 4, dueAt: dueAfterDays(NOW, 30).toISOString() };
+  s = scheduleSkill(mastered, false, NOW);
+  assert.equal(s.streak, 2);
+  assert.equal(s.dueAt, NOW.toISOString(), "due again straight away");
 });
 
 test("the review gap stops growing at 90 days", () => {
@@ -161,6 +167,11 @@ test("mastered needs 4 streaks of 4", () => {
   assert.equal(wordKnowledge(withStreaks(4, 16)), "mastered");
 });
 
+test("a word on two lists counts once, at its best", () => {
+  const counts = countKnowledge(uniqueWords([word(), { ...withStreaks(4), word: " Brave" }, word({ word: "calm" })]));
+  assert.deepEqual(counts, { new: 1, learning: 0, known: 0, mastered: 1 });
+});
+
 test("counts split the list and words known covers known + mastered", () => {
   const words = [word(), withStreaks(1), withStreaks(3, 0), withStreaks(4, 0)];
   assert.deepEqual(countKnowledge(words), {
@@ -209,6 +220,33 @@ test("only readings taken at the current level move it", () => {
   assert.equal(nextReadingLevel(2, recent), 2);
   // Two weak readings at the new level do move him back.
   assert.equal(nextReadingLevel(2, [log(30, 2), log(30, 2), log(95)]), 1);
+});
+
+test("an easier passage left from before a promotion does not reset the run", () => {
+  let p: ProfileState = emptyProfile();
+  const at = (min: number) => ({ at: new Date(NOW.getTime() + min * 60_000), today: "2026-08-19" });
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(i));
+  assert.equal(p.reading.level, 2);
+  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(3));
+  // A level-1 passage still open on another list.
+  p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(4));
+  assert.equal(readingProgress(p.reading, NOW).goodInARow, 1);
+  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(5));
+  assert.equal(readingProgress(p.reading, NOW).goodInARow, 2);
+});
+
+test("after dropping a level and climbing back, old weak readings do not count", () => {
+  let p: ProfileState = emptyProfile();
+  const at = (min: number) => ({ at: new Date(NOW.getTime() + min * 60_000), today: "2026-08-19" });
+  let t = 0;
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(t++));
+  for (let i = 0; i < 2; i++) p = applyReading(p, { level: 2, pct: 25, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 1);
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 2);
+  // One weak reading back at level 2 is not two in a row.
+  p = applyReading(p, { level: 2, pct: 25, wordsCount: 60 }, at(t++));
+  assert.equal(p.reading.level, 2);
 });
 
 test("applyReading logs newest first and caps at 20", () => {
@@ -291,4 +329,8 @@ test("a word is stuck on a second miss in a row within a week", () => {
   assert.equal(isStuckMiss(missed(2), true, now), false, "a right answer is not a miss");
   assert.equal(isStuckMiss({ ...missed(2), streak: 1 }, false, now), false, "last answer was right");
   assert.equal(isStuckMiss({ ...missed(2), wrong: 0 }, false, now), false, "first miss ever");
+  // An early miss halved a streak of 4 to 2; a second miss is still stuck.
+  const halved = scheduleSkill({ ...missed(2), streak: 4, dueAt: now.toISOString() }, false, new Date(now.getTime() - 86_400_000));
+  assert.equal(halved.streak, 2);
+  assert.equal(isStuckMiss(halved, false, now), true);
 });

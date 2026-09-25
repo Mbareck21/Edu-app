@@ -45,6 +45,15 @@ export function sessionPct(s: Scorable): number {
 }
 
 /**
+ * Whether a run may move a math level at all. The floor keeps a short timed
+ * run from levelling up; it must not level him down either — 2 of 2 in a
+ * minute scores 40% against the floor, and that is not a weak round.
+ */
+export function movesLevel(s: Scorable): boolean {
+  return !s.timed || Math.max(0, Math.floor(s.answered) || 0) >= TIMED_MIN_ANSWERED;
+}
+
+/**
  * Every one right, and enough of them for that to mean something. A timed run
  * has to clear the floor; one right of one is not perfect, it is short.
  */

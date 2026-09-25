@@ -196,9 +196,44 @@ test("goalMet fires once, on the session that reaches the goal", () => {
 
 // ── badges ────────────────────────────────────────────────────────────────
 
-test("BADGES has 12 entries with unique ids", () => {
-  assert.equal(BADGES.length, 12);
-  assert.equal(new Set(BADGES.map((b) => b.id)).size, 12);
+test("BADGES has 24 entries with unique ids", () => {
+  assert.equal(BADGES.length, 24);
+  assert.equal(new Set(BADGES.map((b) => b.id)).size, 24);
+});
+
+test("each set 2 badge fires at its threshold and not one below", () => {
+  const badge = (id: string) => BADGES.find((b) => b.id === id)!;
+  const r = result();
+  const stat = (over: Partial<ProfileState["stats"]>): ProfileState => {
+    const p = emptyProfile();
+    return { ...p, stats: { ...p.stats, ...over } };
+  };
+  const cases: [string, (n: number) => ProfileState, number][] = [
+    ["streak-60", (n) => ({ ...emptyProfile(), streak: { current: n, best: n, lastActiveDay: "" } }), 60],
+    ["streak-100", (n) => ({ ...emptyProfile(), streak: { current: n, best: n, lastActiveDay: "" } }), 100],
+    ["speed-500", (n) => stat({ fastAnswers: n }), 500],
+    ["perfect-25", (n) => stat({ perfectSessions: n }), 25],
+    ["perfect-50", (n) => stat({ perfectSessions: n }), 50],
+    ["right-1000", (n) => stat({ correct: n }), 1000],
+    ["right-2500", (n) => stat({ correct: n }), 2500],
+    ["math-50", (n) => stat({ mathSessions: n }), 50],
+    ["reading-5", (n) => ({ ...emptyProfile(), reading: { level: n, recent: [] } }), 5],
+    ["reading-10", (n) => ({ ...emptyProfile(), reading: { level: n, recent: [] } }), 10],
+    ["level-10", (n) => ({ ...emptyProfile(), xp: levelFloor(n) }), 10],
+    ["level-20", (n) => ({ ...emptyProfile(), xp: levelFloor(n) }), 20],
+  ];
+  for (const [id, at, n] of cases) {
+    assert.equal(badge(id).check(at(n), r), true, `${id} at ${n}`);
+    assert.equal(badge(id).check(at(n - 1), r), false, `${id} at ${n - 1}`);
+  }
+});
+
+test("the reading that moves him to level 5 earns reading-5 in the same session", () => {
+  const good = { at: AT.toISOString(), level: 4, pct: 100, wordsCount: 100 };
+  const p: ProfileState = { ...emptyProfile(), reading: { level: 4, recent: [good, good] } };
+  const reading = { level: 4, pct: 100, wordsCount: 100 };
+  const { gained } = applySession(p, result({ kind: "reading", ref: "r1", reading }), now());
+  assert.ok(gained.newBadges.some((b) => b.id === "reading-5"));
 });
 
 test("the first lesson earns first-win, and only once", () => {

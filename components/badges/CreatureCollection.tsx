@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Creature from "@/components/badges/Creature";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
-import { creatureFor } from "@/lib/creatures";
+import { SET_ONE_SIZE, creatureFor } from "@/lib/creatures";
 import { sfx } from "@/lib/sfx";
 
 export type CollectionBadge = {
@@ -30,42 +30,52 @@ export default function CreatureCollection({ badges }: { badges: CollectionBadge
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {found} of {badges.length} found. Tap one to meet it.
       </p>
-      <ul className="mt-3 grid grid-cols-3 gap-2">
-        {badges.map((badge, i) => {
-          const got = Boolean(badge.earnedAt);
-          return (
-            <li key={badge.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (got) sfx.chest();
-                  else sfx.tap();
-                  setOpen(badge);
-                }}
-                className="press-3d flex w-full flex-col items-center rounded-card border-2 px-1 pt-2 pb-2"
-                style={{
-                  background: got ? "var(--color-gold-soft)" : "var(--color-sand)",
-                  borderColor: got ? "var(--color-gold)" : "var(--color-line)",
-                  ["--btn-shade" as string]: got ? "var(--color-gold)" : "var(--color-line)",
-                }}
-              >
-                <span
-                  className={got ? "q-float block" : "block"}
-                  style={got ? { animationDelay: `${(i % 3) * 0.4}s` } : undefined}
-                >
-                  <Creature badgeId={badge.id} locked={!got} size={72} />
-                </span>
-                <span className="mt-1 font-display text-xs font-bold leading-tight">
-                  {got ? creatureFor(badge.id).name.split(" ")[0] : "???"}
-                </span>
-                <span className="text-[11px] leading-tight" style={{ color: "var(--color-muted)" }}>
-                  {badge.name}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {[badges.slice(0, SET_ONE_SIZE), badges.slice(SET_ONE_SIZE)].map((set, n) => (
+        <section key={n}>
+          <h3 className="mt-4 font-display text-sm font-bold">
+            {n === 0 ? "Set 1" : "Set 2: bigger goals"}
+            <span className="ml-2 font-normal" style={{ color: "var(--color-muted)" }}>
+              {set.filter((b) => b.earnedAt).length} of {set.length}
+            </span>
+          </h3>
+          <ul className="mt-2 grid grid-cols-3 gap-2">
+            {set.map((badge, i) => {
+              const got = Boolean(badge.earnedAt);
+              return (
+                <li key={badge.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (got) sfx.chest();
+                      else sfx.tap();
+                      setOpen(badge);
+                    }}
+                    className="press-3d flex w-full flex-col items-center rounded-card border-2 px-1 pt-2 pb-2"
+                    style={{
+                      background: got ? "var(--color-gold-soft)" : "var(--color-sand)",
+                      borderColor: got ? "var(--color-gold)" : "var(--color-line)",
+                      ["--btn-shade" as string]: got ? "var(--color-gold)" : "var(--color-line)",
+                    }}
+                  >
+                    <span
+                      className={got ? "q-float block" : "block"}
+                      style={got ? { animationDelay: `${(i % 3) * 0.4}s` } : undefined}
+                    >
+                      <Creature badgeId={badge.id} locked={!got} size={72} />
+                    </span>
+                    <span className="mt-1 font-display text-xs font-bold leading-tight">
+                      {got ? creatureFor(badge.id).name.split(" ")[0] : "???"}
+                    </span>
+                    <span className="text-[11px] leading-tight" style={{ color: "var(--color-muted)" }}>
+                      {badge.name}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
       {open ? <CreatureSheet badge={open} onClose={() => setOpen(null)} /> : null}
     </Card>
   );

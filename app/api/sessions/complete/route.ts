@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { LEARNER_IDS } from "@/lib/learners";
 import { isStuckMiss, scheduleSkill } from "@/lib/mastery";
 import { addPoolWords, getPool } from "@/lib/word-source";
-import { scoreRound } from "@/lib/models/MathProgress";
+import { applyRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
 import {
   PROFILE_KEY,
@@ -41,7 +41,7 @@ const Body = z.object({
   listId: z.string().min(1).max(64).optional(),
   step: z.enum(STEP_IDS).optional(),
   mathSkill: z.string().min(1).max(40).optional(),
-  mathLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  mathLevel: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).optional(),
   wordResults: z
     .array(
       z.object({
@@ -191,8 +191,13 @@ async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<
   doc.attempts = (doc.attempts ?? 0) + body.answered;
   doc.correct = (doc.correct ?? 0) + body.correct;
   if (body.ms > 0 && (!doc.bestMs || body.ms < doc.bestMs)) doc.bestMs = body.ms;
-  // Only a round played at the stored level moves it; see scoreRound.
-  const scored = scoreRound(doc.level ?? 1, doc.recentPcts ?? [], pctOf(body), body.mathLevel);
+  // Only a round played at the stored level moves it, with the Grade 5 floor
+  // and short timed runs left out; see applyRound.
+  const scored = applyRound(
+    { level: doc.level ?? 1, recentPcts: doc.recentPcts ?? [], lastAt: doc.lastAt },
+    { answered: body.answered, correct: body.correct, timed: body.timed, playedLevel: body.mathLevel },
+    todayKey(now)
+  );
   doc.recentPcts = scored.recentPcts;
   doc.level = scored.level;
   doc.lastAt = now;

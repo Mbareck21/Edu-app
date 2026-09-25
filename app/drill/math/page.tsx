@@ -8,9 +8,10 @@ import {
   parseMathMode,
 } from "@/components/drill/options";
 import { requestSeed } from "@/components/ui/time";
+import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level, type MathSkillId } from "@/lib/math";
-import { toClientMathProgress } from "@/lib/models/MathProgress";
+import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,13 @@ type Search = Promise<{
 async function autoLevel(skill: MathSkillId | "mixed"): Promise<Level> {
   const { MathProgress } = await db();
   const docs = await MathProgress.find().lean();
+  const today = todayKey();
   const levels = docs.map((d) => toClientMathProgress(d));
   if (skill !== MIXED_SKILL) {
-    const found = levels.find((l) => l.skill === skill);
-    return (found?.level ?? 1) as Level;
+    return servedLevel(levels.find((l) => l.skill === skill) ?? null, today);
   }
-  return mixedAutoLevel(levels.map((l) => l.level));
+  // Nothing played yet still starts a Grade 5 child at level 4.
+  return mixedAutoLevel(levels.length > 0 ? levels.map((l) => servedLevel(l, today)) : [servedLevel(null, today)]);
 }
 
 export default async function MathDrillPage({ searchParams }: { searchParams: Search }) {

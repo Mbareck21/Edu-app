@@ -11,9 +11,10 @@ import { sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
+import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { MATH_SKILLS } from "@/lib/math";
-import { toClientMathProgress } from "@/lib/models/MathProgress";
+import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
 import { getPractice } from "@/lib/word-source";
 import { getProfile } from "@/lib/profile";
 
@@ -37,15 +38,17 @@ export default async function DrillPage() {
     .map((l) => ({ listId: l._id, name: l.name, words: l.words }));
   const counts = sourceCounts(lists, now);
 
+  const today = todayKey(now);
   const levels = new Map<string, number>();
   for (const doc of mathDocs) {
     const p = toClientMathProgress(doc);
-    levels.set(p.skill, p.level);
+    levels.set(p.skill, servedLevel(p, today));
   }
   const autoLevels: Record<string, number> = {
-    [MIXED_SKILL]: mixedAutoLevel([...levels.values()]),
+    // Nothing played yet still starts a Grade 5 child at level 4.
+    [MIXED_SKILL]: mixedAutoLevel(levels.size > 0 ? [...levels.values()] : [servedLevel(null, today)]),
   };
-  for (const skill of MATH_SKILLS) autoLevels[skill.id] = levels.get(skill.id) ?? 1;
+  for (const skill of MATH_SKILLS) autoLevels[skill.id] = levels.get(skill.id) ?? servedLevel(null, today);
 
   const bests: Record<string, Record<MathMode, number | null>> = {};
   for (const id of [MIXED_SKILL, ...MATH_SKILLS.map((s) => s.id)]) {
