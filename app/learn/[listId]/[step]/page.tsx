@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import ItemRunner from "@/components/items/ItemRunner";
 import ChainRunner from "@/components/stuck/ChainRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
+import ExitBar from "@/components/ui/ExitBar";
 import { requestSeed } from "@/components/ui/time";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
@@ -134,13 +135,16 @@ export default async function StepPage({
         : null;
 
     return (
-      <ReadingRunner
-        key={runKey}
-        list={list}
-        scaffold={scaffoldFor(profile.reading.recent)}
-        stale={stale}
-        spare={spare}
-      />
+      <>
+        <ExitBar />
+        <ReadingRunner
+          key={runKey}
+          list={list}
+          scaffold={scaffoldFor(profile.reading.recent)}
+          stale={stale}
+          spare={spare}
+        />
+      </>
     );
   }
 

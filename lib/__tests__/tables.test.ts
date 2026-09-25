@@ -161,3 +161,13 @@ test("one round of the nines does not start the other tables", () => {
   assert.ok(round.every((r) => nines.has(r.key)), "only the facts he answered");
   assert.equal(round[0].key, factKey(9, 7), "the one he missed leads");
 });
+
+test("a spoken round is ten different facts from any table, never times one", async () => {
+  const { buildVoiceRound } = await import("@/lib/tables");
+  let s = 7;
+  const rng = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const round = buildVoiceRound({}, "2026-09-25T12:00:00.000Z", rng);
+  assert.equal(round.length, 10);
+  assert.equal(new Set(round.map((f) => f.key)).size, 10);
+  assert.ok(round.every((f) => f.a > 1 && f.b > 1));
+});

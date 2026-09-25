@@ -1,4 +1,5 @@
 import StructureRunner from "@/components/reading/StructureRunner";
+import ExitBar from "@/components/ui/ExitBar";
 import { requestSeed } from "@/components/ui/time";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,10 @@ export default async function StructurePage({
   // new ?r, and without a changing key the finished runner keeps its state.
   const runKey = (await searchParams).r ?? "first";
   const seed = requestSeed();
-  return <StructureRunner key={runKey} seed={seed} />;
+  return (
+    <>
+      <ExitBar />
+      <StructureRunner key={runKey} seed={seed} />
+    </>
+  );
 }

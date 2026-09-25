@@ -5,6 +5,8 @@ import { useMemo, useState } from "react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import TablesRunner, { isTablesSaved, type TablesSaved } from "@/components/tables/TablesRunner";
+import VoiceTablesRunner from "@/components/tables/VoiceTablesRunner";
+import Icon from "@/components/ui/Icon";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import { resumeKey } from "@/lib/resume";
 import {
@@ -12,6 +14,7 @@ import {
   TABLE_UP_TO,
   buildLightningRound,
   buildTableRound,
+  buildVoiceRound,
   factKey,
   isKnown,
   isLit,
@@ -66,6 +69,8 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
   );
   // The round replaces the board, so a tap from low on the page would leave
   // the question above the screen and only the keypad showing.
+  // A spoken round: one at a time, so it is not resumed after a reload.
+  const [voice, setVoice] = useState<Fact[] | null>(null);
   const start = (run: Run) => {
     setRunning(run);
     window.scrollTo(0, 0);
@@ -80,6 +85,22 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
     TABLES.flatMap((t) => Array.from({ length: TABLE_UP_TO }, (_, i) => factKey(t, i + 1)))
   ).size;
   const lightning = buildLightningRound(facts, nowIso, rng);
+  const spoken = buildVoiceRound(facts, nowIso, rng);
+
+  if (voice) {
+    return (
+      <div className="-mx-4">
+        <VoiceTablesRunner
+          facts={voice}
+          onDone={() => {
+            setVoice(null);
+            // The grid moved on the server; take the page again.
+            window.location.reload();
+          }}
+        />
+      </div>
+    );
+  }
 
   if (running) {
     return (
@@ -174,6 +195,19 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           Light purple: you got it right. Purple: right on three different days. Gold: right and fast. 7 x 8 and 8 x 7 light up together.
         </p>
       </Card>
+
+      <Button
+        fullWidth
+        size="lg"
+        color="purple"
+        onClick={() => {
+          setVoice(spoken);
+          window.scrollTo(0, 0);
+        }}
+      >
+        <Icon name="mic" size={22} />
+        Say it out loud: 10 random facts
+      </Button>
 
       {lightning.length > 0 ? (
         <Button

@@ -252,6 +252,38 @@ export function buildLightningRound(
 }
 
 /**
+ * A spoken round: facts from every table, at random, the way a teacher calls
+ * them out. The ones he has missed or that are due are likelier to come up,
+ * but any fact can: the point is recall with no table to lean on. Times one
+ * is left out; it is not a fact worth saying out loud.
+ */
+export function buildVoiceRound(
+  facts: Record<string, FactState>,
+  nowIso: string,
+  rng: () => number,
+  size = ROUND_SIZE
+): Fact[] {
+  const seen = new Set<string>();
+  const ranked: Ranked[] = [];
+  for (const t of TABLES) {
+    for (let b = 2; b <= TABLE_UP_TO; b++) {
+      const key = factKey(t, b);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ranked.push(rank(t, b, facts[key] ?? newFact(t, b), nowIso, rng));
+    }
+  }
+  // The neediest twice over, then shuffled: weak facts come up often, but
+  // never in a predictable order.
+  const pool = order(ranked).slice(0, size * 2);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, size);
+}
+
+/**
  * Stars for a round. One for every fact right; two for doing it inside a
  * minute; three for inside thirty seconds, which is three seconds a fact,
  * recall rather than counting up. Speed counts for nothing until the
