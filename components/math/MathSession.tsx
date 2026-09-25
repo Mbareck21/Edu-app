@@ -10,6 +10,7 @@ import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { clock } from "@/components/ui/time";
 import { buildSession, getSkill, gradeAnswer, type Level, type MathSkillId } from "@/lib/math";
+import { mathHint } from "@/lib/math/hint";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
@@ -94,6 +95,10 @@ function MathSessionInner({
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  /** The question on screen has had its hint; the next miss shows the answer. */
+  const [hinted, setHinted] = useState(false);
+  /** The sheet up now is a hint, so its button is "Try again", not "Got it". */
+  const [hintOpen, setHintOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -186,9 +191,20 @@ function MathSessionInner({
     if (correct) {
       sfx.correct();
       setFlash("correct");
+      setHinted(false);
       timerRef.current = setTimeout(advance, FLASH_MS);
       return;
     }
+    // First miss on this question: a hint and another go, not the answer.
+    if (!hinted) {
+      setHinted(true);
+      setHintOpen(true);
+      setFlash("wrong");
+      setShakeKey((k) => k + 1);
+      setFeedback({ state: "wrong", title: "Not yet. Try again!", line: mathHint(question, Number(input)) });
+      return;
+    }
+    setHinted(false);
     setFlash("wrong");
     setShakeKey((k) => k + 1);
     setFeedback({
@@ -196,7 +212,15 @@ function MathSessionInner({
       title: `The answer is ${question.answer}`,
       line: question.how,
     });
-  }, [advance, feedback, flash, input, queue, question]);
+  }, [advance, feedback, flash, hinted, input, queue, question]);
+
+  /** Back to the same question after a hint, with the box cleared. */
+  const tryAgain = useCallback(() => {
+    setHintOpen(false);
+    setFeedback(null);
+    setInput("");
+    setFlash(null);
+  }, []);
 
   const afterWrong = useCallback(() => {
     watch.current?.mark();
@@ -292,7 +316,11 @@ function MathSessionInner({
         onCheck={check}
       />
 
-      <FeedbackSheet feedback={feedback} onContinue={afterWrong} continueLabel="Got it" />
+      <FeedbackSheet
+        feedback={feedback}
+        onContinue={hintOpen ? tryAgain : afterWrong}
+        continueLabel={hintOpen ? "Try again" : "Got it"}
+      />
     </main>
   );
 }
