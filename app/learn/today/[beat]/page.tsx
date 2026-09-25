@@ -12,6 +12,7 @@ import {
 import { mulberry32 } from "@/lib/math/rng";
 import { resumeKey } from "@/lib/resume";
 import { type ClientWordList } from "@/lib/models/WordList";
+import { newWordsList } from "@/app/learn/today/new-words-list";
 
 export const dynamic = "force-dynamic";
 
@@ -88,14 +89,15 @@ export default async function TodayBeatPage({
   }
 
   if (beat === "new-words") {
-    const items = unit
+    const fresh = newWordsList(lists);
+    const items = fresh
       ? buildLesson({
-          words: unit.words,
+          words: fresh.words,
           step: "match",
           now,
           rng,
           maxNew: 3,
-          listId: unit._id,
+          listId: fresh._id,
         })
       : [];
     return (
@@ -103,11 +105,11 @@ export default async function TodayBeatPage({
         key={runKey}
         {...shared}
         items={items}
-        post={{ ref: "quest:new", listId: unit?._id }}
+        post={{ ref: "quest:new", listId: fresh?._id }}
         resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
         accent="blue"
         title={TITLE["new-words"]}
-        subtitle={unit?.name}
+        subtitle={fresh?.name}
       />
     );
   }

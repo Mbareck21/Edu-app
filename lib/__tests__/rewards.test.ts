@@ -4,6 +4,7 @@ import test from "node:test";
 import { previousDay, lastSevenDays, todayKey } from "@/lib/day";
 import {
   BADGES,
+  FAST_PAID,
   XP,
   applySession,
   emptyProfile,
@@ -103,9 +104,108 @@ test("perfect is ignored when the counts disagree", () => {
 
 test("the day bonus is paid once per day", () => {
   const first = applySession(emptyProfile(), result(), now()).profile;
-  const second = applySession(first, result(), now());
+  const second = applySession(first, result({ ref: "list2:match" }), now());
   assert.equal(second.gained.streakExtended, false);
   assert.equal(second.gained.xp, 8 * XP.correct + 3 * XP.fast + XP.lessonDone);
+});
+
+test("math right answers pay more at a higher level; a bad level claim is clamped", () => {
+  const math = (mathLevel?: number) =>
+    applySession(
+      emptyProfile(),
+      result({ kind: "math", ref: "math:add", answered: 10, correct: 10, fastCount: 0, perfect: true, mathLevel: mathLevel as never }),
+      now()
+    ).gained.xp - XP.streakDay;
+  assert.equal(math(1), 150);
+  assert.equal(math(3), 200);
+  assert.equal(math(5), 250);
+  assert.equal(math(undefined), 150);
+  assert.equal(math(9), 250);
+  assert.equal(math(-2), 150);
+});
+
+test("a tables round pays half a level-1 answer per fact", () => {
+  const { gained } = applySession(
+    emptyProfile(),
+    result({ kind: "math", ref: "tables:7", answered: 10, correct: 10, fastCount: 0, perfect: true }),
+    now()
+  );
+  assert.equal(gained.xp, 10 * 5 + XP.lessonDone + XP.perfect + XP.streakDay);
+});
+
+test("a timed drill pays half per right answer, at most 20 of them, and speed is capped", () => {
+  const drill = (correct: number, fastCount: number) =>
+    applySession(
+      emptyProfile(),
+      result({ kind: "math", ref: `drill:math:add:timed60#${correct}`, answered: correct, correct, fastCount, timed: true, perfect: true, mathLevel: 1 }),
+      now()
+    ).gained.xp - XP.streakDay;
+  assert.equal(drill(15, 8), 15 * 5 + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
+  assert.equal(drill(40, 40), 20 * 5 + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
+});
+
+test("a good passage reading pays like the minutes it took", () => {
+  const read = (profile: ProfileState) =>
+    applySession(
+      profile,
+      result({
+        kind: "reading",
+        ref: "read:list1",
+        answered: 4,
+        correct: 4,
+        fastCount: 0,
+        perfect: true,
+        reading: { level: 3, pct: 100, wordsCount: 300 },
+      }),
+      now()
+    );
+  const first = read(emptyProfile());
+  assert.equal(first.gained.xp, 4 * XP.passageCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
+  // Reading it again today: the ordinary reading rate, no lesson bonus.
+  assert.equal(read(first.profile).gained.xp, 4 * XP.readingCorrect + XP.perfect);
+});
+
+test("a short reading without a passage pays the reading rate", () => {
+  const { gained } = applySession(
+    emptyProfile(),
+    result({ kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, perfect: true }),
+    now()
+  );
+  assert.equal(gained.xp, 6 * XP.readingCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
+});
+
+test("the same ref again today pays no lesson bonus; tomorrow it does", () => {
+  const first = applySession(emptyProfile(), result(), now()).profile;
+  const again = applySession(first, result(), now());
+  assert.equal(again.gained.xp, 8 * XP.correct + 3 * XP.fast);
+  const tomorrow = applySession(again.profile, result(), now("2026-08-20"));
+  assert.equal(tomorrow.gained.xp, 8 * XP.correct + 3 * XP.fast + XP.lessonDone + XP.streakDay);
+});
+
+test("a timed drill with another score is still the same run", () => {
+  const drill = (correct: number) =>
+    result({ kind: "math", ref: `drill:math:add:timed60#${correct}`, answered: correct, correct, fastCount: 0, timed: true });
+  const first = applySession(emptyProfile(), drill(10), now()).profile;
+  assert.equal(applySession(first, drill(12), now()).gained.xp, 12 * 5);
+});
+
+test("under 3 answers pays no lesson or perfect bonus, but keeps the day", () => {
+  const { gained, profile } = applySession(
+    emptyProfile(),
+    result({ answered: 2, correct: 2, fastCount: 0, perfect: true }),
+    now()
+  );
+  assert.equal(gained.xp, 2 * XP.correct + XP.streakDay);
+  assert.equal(gained.streakExtended, true);
+  assert.equal(profile.streak.current, 1);
+});
+
+test("a session with no answers leaves the streak alone", () => {
+  const day1 = applySession(emptyProfile(), result(), now("2026-08-19")).profile;
+  const idle = applySession(day1, result({ answered: 0, correct: 0, fastCount: 0 }), now("2026-08-20"));
+  assert.equal(idle.gained.xp, 0);
+  assert.equal(idle.gained.streakExtended, false);
+  assert.deepEqual(idle.profile.streak, day1.streak);
 });
 
 // ── streak ────────────────────────────────────────────────────────────────
@@ -215,9 +315,9 @@ test("goalMet fires once, on the session that reaches the goal", () => {
 
 // ── badges ────────────────────────────────────────────────────────────────
 
-test("BADGES has 24 entries with unique ids", () => {
-  assert.equal(BADGES.length, 24);
-  assert.equal(new Set(BADGES.map((b) => b.id)).size, 24);
+test("BADGES has 34 entries with unique ids", () => {
+  assert.equal(BADGES.length, 34);
+  assert.equal(new Set(BADGES.map((b) => b.id)).size, 34);
 });
 
 test("each set 2 badge fires at its threshold and not one below", () => {

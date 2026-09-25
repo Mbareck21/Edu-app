@@ -99,7 +99,7 @@ const ReadingSeenSchema = new Schema(
 
 const ReadingSchema = new Schema(
   {
-    level: { type: Number, default: 1, min: 1, max: 10 },
+    level: { type: Number, default: 1, min: 1, max: 12 },
     recent: { type: [ReadingLogSchema], default: [] }, // newest first, cap 20
     since: { type: Date, default: undefined }, // when the level last changed
   },
@@ -220,7 +220,7 @@ export function toProfileState(doc: unknown): ProfileState {
         })
       : [],
     reading: {
-      level: Math.min(10, Math.max(1, num(reading.level, 1) || 1)),
+      level: Math.min(12, Math.max(1, num(reading.level, 1) || 1)),
       recent: Array.isArray(reading.recent)
         ? reading.recent.map((entry): ReadingLog => {
             const r = record(entry);

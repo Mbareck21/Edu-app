@@ -88,7 +88,7 @@ test("genuinely different words still serve as distractors", () => {
 });
 
 test("every pack can still build a full card for every word", () => {
-  for (const id of ["math-vocabulary", "growing-plants", "number-words"]) {
+  for (const id of ["math-vocabulary", "growing-plants", "number-words", "g5-matter", "g5-ecosystems", "g5-earth-systems", "g5-space", "g5-math-words", "g5-reading-words"]) {
     const words = packWords(id);
     for (const w of words) {
       const wrong = wordDistractors(w.word, words, mulberry32(7));

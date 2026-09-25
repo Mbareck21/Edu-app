@@ -30,6 +30,9 @@ import {
   STORY_SETTINGS,
 } from "@/lib/reading";
 import { pickArchived, readingWordsToAdd, REUSE_AFTER_MS, withNames } from "@/lib/reading";
+import { planQuarter, wpmNormForDate, WPM_NORMS_GRADE4, WPM_NORMS_GRADE5 } from "@/lib/reading";
+import { maxReadingLevel } from "@/lib/reading";
+import { readingSystemPrompt } from "@/lib/groq";
 
 /** Tiny deterministic rng so the cast tests are not flaky. */
 function seeded(seed: number): () => number {
@@ -48,7 +51,7 @@ test("level params follow the plan's formulas", () => {
   assert.equal(readingParams(1).maxSentenceWords, 9);
   assert.equal(readingParams(10).maxSentenceWords, 18);
   assert.equal(readingParams(0).level, 1);
-  assert.equal(readingParams(99).level, 10);
+  assert.equal(readingParams(99).level, 12);
   assert.equal(clampLevel(Number.NaN), 1);
 });
 
@@ -123,7 +126,7 @@ test("the lexile ladder is anchored to the Grade 4 band", () => {
   assert.equal(lexileForLevel(1), LEXILE_LADDER.start);
   assert.equal(lexileForLevel(10), LEXILE_LADDER.end);
   assert.equal(lexileForLevel(0), LEXILE_LADDER.start);
-  assert.equal(lexileForLevel(99), LEXILE_LADDER.end);
+  assert.equal(lexileForLevel(99), lexileForLevel(12));
   // Climbs, never dips.
   for (let l = 2; l <= 10; l++) {
     assert.ok(lexileForLevel(l) > lexileForLevel(l - 1), `level ${l} climbs`);
@@ -354,4 +357,54 @@ test("answers shown to him keep the passage's names capitalised", () => {
   assert.equal(withNames("amina notices the light", passage), "Amina notices the light");
   assert.equal(withNames("look at it", passage), "look at it", "a sentence opener is not a name");
   assert.equal(withNames("a rose", passage), "a rose", "a word also used in lower case stays as typed");
+});
+
+test("standards opened in Grade 4 stay open after the school year ends", () => {
+  const types = (day: string, kind: "story" | "info") =>
+    questionPlan(3, kind, false, planQuarter(day)).map((q) => q.type);
+  for (const kind of ["story", "info"] as const) {
+    assert.deepEqual(types("2027-06-15", kind), types("2027-05-19", kind));
+  }
+  assert.ok(types("2027-06-15", "story").includes("theme"));
+  assert.ok(types("2027-06-15", "info").includes("evidence"));
+  // Before and during the year it is still the calendar quarter.
+  assert.equal(planQuarter("2026-07-01"), "summer");
+  assert.equal(planQuarter("2026-09-01"), "Q1");
+});
+
+test("winter break keeps the last quarter reached", () => {
+  assert.equal(planQuarter("2026-12-25"), "Q2");
+  assert.equal(planQuarter("2026-10-10"), "Q1");
+  const types = (day: string) => questionPlan(1, "story", false, planQuarter(day)).map((q) => q.type);
+  assert.ok(types("2026-12-25").includes("theme"));
+  assert.deepEqual(types("2026-12-25"), types("2026-12-18"));
+});
+
+test("the words-a-minute goal follows the grade", () => {
+  assert.equal(wpmNormForDate(new Date("2026-09-15T12:00:00Z")), WPM_NORMS_GRADE4.fall);
+  assert.equal(wpmNormForDate(new Date("2027-04-15T12:00:00Z")), WPM_NORMS_GRADE4.spring);
+  assert.equal(wpmNormForDate(new Date("2027-05-19T17:00:00Z")), WPM_NORMS_GRADE4.spring);
+  // The summer he moves up aims at Grade 5 fall, not Grade 5 spring.
+  assert.equal(wpmNormForDate(new Date("2027-05-25T17:00:00Z")), WPM_NORMS_GRADE5.fall);
+  assert.equal(wpmNormForDate(new Date("2027-07-15T17:00:00Z")), WPM_NORMS_GRADE5.fall);
+  assert.equal(wpmNormForDate(new Date("2027-09-15T12:00:00Z")), WPM_NORMS_GRADE5.fall);
+  assert.equal(wpmNormForDate(new Date("2027-12-15T17:00:00Z")), WPM_NORMS_GRADE5.winter);
+  assert.equal(wpmNormForDate(new Date("2028-04-15T17:00:00Z")), WPM_NORMS_GRADE5.spring);
+  assert.equal(wpmNormForDate(new Date("2028-01-15T12:00:00Z")), WPM_NORMS_GRADE5.winter);
+  assert.deepEqual(WPM_NORMS_GRADE5, { fall: 110, winter: 127, spring: 139 });
+});
+
+test("the reading prompt names the child's grade", () => {
+  assert.match(readingSystemPrompt(4), /in Grade 4,/);
+  assert.match(readingSystemPrompt(5), /in Grade 5,/);
+  assert.doesNotMatch(readingSystemPrompt(5), /Grade 4/);
+});
+
+test("levels 11 and 12 continue the Lexile step and open only in Grade 5", () => {
+  assert.equal(lexileForLevel(1), 450);
+  assert.equal(lexileForLevel(10), 940);
+  assert.equal(lexileForLevel(11), 990);
+  assert.equal(lexileForLevel(12), 1050);
+  assert.equal(maxReadingLevel(4), 10);
+  assert.equal(maxReadingLevel(5), 12);
 });

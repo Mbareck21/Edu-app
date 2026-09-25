@@ -39,13 +39,25 @@ test("7×8 and 8×7 are one fact", () => {
   assert.equal(factKey(9, 9), "9x9");
 });
 
-test("the grid is tables 2 to 9, ×1 to ×10, with no fact counted twice", () => {
+test("the grid is tables 2 to 12, ×1 to ×12, with no fact counted twice", () => {
   const keys = allFactKeys();
   assert.equal(new Set(keys).size, keys.length);
-  assert.deepEqual(TABLES, [2, 3, 4, 5, 6, 7, 8, 9]);
-  assert.equal(TABLE_UP_TO, 10);
-  // 8 tables × 10 columns = 80 cells, but shared facts collapse: 2..9 pairs.
-  assert.ok(keys.length < 80 && keys.length > 40);
+  assert.deepEqual(TABLES, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.equal(TABLE_UP_TO, 12);
+  // 11 tables × 12 columns = 132 cells; the 55 pairs of two tables collapse.
+  assert.equal(keys.length, 132 - 55);
+  assert.ok(keys.includes("12x12") && keys.includes("1x11") && keys.includes("10x12"));
+});
+
+test("every fact of the old 2-to-9 grid keeps its key", () => {
+  // Stored rows are keyed "7x8"; growing the grid must not orphan any of them.
+  const keys = new Set(allFactKeys());
+  for (let t = 2; t <= 9; t++) {
+    for (let b = 1; b <= 10; b++) assert.ok(keys.has(factKey(t, b)), factKey(t, b));
+  }
+  const row = { streak: 2, correct: 3, lastFast: true };
+  assert.equal(factFromRow("7x8", row).key, "7x8");
+  assert.equal(factFromRow("2x10", row).streak, 2);
 });
 
 test("a fact is known only after right answers on separate days", () => {
@@ -118,7 +130,7 @@ test("progress on a table counts lit, known and fast facts", () => {
   facts[factKey(4, 4)] = { ...newFact(4, 4), streak: 3, lastFast: true };
   facts[factKey(4, 7)] = { ...newFact(4, 7), streak: 3, lastFast: false };
   facts[factKey(4, 9)] = { ...newFact(4, 9), streak: 1 };
-  assert.deepEqual(tableProgress(4, facts), { table: 4, lit: 3, known: 2, fast: 1, total: 10 });
+  assert.deepEqual(tableProgress(4, facts), { table: 4, lit: 3, known: 2, fast: 1, total: 12 });
 });
 
 test("stars: all right for one, inside a minute for two, inside thirty seconds for three", () => {

@@ -224,7 +224,7 @@ export const WordListSchema = new Schema(
     // Which child added the list; empty means Nour. Lists are shared between
     // the children, but only the one who added a list can delete it.
     addedBy: { type: String, default: "" },
-    readingLevel: { type: Number, default: 1, min: 1, max: 10 },
+    readingLevel: { type: Number, default: 1, min: 1, max: 12 },
     currentReading: { type: CurrentReadingSchema, default: null },
     // Whole passages he has finished with, newest last. When the writer is
     // down or the day's budget is spent, one he has not seen for a week is
@@ -566,7 +566,7 @@ export function toClient(doc: {
     words: doc.words.map((w) => toClientWord(w)),
     kind: doc.kind === "pool" ? "pool" : "unit",
     addedBy: ownerOf(doc.addedBy),
-    readingLevel: Math.max(1, Math.min(10, Number(doc.readingLevel) || 1)),
+    readingLevel: Math.max(1, Math.min(12, Number(doc.readingLevel) || 1)),
     currentReading: reading,
     readingStats: stats,
     pathProgress: normalizePathProgress(doc.pathProgress),

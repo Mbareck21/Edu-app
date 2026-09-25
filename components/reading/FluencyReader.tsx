@@ -10,6 +10,8 @@ import { fireConfetti } from "@/components/ui/Confetti";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { fluencyHeadline, fluencyPart, scoreFluency, type FluencyResult } from "@/lib/fluency";
+import { todayKey } from "@/lib/day";
+import { gradeOn } from "@/lib/grade";
 import { learnerFromCookie } from "@/lib/learners";
 import { wpmNormForDate } from "@/lib/reading";
 import { sfx } from "@/lib/sfx";
@@ -161,6 +163,7 @@ export default function FluencyReader({
   }
 
   const norm = wpmNormForDate();
+  const grade = gradeOn(todayKey());
 
   return (
     <div className="px-4 pb-10">
@@ -183,9 +186,9 @@ export default function FluencyReader({
               </p>
             ) : null}
             <div className="mt-4 text-left">
-              <ProgressBar value={result.wcpm / norm} color="blue" height={10} label="Towards the Grade 4 goal" />
+              <ProgressBar value={result.wcpm / norm} color="blue" height={10} label={`Towards the Grade ${grade} goal`} />
               <p className="mt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-                Grade 4 goal: {norm} a minute. Every read gets you closer.
+                Grade {grade} goal: {norm} a minute. Every read gets you closer.
               </p>
             </div>
             {result.tricky.length > 0 ? (

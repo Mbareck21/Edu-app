@@ -148,6 +148,26 @@ export type SessionResult = {
   wordResults?: WordResult[];
   /** A finished reading — moves the profile's reading level. */
   reading?: ReadingResult;
+  /**
+   * Server-only: filled by /api/sessions/complete (lib/mastery-snapshot.ts)
+   * after this session's progress is written, for the Set 3 badges. The
+   * client never sends it; the route's schema drops it if it tries.
+   */
+  mastery?: MasterySnapshot;
+};
+
+/** The long goals Badge.check cannot see on the profile. */
+export type MasterySnapshot = {
+  /** Different words known or mastered on his school lists; Stuck words left out. */
+  wordsKnown: number;
+  /** Times-table facts on the grid that are lit, known, and gold (known and fast). */
+  factsLit: number;
+  factsKnown: number;
+  factsGold: number;
+  /** Tables with every one of their facts known. */
+  tablesKnown: number;
+  /** Stored level of every math skill, in MATH_SKILL_IDS order; 1 if never played. */
+  mathLevels: number[];
 };
 
 // ── Profile (pure state the rewards engine works on) ──────────────────────

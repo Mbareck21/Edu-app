@@ -8,6 +8,9 @@
 //
 // Pure: safe to import from client components.
 
+import { todayKey } from "@/lib/day";
+import { gradeOn } from "@/lib/grade";
+
 export type PetStageId = "egg" | "baby" | "kid" | "teen" | "grown" | "legend";
 
 export type PetStage = { id: PetStageId; name: string; at: number };
@@ -35,9 +38,19 @@ export function growthPoints(g: Growth): number {
   return n(g.wordsKnown) + n(g.wordsMastered) + n(g.mathLevelsUp);
 }
 
-/** Levels above 1 across the math skills; a skill never played counts 0. */
-export function mathLevelsUp(levels: readonly number[]): number {
-  return levels.reduce((sum, l) => sum + Math.max(0, (Math.floor(l) || 1) - 1), 0);
+/**
+ * Levels earned across the math skills; a skill never played counts 0. In
+ * Grade 4 every level above 1 counts. Grade 5 lifts every skill he plays to 4
+ * without any learning (see levelForGrade), so there a skill keeps at most the
+ * Grade 4 credit (levels 1-3) and only levels above 4 add to it: the lift
+ * neither feeds Sparky nor takes the Grade 4 growth away.
+ */
+export function mathLevelsUp(levels: readonly number[], today: string = todayKey()): number {
+  const grade5 = gradeOn(today) === 5;
+  return levels.reduce((sum, raw) => {
+    const l = Math.floor(raw) || 1;
+    return sum + (grade5 ? Math.min(l, 3) - 1 + Math.max(0, l - 4) : l - 1);
+  }, 0);
 }
 
 export type PetMood = "sleepy" | "happy" | "proud";

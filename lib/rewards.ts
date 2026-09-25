@@ -3,6 +3,8 @@
 // be unit tested without a database.
 
 import { previousDay, todayKey } from "@/lib/day";
+import { gradeOn, type Grade } from "@/lib/grade";
+import { maxReadingLevel } from "@/lib/reading";
 import type {
   ActivityEntry,
   EarnedBadge,
@@ -15,16 +17,69 @@ import type {
 import { STEP_PASS_PCT, stepById } from "@/lib/types";
 import type { IconName } from "@/components/ui/Icon";
 import { sessionPct, sessionPerfect } from "@/lib/session-score";
+import { allFactKeys } from "@/lib/tables";
 
+// XP pays for difficulty, so the family scoreboard stays fair between the
+// brothers whatever each one plays. A right answer is worth roughly what it
+// costs in time and effort; see rightXp().
+//
+// First play today, every answer right (the day's first session adds 15):
+//   Times tables, 10 facts, ~1 min ....... 10 x 5 + 20 + 30         = 100 (was 150)
+//     same table again today ............. 10 x 5 + 30              =  80 (was 150)
+//   Math lesson, 10 questions, ~2 min .... L1 150 · L2 175 · L3 200 · L4 225 · L5 250
+//                                          (was 150 at every level)
+//   Timed drill 60 s, 15 right, 8 fast ... L1: 15 x 5 + 25 + 50     = 150 (was 240)
+//                                          L5: 15 x 10 + 25 + 50    = 225
+//   Reading passage, 4 questions, ~8 min . 4 x 125 + 20 + 30        = 550 (was 90)
+//     same list again today .............. 4 x 30 + 30              = 150
+//   Text structure, 6 texts, ~5 min ...... 6 x 30 + 50              = 230 (was 110)
+//   Vocab lesson, 10 items, all fast ..... 10 x 10 + 25 + 50        = 175 (was 200)
+// Under 3 answers pays no lesson or perfect bonus; 0 answers not the day either.
 export const XP = {
   correct: 10,
-  /** Per answer given in under 3 seconds. */
+  /** Per answer given in under 3 seconds, for at most FAST_PAID of them. */
   fast: 5,
   lessonDone: 20,
   perfect: 30,
   /** First session of a new day. */
   streakDay: 15,
+  /** Per right answer in a reading: short texts, or a passage read again today. */
+  readingCorrect: 30,
+  /** Per right answer on a whole passage (about 8 minutes for 4 questions), first today. */
+  passageCorrect: 125,
 } as const;
+
+/** Most fast answers paid in one session: speed cannot stack past this. */
+export const FAST_PAID = 5;
+/** Most right answers paid in one timed run. */
+export const TIMED_PAID = 20;
+/** Fewest answers for the lesson and perfect bonuses. */
+export const BONUS_MIN_ANSWERED = 3;
+
+/** A timed drill's ref carries its score after `#`; the run itself is the part before. */
+function sameRef(a: string, b: string): boolean {
+  return a.split("#")[0] === b.split("#")[0];
+}
+
+/**
+ * XP for one right answer. Math scales with the level played, which the
+ * client reports: it is only trusted as far as clamping it to 1..5, and a
+ * missing level pays as 1. Tables and timed drills are quick recall and pay
+ * half. A passage
+ * pays its big rate once per list per day, so reading it again is no farm.
+ */
+export function rightXp(
+  result: Pick<SessionResult, "kind" | "ref" | "timed" | "mathLevel" | "reading">,
+  firstToday: boolean
+): number {
+  if (result.kind === "reading") {
+    return result.reading && firstToday ? XP.passageCorrect : XP.readingCorrect;
+  }
+  if (result.kind !== "math") return XP.correct;
+  const level = Math.min(5, Math.max(1, Math.floor(Number(result.mathLevel)) || 1));
+  const rate = XP.correct * (1 + 0.25 * (level - 1));
+  return result.timed || result.ref.startsWith("tables:") ? rate / 2 : rate;
+}
 
 export const ACTIVITY_CAP = 200;
 
@@ -229,7 +284,7 @@ export const BADGES: readonly Badge[] = [
   {
     id: "reading-10",
     name: "Top Reader",
-    blurb: "You got to reading level 10, the top!",
+    blurb: "You got to reading level 10.",
     icon: "book",
     check: (p, r) => readingLevelAfter(p, r) >= MAX_READING_LEVEL,
   },
@@ -247,7 +302,86 @@ export const BADGES: readonly Badge[] = [
     icon: "star",
     check: (p) => levelFor(p.xp).level >= 20,
   },
+  // Set 3: mastery. These read the snapshot the API adds (result.mastery).
+  {
+    id: "words-25",
+    name: "Word Keeper",
+    blurb: "You know 25 words.",
+    icon: "words",
+    check: (_p, r) => (r.mastery?.wordsKnown ?? 0) >= 25,
+  },
+  {
+    id: "words-50",
+    name: "Word Collector",
+    blurb: "You know 50 words.",
+    icon: "words",
+    check: (_p, r) => (r.mastery?.wordsKnown ?? 0) >= 50,
+  },
+  {
+    id: "words-100",
+    name: "Hundred Words",
+    blurb: "You know 100 words.",
+    icon: "words",
+    check: (_p, r) => (r.mastery?.wordsKnown ?? 0) >= 100,
+  },
+  {
+    id: "table-one",
+    name: "Table Tamer",
+    blurb: "You know a whole times table.",
+    icon: "math",
+    check: (_p, r) => (r.mastery?.tablesKnown ?? 0) >= 1,
+  },
+  {
+    id: "grid-lit",
+    name: "Grid Glow",
+    blurb: "You lit up the whole times-table grid.",
+    icon: "sparkles",
+    check: (_p, r) => wholeGrid(r, "factsLit"),
+  },
+  {
+    id: "grid-known",
+    name: "Table Master",
+    blurb: "You know every times-table fact.",
+    icon: "trophy",
+    check: (_p, r) => wholeGrid(r, "factsKnown"),
+  },
+  {
+    id: "grid-gold",
+    name: "Golden Grid",
+    blurb: "Every times-table fact is gold.",
+    icon: "star",
+    check: (_p, r) => wholeGrid(r, "factsGold"),
+  },
+  {
+    id: "math-level-5",
+    name: "Top Skill",
+    blurb: "You got a math skill to level 5.",
+    icon: "math",
+    check: (_p, r) => (r.mastery?.mathLevels ?? []).some((l) => l >= 5),
+  },
+  {
+    id: "math-all-3",
+    name: "All-Rounder",
+    blurb: "You got every math skill to level 3.",
+    icon: "math",
+    check: (_p, r) => {
+      const levels = r.mastery?.mathLevels ?? [];
+      return levels.length > 0 && levels.every((l) => l >= 3);
+    },
+  },
+  {
+    id: "reading-8",
+    name: "Story Explorer",
+    blurb: "You got to reading level 8.",
+    icon: "book",
+    check: (p, r) => readingLevelAfter(p, r) >= 8,
+  },
 ];
+
+/** Every fact on the times-table grid has reached `count`'s mark. */
+function wholeGrid(r: SessionResult, count: "factsLit" | "factsKnown" | "factsGold"): boolean {
+  return (r.mastery?.[count] ?? 0) >= allFactKeys().length;
+}
 
 /**
  * Badges are checked before the API folds this session's reading in (see
@@ -303,6 +437,7 @@ export function emptyProfile(name = "Nour"): ProfileState {
 }
 
 export const READING_CAP = 20;
+/** Top of the Grade 4 ladder, and the reading-10 badge. See maxReadingLevel. */
 export const MAX_READING_LEVEL = 10;
 
 /**
@@ -322,15 +457,21 @@ export const READING_DOWN_RUN = 2;
  * step up; READING_DOWN_RUN in a row under READING_DOWN_PCT step down, and only
  * readings taken at the current level count. Pure — `recent` is newest first.
  */
-export function nextReadingLevel(level: number, recent: ReadingLog[], since?: string): number {
-  const cur = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(level) || 1));
+export function nextReadingLevel(
+  level: number,
+  recent: ReadingLog[],
+  since?: string,
+  grade: Grade = gradeOn(todayKey())
+): number {
+  const top = maxReadingLevel(grade);
+  const cur = Math.min(top, Math.max(1, Math.floor(level) || 1));
   // Only readings taken AT this level can justify leaving it. Reading the whole
   // log meant one promotion cascaded into the next on the very next reading:
   // three good ones at L1 would have walked him L1 -> L4 in five sessions.
   const atLevel = readingsAtLevel(cur, recent, since);
   const runUp = atLevel.slice(0, READING_UP_RUN);
   if (runUp.length === READING_UP_RUN && runUp.every((r) => r.pct >= READING_UP_PCT)) {
-    return Math.min(MAX_READING_LEVEL, cur + 1);
+    return Math.min(top, cur + 1);
   }
   const runDown = atLevel.slice(0, READING_DOWN_RUN);
   if (
@@ -377,7 +518,7 @@ export function applyReading(
   };
   const recent = [entry, ...profile.reading.recent].slice(0, READING_CAP);
   const { level, since } = profile.reading;
-  const next = nextReadingLevel(level, recent, since);
+  const next = nextReadingLevel(level, recent, since, gradeOn(todayKey(now.at)));
   return {
     ...profile,
     reading: {
@@ -428,10 +569,13 @@ export function applySession(
   // Streak: a new day extends it, a gap resets it to 1. A session played on
   // an earlier day than the last one (sent late from the phone's queue) leaves
   // the streak and today's count alone: they have already moved past it.
+  // A session with no answers at all is not a day played: it leaves the streak
+  // alone. One or two answers still count for the day.
+  const idle = answered === 0;
   const last = profile.streak.lastActiveDay;
   const late = Boolean(last) && now.today < last;
   const sameDay = last === now.today || late;
-  const streakExtended = !sameDay;
+  const streakExtended = !sameDay && !idle;
   const current = sameDay
     ? profile.streak.current
     : last && previousDay(now.today) === last
@@ -442,19 +586,27 @@ export function applySession(
   const mended = late
     ? Math.max(profile.streak.current, runEndingOn(last, [{ at: now.at.toISOString() }, ...profile.activity]))
     : current;
-  const streak = late
-    ? { ...profile.streak, current: mended, best: Math.max(profile.streak.best, mended) }
-    : {
-        current,
-        best: Math.max(profile.streak.best, current),
-        lastActiveDay: now.today,
-      };
+  const streak = idle
+    ? profile.streak
+    : late
+      ? { ...profile.streak, current: mended, best: Math.max(profile.streak.best, mended) }
+      : {
+          current,
+          best: Math.max(profile.streak.best, current),
+          lastActiveDay: now.today,
+        };
 
+  // The same run again today earns its answers, not the lesson bonus again.
+  const firstToday = !profile.activity.some(
+    (a) => sameRef(a.ref, result.ref) && todayKey(new Date(a.at)) === now.today
+  );
+  const bonuses = answered >= BONUS_MIN_ANSWERED;
+  const paidRight = result.timed ? Math.min(correct, TIMED_PAID) : correct;
   const xpGained =
-    correct * XP.correct +
-    fast * XP.fast +
-    XP.lessonDone +
-    (perfect ? XP.perfect : 0) +
+    Math.round(paidRight * rightXp(result, firstToday)) +
+    Math.min(fast, FAST_PAID) * XP.fast +
+    (bonuses && firstToday ? XP.lessonDone : 0) +
+    (bonuses && perfect ? XP.perfect : 0) +
     (streakExtended ? XP.streakDay : 0);
 
   const lessonsBefore = profile.today.day === now.today ? profile.today.lessons : 0;
@@ -539,7 +691,8 @@ export function readingProgress(
   now: Date = new Date(),
   shown = 10
 ): ReadingProgress {
-  const level = Math.min(MAX_READING_LEVEL, Math.max(1, Math.floor(reading.level) || 1));
+  const top = maxReadingLevel(gradeOn(todayKey(now)));
+  const level = Math.min(top, Math.max(1, Math.floor(reading.level) || 1));
   let goodInARow = 0;
   for (const r of readingsAtLevel(level, reading.recent, reading.since)) {
     if (r.pct < READING_UP_PCT) break;
@@ -550,7 +703,7 @@ export function readingProgress(
   return {
     level,
     goodInARow,
-    toNext: level >= MAX_READING_LEVEL ? 0 : READING_UP_RUN - goodInARow,
+    toNext: level >= top ? 0 : READING_UP_RUN - goodInARow,
     scores: reading.recent.slice(0, shown).map((r) => r.pct).reverse(),
     wpms: reading.recent
       .filter((r) => typeof r.wpm === "number" && r.wpm > 0)

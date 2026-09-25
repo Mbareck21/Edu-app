@@ -42,7 +42,7 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "412x915",
         type: "image/png",
         form_factor: "narrow",
-        label: "Write a number from its words, on a Grade 4 number pad",
+        label: "Write a number from its words, on a number pad",
       },
     ],
   };

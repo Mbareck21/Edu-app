@@ -19,6 +19,8 @@ import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
 import FluencyReader from "@/components/reading/FluencyReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
+import { todayKey } from "@/lib/day";
+import { gradeOn } from "@/lib/grade";
 import { postReadingDone, postSession, saveNote } from "@/lib/offline-queue";
 import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
@@ -287,6 +289,7 @@ function ReadingRunnerInner({
   const level = reading?.level ?? list.readingLevel ?? 1;
   const lexile = lexileForLevel(level);
   const atGrade = atGradeLevel(level);
+  const grade = gradeOn(todayKey());
 
   const stopAudio = useCallback(() => {
     tokenRef.current++;
@@ -534,7 +537,8 @@ function ReadingRunnerInner({
         // sends, so closing the app during a slow save can no longer lose it.
         const posted = await postSession({
           kind: "reading",
-          ref: `read:${list._id}`,
+          // The passage's own time tells a new passage from a re-read of this one.
+          ref: `read:${list._id}@${reading.generatedAt}`,
           listId: list._id,
           step: "read",
           answered: questions.length,
@@ -592,10 +596,10 @@ function ReadingRunnerInner({
         title={perfect ? "Every one right." : "Reading done."}
         subtitle={
           wpm
-            ? `${wpm} words a minute. Grade 4 aims for ${wpmNormForDate()}.`
+            ? `${wpm} words a minute. Grade ${grade} aims for ${wpmNormForDate()}.`
             : echo
               ? `You read back ${echo.passed} of ${echo.sentences} sentences.`
-              : `Level ${level} · ${lexile}L${atGrade ? " · Grade 4 reading" : ""}`
+              : `Level ${level} · ${lexile}L${atGrade ? ` · Grade ${grade} reading` : ""}`
         }
         xp={gainedXp}
         ms={elapsedMs}
@@ -776,8 +780,8 @@ function ReadingRunnerInner({
         </p>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           {atGrade
-            ? "This is Grade 4 reading."
-            : `Grade 4 reading starts at ${GRADE4_LEXILE.min}L.`}
+            ? `This is Grade ${grade} reading.`
+            : `Grade ${grade} reading starts at ${GRADE4_LEXILE.min}L.`}
         </p>
         <h1 className="font-display text-3xl font-bold">{reading.title}</h1>
         {reading.reused ? (

@@ -200,10 +200,28 @@ test("three readings at READING_UP_PCT step the level up, capped at 10", () => {
   assert.equal(nextReadingLevel(1, [log(90), log(88), log(86)]), 2);
   // 75 is the mark: 3 of 4 counts, and so does 4 of 5.
   assert.equal(nextReadingLevel(1, [log(75), log(75), log(80)]), 2);
-  assert.equal(nextReadingLevel(10, [log(90), log(88), log(86)]), 10);
+  assert.equal(nextReadingLevel(10, [log(90), log(88), log(86)], undefined, 4), 10);
   assert.equal(nextReadingLevel(1, [log(90), log(88)]), 1);
   // 2 of 3 is still not a good reading.
   assert.equal(nextReadingLevel(1, [log(90), log(88), log(67)]), 1);
+});
+
+test("Grade 5 opens levels 11 and 12, capped at 12", () => {
+  const good = (level: number) => [log(90, level), log(88, level), log(86, level)];
+  assert.equal(nextReadingLevel(10, good(10), undefined, 5), 11);
+  assert.equal(nextReadingLevel(11, good(11), undefined, 5), 12);
+  assert.equal(nextReadingLevel(12, good(12), undefined, 5), 12);
+  // Grade 4 holds a level-11 record at 10.
+  assert.equal(nextReadingLevel(11, good(11), undefined, 4), 10);
+  // The ladder reads the grade from the reading's date.
+  let p: ProfileState = { ...emptyProfile(), reading: { level: 10, recent: [] } };
+  const at = (min: number, day: string) => ({ at: new Date(Date.parse(`${day}T17:00:00Z`) + min * 60_000), today: day });
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 10, pct: 100, wordsCount: 300 }, at(i, "2027-05-19"));
+  assert.equal(p.reading.level, 10);
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 10, pct: 100, wordsCount: 300 }, at(i, "2027-06-15"));
+  assert.equal(p.reading.level, 11);
+  assert.equal(readingProgress(p.reading, new Date("2027-06-15T18:00:00Z")).toNext, 3);
+  assert.equal(readingProgress({ level: 10, recent: [] }, new Date("2026-10-01T18:00:00Z")).toNext, 0);
 });
 
 test("two readings under READING_DOWN_PCT step the level down, floor 1", () => {

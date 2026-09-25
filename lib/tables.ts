@@ -1,7 +1,7 @@
 /**
- * Times tables, 2 to 9, as a grid to fill in rather than a test to sit.
+ * Times tables, 2 to 12, as a grid to fill in rather than a test to sit.
  *
- * The grid is the game. Eight rows (the tables) by ten columns (x1 to x10);
+ * The grid is the game. Eleven rows (the tables) by twelve columns (x1 to x12);
  * a cell lights when he knows that fact and turns gold when he knows it fast.
  * Mastering the tables means filling the grid. Nothing to unlock, nothing to
  * lose except honestly: a cell goes dark again if he forgets, which is what
@@ -20,11 +20,15 @@
 
 import { KNOWN_STREAK, dueAfterDays, skillGapDays } from "@/lib/spacing";
 
-/** The tables he is learning. His father asked for two to nine. */
-export const TABLES: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9];
-/** Each table runs x1 to x10. */
-export const TABLE_UP_TO = 10;
-/** Facts in one round: a whole table's worth. */
+/**
+ * The tables he is learning. His father asked for two to nine; Grade 5 goes
+ * on to twelve (ten comes along so the grid has no gap). Stored keys ("7x8") are unchanged, so the old grid is
+ * simply the top-left corner of this one.
+ */
+export const TABLES: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+/** Each table runs x1 to x12. */
+export const TABLE_UP_TO = 12;
+/** Facts in a lightning or spoken round. */
 export const ROUND_SIZE = 10;
 /** A right answer this quick is recall, not working out. Matches XP.fast. */
 export const FAST_MS = 3000;
@@ -158,7 +162,7 @@ export type TableProgress = {
   total: number;
 };
 
-/** How far along one table is: its ten facts, how many lit, known and fast. */
+/** How far along one table is: its twelve facts, how many lit, known and fast. */
 export function tableProgress(table: number, facts: Record<string, FactState>): TableProgress {
   let lit = 0;
   let known = 0;
@@ -206,7 +210,7 @@ function order(ranked: Ranked[]): Fact[] {
 }
 
 /**
- * One round on a table: all ten facts, the due and weak ones first, each
+ * One round on a table: all twelve facts, the due and weak ones first, each
  * shown either way round at random so 7x8 is met as 8x7 too. `rng` is 0..1.
  */
 export function buildTableRound(

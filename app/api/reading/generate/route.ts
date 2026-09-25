@@ -3,10 +3,10 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
+import { gradeOn } from "@/lib/grade";
 import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfileWithSeen } from "@/lib/profile";
 import {
-  currentQuarter,
   scienceUnitForWeek,
   themeForWeek,
   weekInTheme,
@@ -29,12 +29,15 @@ import {
   type StoryCast,
   ARCHIVE_MAX,
   pickArchived,
+  planQuarter,
+  maxReadingLevel,
+  MAX_READING_LEVEL,
 } from "@/lib/reading";
 import { PROFILE_KEY, READING_SEEN_MAX } from "@/lib/models/Profile";
 import {
   groq,
   CLUE_MODEL,
-  READING_SYSTEM_PROMPT,
+  readingSystemPrompt,
   friendlyAiError,
   rateLimit,
   getClientIp,
@@ -48,7 +51,7 @@ export const maxDuration = 60;
 // exactly that. Everything else is an optional override.
 const Body = z.object({
   listId: z.string().min(1),
-  level: z.number().int().min(1).max(10).optional(),
+  level: z.number().int().min(1).max(12).optional(),
   kind: z.enum(["story", "info"]).optional(),
 });
 
@@ -185,7 +188,10 @@ export async function POST(req: Request) {
   // The reading ladder lives on the profile, not the list. An explicit level
   // in the body wins (the drill / practice screens may want to pin one).
   const { state: profile, seen: allSeen } = await getProfileWithSeen();
-  const level = clampLevel(parsed.data.level ?? profile.reading.level ?? 1);
+  const level = clampLevel(
+    parsed.data.level ?? profile.reading.level ?? 1,
+    maxReadingLevel(gradeOn(todayKey()))
+  );
   const params = readingParams(level);
 
   const history = ((doc.get("readingHistory") as HistoryEntry[] | undefined) ?? []).slice(
@@ -221,7 +227,7 @@ export async function POST(req: Request) {
   const studyWords = sampleWords(allWords, MAX_STUDY_WORDS);
   // The school quarter opens the standards his class has started on, even
   // when the reading ladder has not reached them yet.
-  const plan = questionPlan(level, kind, useScience, currentQuarter(todayISO));
+  const plan = questionPlan(level, kind, useScience, planQuarter(todayISO));
 
   // One de-duplicated list, newest last. A passage generated on this list is
   // already in `seen`; matching on the opening keeps it from being listed twice.
@@ -265,7 +271,7 @@ BIG QUESTION the class is asking: ${essentialQuestion}
 ANGLE: ${topicIdea ?? essentialQuestion}
 The story must carry a lesson he could name in one sentence.${castBlock}`;
 
-  const userPrompt = `LEVEL: ${level} of 10
+  const userPrompt = `LEVEL: ${level} of ${MAX_READING_LEVEL}
 TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never more than ${params.maxWords})
 TEXT DIFFICULTY: about ${params.lexile}L. Match it with sentence length and word choice, not with padding.
 MAX SENTENCE WORDS: ${params.maxSentenceWords}
@@ -319,7 +325,7 @@ Write the passage and the questions now. Strict JSON only.`;
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
         messages: [
-          { role: "system", content: READING_SYSTEM_PROMPT },
+          { role: "system", content: readingSystemPrompt(gradeOn(todayISO)) },
           { role: "user", content: userPrompt + correction },
         ],
         response_format: { type: "json_object" },

@@ -8,7 +8,7 @@ import { factFromRow, type FactState } from "@/lib/tables";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Times tables" };
 
-/** Tables 2 to 9 as a grid to fill in. See lib/tables.ts. */
+/** Tables 2 to 12 as a grid to fill in. See lib/tables.ts. */
 export default async function TablesPage() {
   const { TimesFact } = await db();
   const rows = await TimesFact.find().lean();
@@ -27,7 +27,7 @@ export default async function TablesPage() {
         <h1 className="font-display text-2xl font-bold">Times tables</h1>
       </div>
       <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-        Two to nine. Light up the grid.
+        Two to twelve. Light up the grid.
       </p>
       <TablesBoard facts={facts} seed={requestSeed()} />
     </AppShell>

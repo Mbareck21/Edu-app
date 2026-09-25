@@ -37,10 +37,24 @@ export const CREATURES: Record<string, CreatureInfo> = {
   "reading-10": { name: "Bao the Panda", hint: "Get to reading level 10." },
   "level-10": { name: "Rexy the Dino", hint: "Get to level 10." },
   "level-20": { name: "Cosmo the Alien", hint: "Get to level 20." },
+  // Set 3: mastery.
+  "words-25": { name: "Mossy the Frog", hint: "Know 25 words." },
+  "words-50": { name: "Kiki the Parrot", hint: "Know 50 words." },
+  "words-100": { name: "Atlas the Elephant", hint: "Know 100 words." },
+  "table-one": { name: "Webby the Spider", hint: "Know a whole times table." },
+  "grid-lit": { name: "Flicker the Firefly", hint: "Light up the whole times-table grid." },
+  "grid-known": { name: "Quill the Hedgehog", hint: "Know every times-table fact." },
+  "grid-gold": { name: "Goldie the Goldfish", hint: "Make every times-table fact gold." },
+  "math-level-5": { name: "Peak the Mountain Goat", hint: "Get a math skill to level 5." },
+  "math-all-3": { name: "Koa the Koala", hint: "Get every math skill to level 3." },
+  "reading-8": { name: "Fern the Fawn", hint: "Get to reading level 8." },
 };
 
-/** The first 12 badges are Set 1; the rest are Set 2, the bigger goals. */
-export const SET_ONE_SIZE = 12;
+/**
+ * Where each set starts in BADGES order: Set 1, Set 2 (bigger goals) and
+ * Set 3 (mastery). The last set runs to the end.
+ */
+export const SET_STARTS: readonly number[] = [0, 12, 24];
 
 export function creatureFor(badgeId: string): CreatureInfo {
   return CREATURES[badgeId] ?? { name: "Mystery Friend", hint: "Keep learning to find me." };

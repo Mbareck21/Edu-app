@@ -59,11 +59,13 @@ export function lastNumber(text: string): number | null {
     .replace(/-/g, " ")
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
-    .map((t) => SOUNDS_LIKE[t] ?? t);
+    .map((t) => SOUNDS_LIKE[t] ?? t)
+    // "one hundred and forty four": the "and" broke the run, which read 44.
+    .filter((t, i, all) => !(t === "and" && all[i - 1] === "hundred"));
 
   const times = tokens.lastIndexOf("times");
   if (times >= 0) {
-    // Skip the fact's second number (always one word or digit: 2 to 10).
+    // Skip the fact's second number (always one word or digit: 1 to 12).
     let i = times + 1;
     while (i < tokens.length && !isNumberToken(tokens[i])) i++;
     return numberAtEnd(tokens.slice(i + 1));
