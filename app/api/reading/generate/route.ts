@@ -43,6 +43,7 @@ import {
   getClientIp,
 } from "@/lib/groq";
 import { sampleWords, shuffle } from "@/lib/session-sample";
+import { circularReason, shownAnswer } from "@/lib/circular-question";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -101,6 +102,23 @@ type HistoryEntry = {
   topic?: string;
   generatedAt: Date;
 };
+
+/**
+ * Why each question answers itself, by index; see lib/circular-question.ts.
+ * The source only counts when it really is in the passage, as it does below.
+ */
+function circularQuestions(
+  questions: { q: string; type: string; acceptable?: string[]; options?: string[]; answerIndex?: number; source?: string }[],
+  passage: string
+): Map<number, string> {
+  const out = new Map<number, string>();
+  questions.forEach((q, i) => {
+    const source = q.source && passage.includes(q.source.trim()) ? q.source.trim() : "";
+    const why = circularReason({ q: q.q, type: q.type, answer: shownAnswer(q), source });
+    if (why) out.set(i, why);
+  });
+  return out;
+}
 
 /** A passage he has already been given, from the profile-wide memory. */
 type SeenEntry = { title: string; opening: string; kind?: string; cast?: string };
@@ -376,8 +394,9 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       const short = words < params.minWords;
       const rambling = longest > params.maxSentenceWords + 3;
       const wrongCount = validated.data.questions.length !== plan.length;
+      const circular = circularQuestions(validated.data.questions, passage);
 
-      if (attempt === 1 && (short || rambling || wrongCount)) {
+      if (attempt === 1 && (short || rambling || wrongCount || circular.size > 0)) {
         const fixes: string[] = ["\n\nYour previous attempt fell short. Fix this:"];
         if (short) {
           fixes.push(
@@ -392,6 +411,11 @@ Your last answer was not valid JSON — it ran out of room before the closing br
         if (wrongCount) {
           fixes.push(
             `- You returned ${validated.data.questions.length} questions. The plan asks for exactly ${plan.length}, in the given order and types.`
+          );
+        }
+        for (const [i, why] of circular) {
+          fixes.push(
+            `- Question ${i + 1} ("${validated.data.questions[i].q}") answers itself: ${why}. Ask about a reason or fact the passage states in words, and give an answer that adds something the question does not already say.`
           );
         }
         correction = fixes.join("\n");
@@ -430,7 +454,15 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     if (old) {
       const kept = archive.filter((a) => a !== old);
       if (unfinished) kept.push(unfinished);
-      doc.set("currentReading", { ...old, generatedAt: new Date(), reused: true });
+      // Passages stored before the circular check get the same filter now.
+      const oldQuestions = Array.isArray(old.questions) ? old.questions : [];
+      const circular = circularQuestions(oldQuestions, String(old.paragraph ?? ""));
+      doc.set("currentReading", {
+        ...old,
+        questions: oldQuestions.filter((_, i) => !circular.has(i)),
+        generatedAt: new Date(),
+        reused: true,
+      });
       doc.set("readingArchive", kept.slice(-ARCHIVE_MAX));
       await doc.save();
       return NextResponse.json(toClient(doc.toObject()));
@@ -512,6 +544,18 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     };
   });
 
+  // A question that still answers itself after the retry is not served. It is
+  // dropped after the plan has set formats and types, so the rest keep theirs.
+  const circular = circularQuestions(questions, passage);
+  if (circular.size > 0) {
+    console.warn(`[reading/generate] dropped ${circular.size} circular question(s): ${[...circular.values()].join("; ")}`);
+  }
+  const served = questions.filter((_, i) => !circular.has(i));
+  // A passage with nothing left to ask is not a reading.
+  if (served.length === 0) {
+    return NextResponse.json({ error: "The story did not come out right. Tap it again." }, { status: 502 });
+  }
+
   const now = new Date();
   // The passage being replaced goes on the archive, newest last, capped.
   if (unfinished) {
@@ -520,7 +564,7 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   doc.set("currentReading", {
     title: reading.title,
     paragraph: passage,
-    questions,
+    questions: served,
     vocabGlosses: dedupeGlosses(reading.glossary),
     level,
     passageKind: kind,

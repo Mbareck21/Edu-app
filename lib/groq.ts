@@ -288,6 +288,26 @@ FORMAT "mcq" (tap one option):
     silly. For retell: one right summary, one that is only a small detail,
     one that is about something the passage did not say.
   • "acceptable": [the text of the right option] — one entry.
+  • Every wrong option must be plausible AND clearly wrong by the passage:
+    something the passage says is not so, or says about something else.
+    Never a wrong option the passage could also support.
+
+⚠ No circular questions. A question the passage cannot really answer is worse
+than none.
+  • Every "why" or "how" question must be answered by a REASON or EXPLANATION
+    the passage states outright — a sentence with "because", "so", "so that",
+    "to <do something>", "in order to", "which helps", "since", "as a result".
+    Put that sentence in "source". If no sentence gives a reason, ask a
+    different question.
+  • Never turn a sentence into a "why" question. The passage says "Strong
+    stems protect buds from pressure." and gives no reason — so
+    "Why do strong stems protect buds from pressure?" has no answer.
+  • The answer must ADD information the question does not already hold.
+    Never answer with the question's own words, or the same idea said again
+    in other words.
+BAD:  q "Why do strong stems protect buds from pressure?" → acceptable ["they keep buds safe"]  (the question said again)
+GOOD: passage "Stems stand up tall so the leaves can reach the sun."
+      q "Why do stems stand up tall?" → acceptable ["so the leaves can reach the sun", "to reach the sun"]
 
 ⚠ "acceptable" holds ANSWERS, never rephrasings of the question.
 BAD:  q "What is this about?" → acceptable ["what is it about", "tell me about it"]
