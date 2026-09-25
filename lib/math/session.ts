@@ -88,3 +88,13 @@ export function levelForGrade(stored: number, grade: Grade, savedIn: Grade | nul
   if (grade === 4) return level as Level;
   return Math.max(level, savedIn === 5 ? 3 : 4) as Level;
 }
+
+/** The activity ref of a math lesson: ten questions on one skill. */
+export function mathLessonRef(skillId: string): string {
+  return `math:${skillId}`;
+}
+
+/** A finished math lesson, as opposed to a drill ("drill:math:…") or a tables round ("tables:…"). */
+export function isMathLesson(ref: string): boolean {
+  return ref.startsWith("math:");
+}

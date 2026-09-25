@@ -9,7 +9,7 @@ import LessonComplete from "@/components/ui/LessonComplete";
 import Pill from "@/components/ui/Pill";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { clock } from "@/components/ui/time";
-import { buildSession, getSkill, gradeAnswer, type Level, type MathSkillId } from "@/lib/math";
+import { buildSession, getSkill, gradeAnswer, mathLessonRef, type Level, type MathSkillId } from "@/lib/math";
 import { mathHint } from "@/lib/math/hint";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
@@ -143,7 +143,7 @@ function MathSessionInner({
     const correct = Object.values(firstTryRef.current).filter(Boolean).length;
     const result: SessionResult = {
       kind: "math",
-      ref: `math:${skillId}`,
+      ref: mathLessonRef(skillId),
       answered: questions.length,
       correct,
       // No speed bonus outside the unit challenge and timed drills.
