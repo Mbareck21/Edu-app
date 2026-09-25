@@ -29,6 +29,8 @@ export {
   MAX_SESSION_COUNT,
   buildSession,
   gradeAnswer,
+  isMathLesson,
   levelForGrade,
+  mathLessonRef,
   mixedSession,
 } from "./session";

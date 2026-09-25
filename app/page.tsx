@@ -3,7 +3,7 @@ import Link from "next/link";
 import SchoolStrip from "@/components/learn/SchoolStrip";
 import TodayQuest, { type QuestBeat } from "@/components/learn/TodayQuest";
 import { currentLesson } from "@/lib/math/iready";
-import { getSkill } from "@/lib/math";
+import { getSkill, isMathLesson } from "@/lib/math";
 import UnitCard from "@/components/learn/UnitCard";
 import PetCard from "@/components/pet/PetCard";
 import AppShell from "@/components/ui/AppShell";
@@ -125,8 +125,9 @@ export default async function LearnPage() {
       blurb: schoolOver ? "Practice" : schoolSkill.name,
       icon: "math",
       href: schoolOver ? "/math" : `/math/${schoolSkill.id}`,
-      // Any math counts: the skill page, a drill, whichever he opened.
-      done: doneToday.some((a) => a.kind === "math"),
+      // A whole math lesson (any skill), not a quick drill or a tables round:
+      // two answers in a drill used to tick the beat.
+      done: doneToday.some((a) => a.kind === "math" && isMathLesson(a.ref)),
     },
     {
       id: "production",
