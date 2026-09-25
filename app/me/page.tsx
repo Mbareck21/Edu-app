@@ -229,7 +229,7 @@ export default async function MePage() {
               ["Reading", pctLine("reading")],
               ["Math", pctLine("math")],
               ["Words", pctLine("vocab")],
-              ["Words known this week", String(digest.wordsKnownThisWeek)],
+              ["Known words reviewed", String(digest.wordsKnownThisWeek)],
               ["Tables lit", `${digest.tablesLit} of ${allFactKeys().length}`],
               [
                 "Due tomorrow",
