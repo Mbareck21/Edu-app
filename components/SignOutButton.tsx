@@ -47,6 +47,8 @@ export default function SignOutButton({ name }: { name: string }) {
         fullWidth
         disabled={busy}
         onClick={async () => {
+          // One tap used to sign him out, and only a grown-up can sign back in.
+          if (!window.confirm(`Sign out ${name}? You need the PIN to get back in.`)) return;
           setError(null);
           setBusy(true);
           try {
@@ -59,6 +61,8 @@ export default function SignOutButton({ name }: { name: string }) {
             clearAllProgress();
             await forgetCachedPages();
             window.location.replace("/login");
+          } catch {
+            setError("Could not sign out. Check the internet and try again.");
           } finally {
             setBusy(false);
           }

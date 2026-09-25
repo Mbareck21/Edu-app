@@ -19,7 +19,8 @@ const TABS: Tab[] = [
 export function hidesNav(pathname: string): boolean {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] === "learn" && parts.length >= 3) return true; // /learn/[id]/[step]
-  if (parts[0] === "math" && parts.length >= 2) return true; // /math/[skill]
+  // /math/[skill], but not /math/tables: that is a page with its own rounds.
+  if (parts[0] === "math" && parts.length >= 2 && parts[1] !== "tables") return true;
   if (parts[0] === "drill" && parts.length >= 2) return true; // /drill/[mode]
   return false;
 }
@@ -35,6 +36,7 @@ export default function BottomNav() {
 
   return (
     <nav
+      data-bottom-nav
       className="fixed bottom-0 left-1/2 z-40 w-full max-w-app -translate-x-1/2 border-t"
       style={{
         background: "var(--color-bg)",

@@ -106,7 +106,8 @@ export default function LessonComplete({
   const pctShown = useCountUp(Math.round(Math.max(0, Math.min(1, accuracy ?? 0)) * 100));
 
   return (
-    <div className="flex min-h-dvh flex-col px-4 pt-10 pb-6">
+    // pb-48 keeps room for the buttons fixed at the bottom of the screen.
+    <div className="flex min-h-dvh flex-col px-4 pt-10 pb-48">
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <span
           className="q-bounce-in flex h-24 w-24 items-center justify-center rounded-full"
@@ -168,7 +169,17 @@ export default function LessonComplete({
         ) : null}
       </div>
 
-      <div className="mt-8 space-y-3">
+      {/* Fixed to the bottom of the screen, above the tab bar when there is
+          one: a chest card, a word list or a Home bar above this screen used
+          to push these buttons out of sight. */}
+      <div
+        className="fixed inset-x-0 z-30 mx-auto w-full max-w-app space-y-3 px-4 pt-3"
+        style={{
+          bottom: "var(--nav-h, 0px)",
+          paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+          background: "var(--color-bg)",
+        }}
+      >
         <Action action={primary} variant="primary" />
         {secondary ? <Action action={secondary} variant="secondary" /> : null}
       </div>

@@ -37,6 +37,8 @@ function LoginForm() {
           void flushQueue();
           router.replace(sameSitePath(params.get("next")));
           router.refresh();
+        } catch {
+          setError("No internet. Try again.");
         } finally {
           setBusy(false);
         }

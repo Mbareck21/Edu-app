@@ -536,10 +536,13 @@ export default function ChatPage() {
               variant="secondary"
               onClick={startConversation}
               disabled={streaming || micBusy}
+              // Icon only, like the mic: with a word on it too, four controls
+              // left the message box about 80px wide on a small phone.
+              className="!px-4"
               title="Hands-free conversation"
+              aria-label="Talk hands-free"
             >
               <Icon name="chat" size={20} />
-              Talk
             </Button>
           )}
           <input

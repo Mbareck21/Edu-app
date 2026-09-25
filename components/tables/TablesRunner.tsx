@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import QuestionPad, { FLASH_MS, requeue } from "@/components/math/QuestionPad";
 import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
 import LessonComplete from "@/components/ui/LessonComplete";
+import RunnerHeader from "@/components/ui/RunnerHeader";
 import type { MathQuestion } from "@/lib/math";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, saveProgress } from "@/lib/resume";
@@ -27,6 +28,8 @@ export type TablesRunnerProps = {
   /** A round he was in the middle of when the page reloaded. */
   initial: TablesSaved | null;
   onDone?: () => void;
+  /** Leave the round unfinished; the board clears its saved place. */
+  onClose?: () => void;
 };
 
 /**
@@ -93,6 +96,7 @@ export default function TablesRunner({
   saveKey,
   initial,
   onDone,
+  onClose,
 }: TablesRunnerProps) {
   const questions = useMemo(() => facts.map(toQuestion), [facts]);
   const [queue, setQueue] = useState<number[]>(() => initial?.queue ?? facts.map((_, i) => i));
@@ -230,7 +234,7 @@ export default function TablesRunner({
     }
     const starLine = ["No stars yet — every one right earns the first.", "One star.", "Two stars.", "Three stars!"][outcome.stars];
     return (
-      <div className="safe-top safe-bottom min-h-dvh px-4">
+      <div className="safe-top safe-bottom">
         <LessonComplete
           title={outcome.stars === 3 ? "Lightning fast!" : outcome.stars > 0 ? `${label} done!` : "Round done."}
           subtitle={`${outcome.correct} of ${facts.length} on the first try. ${starLine}`}
@@ -251,7 +255,14 @@ export default function TablesRunner({
   const lit = Object.values(states).filter(isLit).length;
 
   return (
-    <div className="safe-top min-h-dvh px-4 pb-8">
+    <div className="safe-top flex h-dvh flex-col">
+      <RunnerHeader
+        href="/math/tables"
+        onClose={onClose}
+        value={answeredSoFar / Math.max(1, facts.length)}
+        color="purple"
+        label="Round progress"
+      />
       <QuestionPad
         question={question}
         header={

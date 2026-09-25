@@ -8,7 +8,7 @@ import TablesRunner, { isTablesSaved, type TablesSaved } from "@/components/tabl
 import VoiceTablesRunner from "@/components/tables/VoiceTablesRunner";
 import Icon from "@/components/ui/Icon";
 import { useSavedRun } from "@/components/ui/useSavedRun";
-import { resumeKey } from "@/lib/resume";
+import { clearProgress, resumeKey } from "@/lib/resume";
 import {
   TABLES,
   TABLE_UP_TO,
@@ -97,6 +97,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
       >
         <VoiceTablesRunner
           facts={voice}
+          onClose={() => setVoice(null)}
           onDone={() => {
             setVoice(null);
             // The grid moved on the server; take the page again.
@@ -121,6 +122,12 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           sessionRef={running.sessionRef}
           saveKey={ROUND_KEY}
           initial={saved}
+          onClose={() => {
+            // Left unfinished: forget the saved place, or the page would put
+            // him straight back into this round.
+            clearProgress(ROUND_KEY);
+            setRunning(null);
+          }}
           onDone={() => {
             setRunning(null);
             // The grid moved on the server; take the page again so it and the
@@ -216,7 +223,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
         }}
       >
         <Icon name="mic" size={22} />
-        Say it out loud: 10 random facts
+        Say it out loud
       </Button>
 
       {lightning.length > 0 ? (
@@ -228,7 +235,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
             start({ facts: lightning, label: "Lightning", sessionRef: "tables:lightning" })
           }
         >
-          Lightning round: your ten weakest
+          Lightning round
         </Button>
       ) : null}
 

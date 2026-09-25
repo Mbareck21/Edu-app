@@ -87,7 +87,11 @@ export default function GrownUpsPage() {
       <Suspense fallback={null}>
         <AdultForm />
       </Suspense>
-      <Link href="/" className="mt-6 font-display font-bold" style={{ color: "var(--color-green-dark)" }}>
+      <Link
+        href="/"
+        className="mt-4 inline-flex min-h-11 items-center px-3 font-display font-bold"
+        style={{ color: "var(--color-green-dark)" }}
+      >
         Back to learning
       </Link>
     </main>

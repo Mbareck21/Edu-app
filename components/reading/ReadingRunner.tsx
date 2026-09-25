@@ -681,7 +681,9 @@ function ReadingRunnerInner({
 
   const glossPanel = gloss ? (
     <div
-      className="fixed bottom-0 left-1/2 z-50 w-full max-w-app -translate-x-1/2 rounded-t-hero border-t-4 px-4 pt-4"
+      // z-40, under the answer sheet (z-50): a word left open used to cover
+      // the sheet's Continue button.
+      className="fixed bottom-0 left-1/2 z-40 w-full max-w-app -translate-x-1/2 rounded-t-hero border-t-4 px-4 pt-4"
       style={{
         background: "#fff",
         borderTopColor: "var(--color-green)",
@@ -700,6 +702,7 @@ function ReadingRunnerInner({
             setGloss(null);
             setShowArabic(false);
           }}
+          className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
           style={{ color: "var(--color-muted)" }}
         >
           <Icon name="x" size={24} />

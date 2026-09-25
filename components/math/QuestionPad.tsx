@@ -56,9 +56,11 @@ export default function QuestionPad({
 }: QuestionPadProps) {
   return (
     <>
-      <div className="flex-1 overflow-y-auto px-4 pt-2 pb-3">
+      {/* min-h-0 lets this area shrink and scroll, so the keypad and Check
+          stay on screen on a small phone instead of the page growing. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-3">
         {header}
-        <Card className="min-h-[180px]">
+        <Card className="min-h-[140px]">
           {question ? (
             <>
               {/* A new question closes any open word: keyed on the prompt. */}

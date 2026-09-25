@@ -78,7 +78,7 @@ function StuckBoardInner({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setNote(typeof data.error === "string" ? data.error : "That did not save.");
         return;
@@ -103,6 +103,8 @@ function StuckBoardInner({
       // Never swallow one: the parent must see what did not take.
       if (data.rejected.length > 0) parts.push(`Could not use: ${data.rejected.join(", ")}.`);
       setNote(parts.join(" ") || null);
+    } catch {
+      setNote("That did not save. Check the internet and try again.");
     } finally {
       setBusy(false);
     }

@@ -288,7 +288,7 @@ function MathSessionInner({
   const solved = questions.length - queue.length;
 
   return (
-    <main className="flex min-h-dvh flex-col">
+    <main className="flex h-dvh flex-col">
       <RunnerHeader
         href="/math"
         value={solved / questions.length}

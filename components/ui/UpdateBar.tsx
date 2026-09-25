@@ -1,6 +1,16 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 import Icon from "@/components/ui/Icon";
+
+/** Whether a tab bar is on screen now. Pages come and go, so it is watched. */
+function subscribe(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.body, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+const navShown = () => document.querySelector("[data-bottom-nav]") !== null;
 
 /**
  * "There is a new Quest" — the bar he taps to take an update.
@@ -25,12 +35,18 @@ export default function UpdateBar({
   onReload: () => void;
   onDismiss: () => void;
 }) {
+  const nav = useSyncExternalStore(subscribe, navShown, () => true);
   return (
     <div
       className="fixed inset-x-0 z-30 mx-auto flex w-full max-w-app items-center gap-2 px-4"
       // Clear of BottomNav (fixed, bottom-0, z-40) and below FeedbackSheet
-      // (z-50), so neither the tab bar nor a question is ever covered.
-      style={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}
+      // (z-50). With no tab bar (a lesson, a math round) the bottom is where
+      // Check, the keypad and Continue are, so there it goes to the top.
+      style={
+        nav
+          ? { bottom: "calc(76px + env(safe-area-inset-bottom))" }
+          : { top: "calc(8px + env(safe-area-inset-top))" }
+      }
     >
       <button
         type="button"

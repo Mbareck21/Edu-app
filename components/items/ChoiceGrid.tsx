@@ -27,7 +27,9 @@ export default function ChoiceGrid({
   const sentences = layout === "sentences";
 
   return (
-    <div className={sentences ? "flex flex-col gap-2.5" : "grid grid-cols-2 gap-2.5"}>
+    // minmax(0, 1fr): a long word ("responsibility") wraps inside its tile
+    // instead of widening the grid past the screen.
+    <div className={sentences ? "flex flex-col gap-2.5" : "grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5"}>
       {options.map((option) => {
         const isAnswer = revealed && option === answer;
         const isMiss = revealed && chosen === option && option !== answer;
@@ -65,7 +67,7 @@ export default function ChoiceGrid({
               onPick(option);
             }}
             className={[
-              "press-3d min-h-[56px] rounded-tile border-2 px-4 py-3 font-body font-bold disabled:cursor-default",
+              "press-3d min-h-[56px] rounded-tile border-2 px-4 py-3 font-body font-bold break-words hyphens-auto disabled:cursor-default",
               sentences ? "text-left text-[15px] leading-snug" : "text-center text-lg",
             ].join(" ")}
             style={style}

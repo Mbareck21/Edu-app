@@ -243,7 +243,8 @@ export default function RescueRunner({
 
         {/* The sky, the falling word, the water. */}
         <div
-          className="relative mt-3 h-[300px] overflow-hidden rounded-hero"
+          // Shorter on a short phone, so the letter tiles below stay on screen.
+          className="relative mt-3 h-[min(300px,42dvh)] overflow-hidden rounded-hero"
           style={{ background: "linear-gradient(#cfe6ff, #eef6ff)" }}
         >
           <div

@@ -22,8 +22,9 @@ export default async function FlashcardsPage({
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 space-y-4">
       <nav className="text-sm">
-        <Link href={`/lists/${list._id}`} className="text-slate-600 hover:underline">
-          ← Back to {list.name}
+        {/* Home, not the list editor: that page is for grown-ups (PIN). */}
+        <Link href="/" className="inline-flex min-h-11 items-center font-bold text-slate-600">
+          ← Home
         </Link>
       </nav>
       <header>

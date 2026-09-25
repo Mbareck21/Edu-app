@@ -339,7 +339,17 @@ function ChainRunnerInner({
     );
   }
 
-  if (!word || !chain) return null;
+  // A list with no words yet: say so, rather than a blank white screen.
+  if (!word || !chain) {
+    return (
+      <div className="px-4 pt-10 text-center">
+        <p className="font-display text-xl font-bold">No words to write yet.</p>
+        <p className="mt-2 text-base" style={{ color: "var(--color-muted)" }}>
+          Ask a grown-up to add some words to this list.
+        </p>
+      </div>
+    );
+  }
 
   const sense = senses[word];
   const showWord = rung === "copy" || (rung === "cover" && !hidden);

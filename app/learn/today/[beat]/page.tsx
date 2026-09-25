@@ -78,6 +78,9 @@ export default async function TodayBeatPage({
         post={{ ref: "quest:review" }}
         resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
         accent="green"
+        // Review only takes words he has met, so with lists but nothing met
+        // yet it is empty; "Add a word list first" was wrong there.
+        emptyNote={lists.length > 0 ? "Nothing to review yet. Start with New words!" : shared.emptyNote}
         title={TITLE.review}
         subtitle="Everything that was due today."
       />

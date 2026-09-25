@@ -36,7 +36,16 @@ const FALLBACK_SILENCE_MS = 900;
  * and comes round again later in the round. Every answer goes to
  * /api/tables/answer, so the grid moves exactly as it does for typing.
  */
-export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; onDone: () => void }) {
+export default function VoiceTablesRunner({
+  facts,
+  onDone,
+  onClose,
+}: {
+  facts: Fact[];
+  onDone: () => void;
+  /** Leave the round now. The unmount stops the voice and the mic. */
+  onClose: () => void;
+}) {
   const [queue, setQueue] = useState<number[]>(() => facts.map((_, i) => i));
   const [phase, setPhase] = useState<Phase>("ready");
   const [heard, setHeard] = useState<number | null>(null);
@@ -118,7 +127,12 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
     const form = new FormData();
     form.append("audio", blob, `answer.${blob.type.includes("mp4") ? "mp4" : "webm"}`);
     form.append("language", "en");
-    const res = await fetch("/api/transcribe", { method: "POST", body: form }).catch(() => null);
+    // A slow network must not leave him on "checking" with no way on.
+    const res = await fetch("/api/transcribe", {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
     const data = res?.ok ? ((await res.json().catch(() => ({}))) as { text?: string }) : {};
     return { alternatives: data.text ? [data.text] : [], ms };
   }, []);
@@ -238,7 +252,7 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
     }
     const starLine = ["Every one right earns a star.", "One star.", "Two stars.", "Three stars!"][outcome.stars];
     return (
-      <div className="safe-top safe-bottom min-h-dvh px-4">
+      <div className="safe-top safe-bottom">
         <LessonComplete
           title={outcome.stars === 3 ? "Lightning voice!" : "Times tables said!"}
           subtitle={`${outcome.correct} of ${facts.length} right the first time. ${starLine}`}
@@ -260,7 +274,13 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
 
   return (
     <div className="safe-top flex min-h-dvh flex-col" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom))" }}>
-      <RunnerHeader href="/math/tables" value={answered / facts.length} color="purple" label="Facts said" />
+      <RunnerHeader
+        href="/math/tables"
+        onClose={onClose}
+        value={answered / facts.length}
+        color="purple"
+        label="Facts said"
+      />
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
         {phase === "ready" ? (
           <>
@@ -354,7 +374,7 @@ export default function VoiceTablesRunner({ facts, onDone }: { facts: Fact[]; on
             <Icon name="mic" size={22} />
             Start
           </Button>
-        ) : phase === "listening" || (phase === "unclear" && stuck) ? (
+        ) : phase === "listening" || phase === "checking" || (phase === "unclear" && stuck) ? (
           <div className="flex gap-3">
             <Button
               className="flex-1"

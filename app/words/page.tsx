@@ -31,7 +31,11 @@ export default async function WordsPage() {
 
   return (
     <>
-      <main className="safe-top px-4 pb-28 pt-6">
+      <main
+        className="safe-top px-4 pb-28 pt-6"
+        // The tab bar's height, for LessonComplete's pinned buttons (see AppShell).
+        style={{ ["--nav-h" as string]: "calc(61px + env(safe-area-inset-bottom))" }}
+      >
         <h1 className="font-display text-3xl font-bold">Words to fix</h1>
         <p className="mt-1 text-base" style={{ color: "var(--color-muted)" }}>
           Write each one ten times without a mistake.

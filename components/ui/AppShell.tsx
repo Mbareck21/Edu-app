@@ -34,6 +34,9 @@ export default function AppShell({
         ]
           .filter(Boolean)
           .join(" ")}
+        // How much of the bottom the tab bar covers, for anything pinned to
+        // the bottom inside the page (LessonComplete's buttons, a Save bar).
+        style={{ ["--nav-h" as string]: nav ? "calc(61px + env(safe-area-inset-bottom))" : "0px" }}
       >
         {children}
       </main>

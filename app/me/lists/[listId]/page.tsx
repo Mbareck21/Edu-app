@@ -35,7 +35,7 @@ export default async function EditWordListPage({
       <header className="pt-4 pb-5">
         <Link
           href="/me/lists"
-          className="inline-flex items-center gap-1 text-sm font-bold"
+          className="-ml-1 inline-flex min-h-11 items-center gap-1 pr-3 pl-1 text-sm font-bold"
           style={{ color: "var(--color-muted)" }}
         >
           <Icon name="arrowLeft" size={18} />

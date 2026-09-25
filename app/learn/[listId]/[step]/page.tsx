@@ -76,14 +76,17 @@ export default async function StepPage({
       chains[w.word] = fromRow(w.word, row);
     }
     return (
-      <ChainRunner
-        key={runKey}
-        words={chosen}
-        senses={senses}
-        chains={chains}
-        post={{ ref: `${list._id}:flashcards`, listId: list._id, step: "flashcards" }}
-        exit={{ label: "Back to path", href: pathHref }}
-      />
+      <>
+        <ExitBar href={pathHref} label="Back to path" />
+        <ChainRunner
+          key={runKey}
+          words={chosen}
+          senses={senses}
+          chains={chains}
+          post={{ ref: `${list._id}:flashcards`, listId: list._id, step: "flashcards" }}
+          exit={{ label: "Back to path", href: pathHref }}
+        />
+      </>
     );
   }
 

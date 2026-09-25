@@ -8,6 +8,11 @@ import type { AccentColor } from "@/components/ui/colors";
 export type RunnerHeaderProps = {
   /** Where the X goes — usually back to the unit path. */
   href: string;
+  /**
+   * Close without navigating, for a round shown over the page it came from.
+   * A link to the same page did nothing there.
+   */
+  onClose?: () => void;
   /** 0..1 through the session. */
   value: number;
   color?: AccentColor;
@@ -18,6 +23,7 @@ export type RunnerHeaderProps = {
 
 export default function RunnerHeader({
   href,
+  onClose,
   value,
   color = "green",
   right,
@@ -25,14 +31,26 @@ export default function RunnerHeader({
 }: RunnerHeaderProps) {
   return (
     <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-      <Link
-        href={href}
-        aria-label="Close"
-        className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-        style={{ color: "var(--color-muted)" }}
-      >
-        <Icon name="x" size={26} />
-      </Link>
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ color: "var(--color-muted)" }}
+        >
+          <Icon name="x" size={26} />
+        </button>
+      ) : (
+        <Link
+          href={href}
+          aria-label="Close"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ color: "var(--color-muted)" }}
+        >
+          <Icon name="x" size={26} />
+        </Link>
+      )}
       <ProgressBar value={value} color={color} label={label} className="flex-1" />
       {right ? <div className="shrink-0">{right}</div> : null}
     </div>

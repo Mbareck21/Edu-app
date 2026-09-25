@@ -279,7 +279,7 @@ function MathDrillRunnerInner({
     }
     const offlineXp = outcome.correct * XP.correct + XP.lessonDone;
     return (
-      <div className="safe-top safe-bottom min-h-dvh px-4">
+      <div className="safe-top safe-bottom">
         <LessonComplete
           title={timed ? "Time!" : outcome.correct === outcome.answered ? "All right!" : "Drill done!"}
           subtitle={
@@ -308,7 +308,7 @@ function MathDrillRunnerInner({
     : (count - queue.length) / count;
 
   return (
-    <main className="flex min-h-dvh flex-col">
+    <main className="flex h-dvh flex-col">
       <RunnerHeader
         href="/drill"
         value={progress}
