@@ -16,7 +16,6 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import ArabicChip from "@/components/items/ArabicChip";
 import AudioButton from "@/components/items/AudioButton";
 import EchoReader, { type EchoSummary } from "@/components/reading/EchoReader";
-import FluencyReader from "@/components/reading/FluencyReader";
 import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
 import { todayKey } from "@/lib/day";
@@ -30,17 +29,21 @@ import {
   countWords,
   lexileForLevel,
   partPlan,
-  splitParagraphs,
   splitParts,
   withNames,
   type Scaffold,
-  wordsPerMinute,
   wordsFirst,
-  wpmNormForDate,
 } from "@/lib/reading";
+import {
+  forgetOpenReading,
+  isEchoProgress,
+  readingMode,
+  rememberOpenReading,
+  type EchoProgress,
+  type ReadingMode,
+} from "@/lib/reading-resume";
 import { readingProgress } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
-import { playTextThroughTTS, type Playback } from "@/lib/voice";
 import type {
   ClientWordList,
   CurrentReading,
@@ -71,7 +74,6 @@ export type ReadingRunnerProps = {
 };
 
 type Phase = "words" | "mode" | "read" | "questions" | "done";
-type Mode = "listen" | "alone" | "echo" | "aloud";
 
 const HINTS_BEFORE_REVEAL = 2;
 
@@ -95,13 +97,18 @@ function freshQ(n: number): QState[] {
 type ReadingSaved = {
   at: string;
   phase: Phase;
-  mode: Mode;
+  /** A ReadingMode, or one of the two dropped ones: see readingMode(). */
+  mode: string;
   qStates: QState[];
   qIdx: number;
   /** Time on task banked before a reload. */
   ms?: number;
   /** Part by part: the furthest part he had on screen. */
   seen?: number;
+  /** Read after the robot: the sentence he was on. */
+  echoAt?: EchoProgress;
+  /** Read after the robot, once done: for the finish screen. */
+  echo?: EchoSummary;
 };
 
 function isReadingSaved(v: unknown): v is ReadingSaved {
@@ -114,12 +121,14 @@ function isReadingSaved(v: unknown): v is ReadingSaved {
       o.phase === "read" ||
       o.phase === "questions" ||
       o.phase === "done") &&
-    (o.mode === "listen" || o.mode === "alone" || o.mode === "echo" || o.mode === "aloud") &&
+    readingMode(o.mode) !== null &&
     Array.isArray(o.qStates) &&
     o.qStates.every((q) => typeof q === "object" && q !== null && typeof q.done === "boolean") &&
     typeof o.qIdx === "number" &&
     (o.ms === undefined || typeof o.ms === "number") &&
-    (o.seen === undefined || typeof o.seen === "number")
+    (o.seen === undefined || typeof o.seen === "number") &&
+    (o.echoAt === undefined || isEchoProgress(o.echoAt)) &&
+    (o.echo === undefined || (typeof o.echo === "object" && o.echo !== null))
   );
 }
 
@@ -200,7 +209,7 @@ function ReadingRunnerInner({
         ? initial.phase
         : startPhase(stale ? null : list.currentReading)
   );
-  const [mode, setMode] = useState<Mode>(initial?.mode ?? "listen");
+  const [mode, setMode] = useState<ReadingMode>(readingMode(initial?.mode) ?? "echo");
   const [busy, setBusy] = useState<null | "generating" | "saving">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,6 +219,10 @@ function ReadingRunnerInner({
   const [qIdx, setQIdx] = useState(Math.min(resumedIdx, Math.max(0, questions.length - 1)));
   // Part by part ("Read alone"): the furthest part on screen.
   const [seenPart, setSeenPart] = useState(() => initial?.seen ?? 0);
+  // Echo mode ("read after the robot") — kept for the finish screen's subtitle.
+  const [echo, setEcho] = useState<EchoSummary | null>(initial?.echo ?? null);
+  // Echo mode: the sentence he is on, so leaving and coming back carries on.
+  const [echoAt, setEchoAt] = useState<EchoProgress | null>(initial?.echoAt ?? null);
 
   // Time on task, not time on the clock. His longest logged reading was 2.5
   // hours of an open tab — see lib/time-on-task.ts.
@@ -236,8 +249,19 @@ function ReadingRunnerInner({
       qIdx,
       ms: watch.current?.read() ?? 0,
       seen: seenPart,
+      ...(echoAt ? { echoAt } : {}),
+      ...(echo ? { echo } : {}),
     });
-  }, [reading, phase, mode, qStates, qIdx, seenPart, saveKey]);
+  }, [reading, phase, mode, qStates, qIdx, seenPart, echoAt, echo, saveKey]);
+
+  // This page, for Home's Reading beat to come back to while it is unfinished.
+  // Its list may not be the one Home would pick. See lib/reading-resume.ts.
+  const unfinished = reading !== null && phase !== "done";
+  useEffect(() => {
+    const here = window.location.pathname + window.location.search;
+    if (unfinished) rememberOpenReading(here, todayKey());
+    else forgetOpenReading(here);
+  }, [unfinished]);
   const [typed, setTyped] = useState("");
   const [picked, setPicked] = useState<number | null>(null);
   /**
@@ -257,21 +281,6 @@ function ReadingRunnerInner({
   const [gloss, setGloss] = useState<VocabGloss | null>(null);
   const [showArabic, setShowArabic] = useState(false);
 
-  // Listen mode
-  const [playingIdx, setPlayingIdx] = useState<number | null>(null);
-  const [paused, setPaused] = useState(false);
-  /** The part whose sound never arrived. Play picks up from here. */
-  const [stalledAt, setStalledAt] = useState<number | null>(null);
-  const playbackRef = useRef<Playback | null>(null);
-  const tokenRef = useRef(0);
-
-  // Echo mode ("read after me") — kept for the finish screen's subtitle.
-  const [echo, setEcho] = useState<EchoSummary | null>(null);
-
-  // Fluency timer
-  const [timerStart, setTimerStart] = useState<number | null>(null);
-  const [wpm, setWpm] = useState<number | null>(null);
-
   // 0 until the kid picks a reading mode; the finish screen reads it back.
   const startedAtRef = useRef(0);
   const savedRef = useRef(false);
@@ -281,40 +290,11 @@ function ReadingRunnerInner({
   const [ladderNote, setLadderNote] = useState<string | undefined>(undefined);
   const [elapsedMs, setElapsedMs] = useState(resumedAllDone ? (initial?.ms ?? 0) : 0);
 
-  const paragraphs = useMemo(
-    () => (reading ? splitParagraphs(reading.paragraph) : []),
-    [reading]
-  );
   const wordsCount = reading ? countWords(reading.paragraph) : 0;
   const level = reading?.level ?? list.readingLevel ?? 1;
   const lexile = lexileForLevel(level);
   const atGrade = atGradeLevel(level);
   const grade = gradeOn(todayKey());
-
-  const stopAudio = useCallback(() => {
-    tokenRef.current++;
-    playbackRef.current?.cancel();
-    playbackRef.current = null;
-    setPlayingIdx(null);
-    setPaused(false);
-    setStalledAt(null);
-  }, []);
-
-  // Pause holds the audio element's position, so play carries on from the
-  // same spot instead of restarting the passage.
-  const pauseAudio = useCallback(() => {
-    if (!playbackRef.current) return;
-    playbackRef.current.pause();
-    setPaused(true);
-  }, []);
-
-  const resumeAudio = useCallback(() => {
-    if (!playbackRef.current) return;
-    playbackRef.current.resume();
-    setPaused(false);
-  }, []);
-
-  useEffect(() => () => stopAudio(), [stopAudio]);
 
   // ── Generating ──────────────────────────────────────────────────────────
 
@@ -328,11 +308,10 @@ function ReadingRunnerInner({
     setPhase(startPhase(next));
     setSeenPart(0);
     setEcho(null);
+    setEchoAt(null);
     setQStates(freshQ(next?.questions.length ?? 0));
     setQIdx(0);
     setTried([]);
-    setWpm(null);
-    setTimerStart(null);
     savedRef.current = false;
     // The clock starts when he does, not while a passage is being written —
     // generation runs 30s and up, and it used to land on his time on task.
@@ -371,60 +350,6 @@ function ReadingRunnerInner({
       setBusy(null);
     }
   }, [list._id, installReading]);
-
-  // ── Listen mode playback ────────────────────────────────────────────────
-
-  const playFrom = useCallback(
-    (start: number) => {
-      stopAudio();
-      setPaused(false);
-      const token = ++tokenRef.current;
-      const run = (i: number) => {
-        if (i >= paragraphs.length || tokenRef.current !== token) {
-          if (tokenRef.current === token) setPlayingIdx(null);
-          return;
-        }
-        setPlayingIdx(i);
-        const pb = playTextThroughTTS(paragraphs[i]);
-        playbackRef.current = pb;
-        void pb.promise.then((end) => {
-          if (tokenRef.current !== token) return;
-          // A part whose sound failed must stop the passage. Racing on would
-          // "read" the whole story in silence in under a second.
-          if (end === "failed") {
-            setStalledAt(i);
-            setPlayingIdx(null);
-            return;
-          }
-          run(i + 1);
-        });
-      };
-      run(start);
-    },
-    [paragraphs, stopAudio]
-  );
-
-  // ── Fluency timer ───────────────────────────────────────────────────────
-
-  function toggleTimer() {
-    if (timerStart === null) {
-      stopAudio();
-      setWpm(null);
-      setTimerStart(Date.now());
-      return;
-    }
-    // 0 means the span was not a read — too short to be one, or so long he
-    // had clearly stopped. Show nothing rather than a number that would go
-    // into his fluency record and stay there.
-    const measured = wordsPerMinute(wordsCount, Date.now() - timerStart);
-    setWpm(measured > 0 ? measured : null);
-    setTimerStart(null);
-  }
-
-  /** Drop a running timer without scoring it. Only Stop produces a rate. */
-  function cancelTimer() {
-    setTimerStart(null);
-  }
 
   // ── Answering ───────────────────────────────────────────────────────────
 
@@ -550,7 +475,6 @@ function ReadingRunnerInner({
             level,
             pct,
             wordsCount,
-            ...(wpm ? { wpm } : {}),
           },
         });
         if (posted.saved) {
@@ -583,7 +507,6 @@ function ReadingRunnerInner({
     pct,
     level,
     wordsCount,
-    wpm,
     elapsedMs,
     list._id,
   ]);
@@ -595,9 +518,7 @@ function ReadingRunnerInner({
       <LessonComplete
         title={perfect ? "Every one right." : "Reading done."}
         subtitle={
-          wpm
-            ? `${wpm} words a minute. Grade ${grade} aims for ${wpmNormForDate()}.`
-            : echo
+          echo
               ? `You read back ${echo.passed} of ${echo.sentences} sentences.`
               : `Level ${level} · ${lexile}L${atGrade ? ` · Grade ${grade} reading` : ""}`
         }
@@ -800,53 +721,15 @@ function ReadingRunnerInner({
           // story, and his answers, out from under him.
           disabled={busy !== null}
           onClick={() => {
-            setMode("listen");
-            setEcho(null);
-            startedAtRef.current = Date.now();
-            watch.current = startStopwatch();
-            setPhase("read");
-            playFrom(0);
-          }}
-        >
-          Listen and read
-        </Button>
-        <Button
-          fullWidth
-          size="lg"
-          variant="secondary"
-          color="green"
-          // Not while a new passage is being written: it would swap the
-          // story, and his answers, out from under him.
-          disabled={busy !== null}
-          onClick={() => {
             setMode("echo");
             setEcho(null);
+            setEchoAt(null);
             startedAtRef.current = Date.now();
             watch.current = startStopwatch();
             setPhase("read");
           }}
         >
-          Read after me
-        </Button>
-        <Button
-          fullWidth
-          size="lg"
-          variant="secondary"
-          color="green"
-          // Not while a new passage is being written: it would swap the
-          // story, and his answers, out from under him.
-          disabled={busy !== null}
-          onClick={() => {
-            setMode("aloud");
-            setEcho(null);
-            setWpm(null);
-            startedAtRef.current = Date.now();
-            watch.current = startStopwatch();
-            setPhase("read");
-          }}
-        >
-          <Icon name="mic" size={22} />
-          Read it out loud to me
+          Read after the robot
         </Button>
         <Button
           fullWidth
@@ -869,9 +752,9 @@ function ReadingRunnerInner({
           Read it part by part
         </Button>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-          <strong>Read after me</strong> plays one sentence at a time and listens
-          while you say it back. <strong>Read it out loud to me</strong> counts
-          your words a minute. Can you beat your record?
+          <strong>Read after the robot</strong> plays one sentence at a time and
+          listens while you say it back. <strong>Read it part by part</strong> gives
+          you a few sentences, then a question on them.
         </p>
         {/* He must never be stuck with a passage he does not want. Before this
             the only way to a new one was to finish every question first. */}
@@ -894,7 +777,9 @@ function ReadingRunnerInner({
   }
 
   // (b) Reading
-  if (phase === "read" && mode === "echo") {
+  // Only "read after the robot" has a reading screen; part by part goes
+  // straight to the questions.
+  if (phase === "read") {
     return (
       <div className="pt-5">
         <div className="mb-1 flex items-center justify-between gap-2 px-4">
@@ -910,131 +795,13 @@ function ReadingRunnerInner({
             setGloss(g);
             setShowArabic(false);
           }}
+          start={echoAt}
+          onProgress={setEchoAt}
           onFinish={(summary) => {
             setEcho(summary);
             setPhase("questions");
           }}
         />
-        {glossPanel}
-      </div>
-    );
-  }
-
-  if (phase === "read" && mode === "aloud") {
-    return (
-      <div className="pt-5">
-        <div className="mb-3 flex items-center justify-between gap-2 px-4">
-          <h1 className="font-display text-2xl font-bold">{reading.title}</h1>
-          <Pill color="green" size="sm">
-            L{level}
-          </Pill>
-        </div>
-        <FluencyReader
-          text={reading.paragraph}
-          onFinish={(wcpm) => {
-            // His best read today goes into the reading record, like a timed read.
-            setWpm(wcpm);
-            setPhase("questions");
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (phase === "read") {
-    return (
-      <div className="px-4 pb-10 pt-5">
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h1 className="font-display text-2xl font-bold">{reading.title}</h1>
-          <Pill color="green" size="sm">
-            L{level}
-          </Pill>
-        </div>
-
-        {mode === "listen" ? (
-          <div className="mb-4 flex items-center gap-3">
-            <Button
-              size="lg"
-              color="green"
-              onClick={() => {
-                if (stalledAt !== null) playFrom(stalledAt);
-                else if (playingIdx === null) playFrom(0);
-                else if (paused) resumeAudio();
-                else pauseAudio();
-              }}
-            >
-              <Icon name={playingIdx !== null && !paused ? "pause" : "play"} size={22} />
-              {stalledAt !== null ? "Try again" : playingIdx === null ? "Play" : paused ? "Play" : "Pause"}
-            </Button>
-            {playingIdx !== null ? (
-              <Button size="md" variant="secondary" color="green" onClick={stopAudio}>
-                <Icon name="x" size={20} />
-                Stop
-              </Button>
-            ) : null}
-            <p
-              className="text-sm"
-              style={{
-                color:
-                  stalledAt !== null ? "var(--color-coral-dark)" : "var(--color-muted)",
-              }}
-            >
-              {stalledAt !== null
-                ? `The sound did not come through for part ${stalledAt + 1}. Check the internet, then tap Try again.`
-                : playingIdx === null
-                  ? "Tap play. The part being read lights up."
-                  : paused
-                    ? `Paused in part ${playingIdx + 1}. Play carries on from here.`
-                    : `Part ${playingIdx + 1} of ${paragraphs.length}`}
-            </p>
-          </div>
-        ) : null}
-
-        <Passage
-          text={reading.paragraph}
-          glosses={reading.vocabGlosses}
-          activeParagraph={mode === "listen" ? (playingIdx ?? stalledAt) : null}
-          follow={playingIdx !== null}
-          onGlossTap={(g) => {
-            setGloss(g);
-            setShowArabic(false);
-          }}
-        />
-
-        <Card color="green" variant="soft" className="mt-6">
-          <p className="font-display text-base font-bold">Time my read</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-            Read it out loud one more time. Start, read, stop.
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <Button size="md" color="blue" onClick={toggleTimer}>
-              {timerStart === null ? "Start" : "Stop"}
-            </Button>
-            {wpm ? (
-              <Pill color="blue" size="md">
-                {wpm} words a minute
-              </Pill>
-            ) : null}
-          </div>
-        </Card>
-
-        <div className="mt-6">
-          <Button
-            fullWidth
-            size="lg"
-            color="green"
-            onClick={() => {
-              stopAudio();
-              // Walking off the read screen is not a finished read. Scoring it
-              // here logged a rate for however long the tab had been open.
-              cancelTimer();
-              setPhase("questions");
-            }}
-          >
-            Answer the questions
-          </Button>
-        </div>
-
         {glossPanel}
       </div>
     );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import ContinueReadingLink from "@/components/learn/ContinueReadingLink";
 import Card from "@/components/ui/Card";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
@@ -78,7 +79,14 @@ export default function TodayQuest({ beats }: { beats: QuestBeat[] }) {
 
           return (
             <li key={beat.id}>
-              {beat.href ? (
+              {beat.href && beat.id === "read" ? (
+                <ContinueReadingLink
+                  href={beat.href}
+                  className="press-3d flex min-h-[60px] items-center gap-3 rounded-tile bg-white px-3 py-2"
+                >
+                  {row}
+                </ContinueReadingLink>
+              ) : beat.href ? (
                 <Link
                   href={beat.href}
                   className="press-3d flex min-h-[60px] items-center gap-3 rounded-tile bg-white px-3 py-2"

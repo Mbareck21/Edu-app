@@ -21,6 +21,7 @@ import {
   type SilentRecording,
 } from "@/lib/voice";
 import type { VocabGloss } from "@/lib/models/WordList";
+import type { EchoProgress } from "@/lib/reading-resume";
 
 export type EchoReaderProps = {
   text: string;
@@ -28,6 +29,10 @@ export type EchoReaderProps = {
   /** Called once every sentence has been echoed or skipped. */
   onFinish: (summary: EchoSummary) => void;
   onGlossTap?: (gloss: VocabGloss) => void;
+  /** Where a reading he left partway picks up. */
+  start?: EchoProgress | null;
+  /** Each move to the next sentence, so the runner can save the place. */
+  onProgress?: (progress: EchoProgress) => void;
 };
 
 export type EchoSummary = {
@@ -51,13 +56,17 @@ export default function EchoReader({
   glosses,
   onFinish,
   onGlossTap,
+  start = null,
+  onProgress,
 }: EchoReaderProps) {
   const sentences = useMemo(
     () => splitParagraphs(text).flatMap((p) => splitSentences(p)),
     [text]
   );
 
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(() =>
+    Math.min(start?.idx ?? 0, Math.max(0, sentences.length - 1))
+  );
   const [stage, setStage] = useState<Stage>("listen");
   const [score, setScore] = useState<EchoScore | null>(null);
   const [attempts, setAttempts] = useState(0);
@@ -71,7 +80,11 @@ export default function EchoReader({
   /** A turn is under way. A second tap on "My turn" is ignored, not a second mic. */
   const listeningRef = useRef(false);
   // Results accumulate in a ref: the summary is read once, at the end.
-  const tallyRef = useRef({ passed: 0, pctSum: 0, pctCount: 0 });
+  const tallyRef = useRef({
+    passed: start?.passed ?? 0,
+    pctSum: start?.pctSum ?? 0,
+    pctCount: start?.pctCount ?? 0,
+  });
 
   const sentence = sentences[idx] ?? "";
   const canRecord = isRecordingSupported();
@@ -133,11 +146,12 @@ export default function EchoReader({
       return;
     }
     setIdx(idx + 1);
+    onProgress?.({ idx: idx + 1, ...tallyRef.current });
     setStage("listen");
     setScore(null);
     setAttempts(0);
     setError(null);
-  }, [idx, sentences.length, finish]);
+  }, [idx, sentences.length, finish, onProgress]);
 
   const listen = useCallback(async () => {
     if (listeningRef.current) return;
