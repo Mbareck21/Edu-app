@@ -30,7 +30,7 @@ function result(over: Partial<SessionResult> = {}): SessionResult {
 }
 
 function now(today = "2026-08-19") {
-  return { at: AT, today };
+  return { at: new Date(`${today}T10:00:00.000Z`), today };
 }
 
 // ── day helpers ───────────────────────────────────────────────────────────
@@ -129,17 +129,36 @@ test("a missed day resets the streak but keeps the best", () => {
   assert.equal(after.streak.best, 3);
 });
 
-test("a late session from an earlier day leaves the streak and today alone", () => {
+test("a late session from an earlier day leaves today alone and adds its day to the streak", () => {
   let p: ProfileState = emptyProfile();
   for (const day of ["2026-08-18", "2026-08-19"]) {
     p = applySession(p, result(), now(day)).profile;
   }
   const late = applySession(p, result(), now("2026-08-17"));
-  assert.deepEqual(late.profile.streak, p.streak);
+  assert.equal(late.profile.streak.current, 3, "he did play on the 17th");
+  assert.equal(late.profile.streak.lastActiveDay, "2026-08-19");
   assert.deepEqual(late.profile.today, p.today);
   assert.equal(late.gained.streakExtended, false);
   assert.equal(late.gained.goalMet, false);
   assert.ok(late.profile.xp > p.xp, "the work still earns XP");
+});
+
+test("a day played offline that arrives after the next day mends the streak", () => {
+  let p: ProfileState = emptyProfile();
+  p = applySession(p, result(), now("2026-08-17")).profile; // Monday
+  p = applySession(p, result(), now("2026-08-19")).profile; // Wednesday, sent first
+  assert.equal(p.streak.current, 1);
+  p = applySession(p, result(), now("2026-08-18")).profile; // Tuesday, offline
+  assert.equal(p.streak.current, 3);
+  assert.equal(p.streak.best, 3);
+  assert.equal(p.streak.lastActiveDay, "2026-08-19");
+});
+
+test("a late session that fills no gap leaves the streak alone", () => {
+  let p: ProfileState = emptyProfile();
+  for (const day of ["2026-08-17", "2026-08-19"]) p = applySession(p, result(), now(day)).profile;
+  p = applySession(p, result(), now("2026-08-15")).profile;
+  assert.equal(p.streak.current, 1);
 });
 
 test("a queued session from yesterday, sent before today's, keeps the streak going", () => {
