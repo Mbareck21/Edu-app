@@ -20,7 +20,16 @@ const COLORS: AccentColor[] = ["blue", "purple"];
  * points: the days he is ahead in the tug of war (see lib/rivalry.ts). The
  * headline is what they made together.
  */
-export default function FamilyScoreboard({ rows, rivalry }: { rows: ScoreRow[]; rivalry: Rivalry }) {
+export default function FamilyScoreboard({
+  rows,
+  rivalry,
+  closed,
+}: {
+  rows: ScoreRow[];
+  rivalry: Rivalry;
+  /** Past RACE_CLOSES: today's result is set. */
+  closed: boolean;
+}) {
   if (rows.length < 2) return null;
   const top = Math.max(1, ...rows.map((r) => r.xp));
   const together = rows.reduce((sum, r) => sum + r.xp, 0);
@@ -41,12 +50,14 @@ export default function FamilyScoreboard({ rows, rivalry }: { rows: ScoreRow[]; 
         </span>
       </div>
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-        Today. A new race starts at midnight.
+        {closed
+          ? "Race closed for tonight. A new race starts at midnight."
+          : "Today, until 9:30 pm. Up to 5,000 XP counts. Mix it up: the 3rd of the same thing counts half."}
       </p>
       <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
         {holder
-          ? `🏆 ${holder.name} is ${rivalry.points} ${rivalry.points === 1 ? "day" : "days"} ahead. Win tonight to ${holder.isMe ? "add one" : "take one back"}!`
-          : "🏆 Level on days. Win tonight to go ahead!"}
+          ? `🏆 ${holder.name} is ${rivalry.points} ${rivalry.points === 1 ? "day" : "days"} ahead. ${closed ? "Tonight's result is in." : `Win tonight to ${holder.isMe ? "add one" : "take one back"}!`}`
+          : closed ? "🏆 Level on days." : "🏆 Level on days. Win tonight to go ahead!"}
       </p>
       <ul className="mt-3 space-y-3">
         {ranked.map((r) => {

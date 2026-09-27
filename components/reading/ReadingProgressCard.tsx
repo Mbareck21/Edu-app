@@ -1,70 +1,104 @@
 import Card from "@/components/ui/Card";
-import ProgressBar from "@/components/ui/ProgressBar";
+import { todayKey } from "@/lib/day";
+import { gradeOn } from "@/lib/grade";
+import { maxReadingLevel } from "@/lib/reading";
 import { READING_UP_PCT, READING_UP_RUN, type ReadingProgress } from "@/lib/rewards";
 
-/** Little bars, oldest on the left, so he can see the line going up. */
-function Bars({ values, max, good }: { values: number[]; max: number; good: (v: number) => boolean }) {
+/** Stars for one reading: 3 all right, 2 a good one, 1 some right, 0 a miss. */
+export function readingStars(pct: number): number {
+  if (pct >= 100) return 3;
+  if (pct >= READING_UP_PCT) return 2;
+  if (pct >= 50) return 1;
+  return 0;
+}
+
+function Stars({ n }: { n: number }) {
   return (
-    <div className="mt-2 flex h-16 items-end gap-1.5" aria-hidden>
-      {values.map((v, i) => (
-        <div
-          key={i}
-          className="w-6 rounded-t-md"
-          style={{
-            height: `${Math.max(8, Math.round((v / max) * 100))}%`,
-            // Grey, not gold: gold reads as a prize, and these are the ones to beat.
-            background: good(v) ? "var(--color-green)" : "var(--color-faint)",
-            opacity: i === values.length - 1 ? 1 : 0.75,
-          }}
-        />
+    <span className="whitespace-nowrap text-sm leading-none" aria-label={`${n} of 3 stars`}>
+      {[0, 1, 2].map((i) => (
+        <span key={i} style={{ opacity: i < n ? 1 : 0.2 }}>
+          ⭐
+        </span>
       ))}
-    </div>
+    </span>
   );
 }
 
 /**
- * His reading, where he can see it: the level, how close the next one is, his
- * last scores and his reading speed. Before this the ladder moved in silence.
+ * His reading in words he understands: his level, how many good readings in a
+ * row the next level needs (circles that fill), and stars for his last reads.
  */
 export default function ReadingProgressCard({ progress }: { progress: ReadingProgress }) {
-  const { level, goodInARow, toNext, scores, wpms, thisWeek } = progress;
-  const lastWpm = wpms[wpms.length - 1];
-  const bestWpm = wpms.length > 0 ? Math.max(...wpms) : 0;
+  const { level, goodInARow, toNext, scores, thisWeek } = progress;
+  const top = maxReadingLevel(gradeOn(todayKey()));
+  const recent = scores.slice(-6).reverse(); // newest first
   return (
     <Card className="mt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-lg font-bold">Reading level {level}</h2>
+        <h2 className="font-display text-lg font-bold">
+          📖 Reading level {level} <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>of {top}</span>
+        </h2>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           {thisWeek} this week
         </p>
       </div>
-      <ProgressBar value={goodInARow / READING_UP_RUN} color="green" height={10} className="mt-2" />
-      <p className="mt-2 text-sm">
-        {toNext === 0
-          ? "Top level. Keep reading!"
-          : `${toNext} more good ${toNext === 1 ? "reading" : "readings"} to level ${level + 1}.`}{" "}
-        <span style={{ color: "var(--color-muted)" }}>Good means 3 of 4 right.</span>
-      </p>
 
-      {scores.length > 0 ? (
+      {toNext === 0 ? (
+        <p className="mt-3 font-display font-bold" style={{ color: "var(--color-green-dark)" }}>
+          🏆 Top level! Keep reading.
+        </p>
+      ) : (
+        <>
+          <div className="mt-3 flex items-center gap-2" aria-label={`${goodInARow} of ${READING_UP_RUN} good readings`}>
+            {Array.from({ length: READING_UP_RUN }, (_, i) => (
+              <span
+                key={i}
+                className="flex h-9 w-9 items-center justify-center rounded-full border-2 font-display text-sm font-bold"
+                style={
+                  i < goodInARow
+                    ? { background: "var(--color-green)", borderColor: "var(--color-green)", color: "#fff" }
+                    : { borderColor: "var(--color-line)", color: "var(--color-faint)" }
+                }
+              >
+                {i < goodInARow ? "✓" : i + 1}
+              </span>
+            ))}
+            <span className="ml-1 text-2xl" aria-hidden>
+              →
+            </span>
+            <span className="font-display font-bold">Level {level + 1}</span>
+          </div>
+          <p className="mt-2 text-sm">
+            <strong>
+              {toNext} more good {toNext === 1 ? "reading" : "readings"} in a row!
+            </strong>{" "}
+            <span style={{ color: "var(--color-muted)" }}>A good reading is 3 of 4 right.</span>
+          </p>
+        </>
+      )}
+
+      {recent.length > 0 ? (
         <div className="mt-4">
           <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
             Your last readings
           </p>
-          <Bars values={scores} max={100} good={(v) => v >= READING_UP_PCT} />
-        </div>
-      ) : null}
-
-      {wpms.length > 0 ? (
-        <div className="mt-4">
-          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
-            Reading speed
-          </p>
-          <p className="mt-1 text-sm">
-            <strong className="font-display">{lastWpm}</strong> words a minute last time · best{" "}
-            <strong className="font-display">{bestWpm}</strong>
-          </p>
-          {wpms.length > 1 ? <Bars values={wpms} max={bestWpm} good={() => true} /> : null}
+          <ul className="mt-2 grid grid-cols-3 gap-2">
+            {recent.map((pct, i) => (
+              <li
+                key={i}
+                className="flex flex-col items-center rounded-tile border-2 py-2"
+                style={{
+                  background: "var(--color-sand)",
+                  borderColor: i === 0 ? "var(--color-green)" : "transparent",
+                }}
+              >
+                <Stars n={readingStars(pct)} />
+                <span className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>
+                  {i === 0 ? `Latest · ${pct}%` : `${pct}%`}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </Card>

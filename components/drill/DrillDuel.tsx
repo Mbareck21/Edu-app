@@ -25,7 +25,7 @@ export default function DrillDuel({ rows, lastWinner }: { rows: DuelRow[]; lastW
     <Card className="mt-3">
       <h2 className="font-display text-lg font-bold">Drill duel</h2>
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-        This week, since Monday.{lastWinner ? ` Last week's champion: ${lastWinner} 👑` : ""}
+        This week{lastWinner ? ` · last week 👑 ${lastWinner}` : ""}
       </p>
       <ul className="mt-3 space-y-3">
         {rows.map((r, i) => (

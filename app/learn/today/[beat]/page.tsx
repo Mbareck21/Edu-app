@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import ItemRunner from "@/components/items/ItemRunner";
 import { requestSeed } from "@/components/ui/time";
 import { connectDB } from "@/lib/db";
+import { loadPlanProgress } from "@/lib/daily-plan-data";
 import { getPractice } from "@/lib/word-source";
 import {
   buildLesson,
@@ -56,6 +57,7 @@ export default async function TodayBeatPage({
   const rng = mulberry32(seed % 2147483647);
   const unit = productionList(lists);
   const fill = lists.filter(needsExamples).map((l) => l._id);
+  const dayPlan = await loadPlanProgress(beat === "new-words" ? "new" : beat);
 
   const shared = {
     exitHref: "/",
@@ -63,6 +65,7 @@ export default async function TodayBeatPage({
     secondary: { label: "Again", href: `/learn/today/${beat}?r=${seed}` },
     fillExamples: fill.length > 0 ? fill : undefined,
     emptyNote: "Add a word list first, then come back.",
+    dayPlan,
   };
 
   if (beat === "review") {

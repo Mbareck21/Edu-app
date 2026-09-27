@@ -1,21 +1,95 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayXp, nudge } from "@/lib/scoreboard";
+import { RACE_CAP, activityKind, nudge, raceClosed, raceXp } from "@/lib/scoreboard";
 
 const TZ = "America/Chicago";
 
-test("day XP counts only today in the kid's timezone", () => {
+test("race XP counts today in the kid's timezone, before 9:30 pm", () => {
   const activity = [
-    { at: "2026-09-25T15:00:00.000Z", xp: 40 }, // Friday
-    { at: "2026-09-25T20:00:00.000Z", xp: 30 }, // Friday
-    // Saturday 00:30 UTC is still Friday evening in Chicago.
-    { at: "2026-09-26T00:30:00.000Z", xp: 5 },
+    { at: "2026-09-25T15:00:00.000Z", xp: 40, ref: "quest:review" }, // Friday 10:00
+    { at: "2026-09-25T20:00:00.000Z", xp: 30, ref: "math:place-value" }, // Friday 15:00
+    // Saturday 00:30 UTC is still Friday evening (19:30) in Chicago.
+    { at: "2026-09-26T00:30:00.000Z", xp: 5, ref: "read:structure" },
+    // Saturday 02:45 UTC is Friday 21:45 in Chicago: after the race closed.
+    { at: "2026-09-26T02:45:00.000Z", xp: 900, ref: "tables:7" },
     // Friday 03:00 UTC is Thursday night in Chicago: yesterday.
-    { at: "2026-09-25T03:00:00.000Z", xp: 500 },
+    { at: "2026-09-25T03:00:00.000Z", xp: 500, ref: "tables:8" },
   ];
-  assert.equal(dayXp(activity, "2026-09-25", TZ), 75);
-  assert.equal(dayXp(activity, "2026-09-26", TZ), 0);
+  assert.equal(raceXp(activity, "2026-09-25", TZ), 75);
+  assert.equal(raceXp(activity, "2026-09-26", TZ), 0);
+});
+
+test("race XP stops counting at the cap, and the race closes at 9:30 pm", () => {
+  const long = ["quest:review", "math:place-value", "drill:vocab:mixed"].map((ref) => ({
+    at: "2026-09-25T15:00:00.000Z",
+    xp: 2000,
+    ref,
+  }));
+  assert.equal(raceXp(long, "2026-09-25", TZ), RACE_CAP);
+  assert.equal(raceClosed(new Date("2026-09-26T02:29:00.000Z"), TZ), false); // 21:29
+  assert.equal(raceClosed(new Date("2026-09-26T02:30:00.000Z"), TZ), true); // 21:30
+});
+
+test("the third of the same kind counts half in the race, in the order played", () => {
+  const at = (h: number) => `2026-09-25T${String(h).padStart(2, "0")}:00:00.000Z`;
+  // Listed out of order: the two earliest count in full.
+  const drills = [
+    { at: at(18), xp: 100, ref: "drill:math:place-value:quick" },
+    { at: at(15), xp: 100, ref: "drill:math:fractions:timed" },
+    { at: at(16), xp: 100, ref: "drill:math:place-value:quick" },
+    { at: at(17), xp: 100, ref: "drill:math:rounding:quick" },
+  ];
+  assert.equal(raceXp(drills, "2026-09-25", TZ), 300); // 2 full + 2 half
+  // The earliest two are full, whatever their XP: 40 + 60 full, then 100 / 2.
+  const uneven = [
+    { at: at(17), xp: 100, ref: "tables:7" },
+    { at: at(15), xp: 40, ref: "tables:3" },
+    { at: at(16), xp: 60, ref: "tables:lightning" },
+  ];
+  assert.equal(raceXp(uneven, "2026-09-25", TZ), 150);
+});
+
+test("mixing kinds counts every session in full", () => {
+  const refs = [
+    "quest:review",
+    "quest:new",
+    "read:abc@2026-09-25T10:00:00.000Z",
+    "read:structure",
+    "math:place-value",
+    "drill:math:rounding:quick",
+    "drill:vocab:mixed",
+    "tables:7",
+    "abc123:spell",
+  ];
+  const mixed = refs.map((ref) => ({ at: "2026-09-25T15:00:00.000Z", xp: 50, ref }));
+  assert.equal(raceXp(mixed, "2026-09-25", TZ), 50 * refs.length);
+});
+
+test("the cap applies after the halving", () => {
+  const same = Array.from({ length: 6 }, () => ({
+    at: "2026-09-25T15:00:00.000Z",
+    xp: 1500,
+    ref: "drill:vocab:mixed",
+  }));
+  // 1500 + 1500 + 4 x 750 = 6000, capped.
+  assert.equal(raceXp(same, "2026-09-25", TZ), RACE_CAP);
+  // 1500 + 1500 + 750 = 3750: under the cap, and not 4500.
+  assert.equal(raceXp(same.slice(0, 3), "2026-09-25", TZ), 3750);
+});
+
+test("activity kinds group by what he is learning", () => {
+  assert.equal(activityKind("quest:review"), "quest:review");
+  assert.notEqual(activityKind("quest:review"), activityKind("quest:new"));
+  assert.equal(activityKind("read:a@1"), activityKind("read:b@2"));
+  assert.equal(activityKind("abc:read"), activityKind("read:a@1"));
+  assert.notEqual(activityKind("read:structure"), activityKind("read:a@1"));
+  assert.equal(activityKind("math:place-value"), activityKind("math:fractions"));
+  assert.notEqual(activityKind("math:place-value"), activityKind("drill:math:place-value:quick"));
+  assert.equal(activityKind("drill:vocab:mixed"), activityKind("drill:vocab:spell"));
+  assert.equal(activityKind("tables:7"), activityKind("tables:voice"));
+  assert.equal(activityKind("abc:spell"), activityKind("def:spell"));
+  assert.notEqual(activityKind("abc:spell"), activityKind("abc:match"));
 });
 
 test("the nudge cheers the leader and tells the other how far to go", () => {

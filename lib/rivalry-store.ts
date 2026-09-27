@@ -10,7 +10,7 @@
 import { addDays, todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
 import { freshRivalry, settleThrough, type Rivalry } from "@/lib/rivalry";
-import { dayXp } from "@/lib/scoreboard";
+import { raceXp } from "@/lib/scoreboard";
 import type { ProfileState } from "@/lib/types";
 
 type Doc = { _id: string } & Rivalry;
@@ -32,7 +32,7 @@ export async function currentRivalry(
   if (before.through >= yesterday) return before;
 
   const after = settleThrough(before, yesterday, (day) =>
-    Object.fromEntries(family.map(({ learner, state }) => [learner, dayXp(state.activity, day)]))
+    Object.fromEntries(family.map(({ learner, state }) => [learner, raceXp(state.activity, day)]))
   );
   // Only lands on the count it read: two pages settling at once write once.
   if (stored) {

@@ -8,6 +8,7 @@ import ExitBar from "@/components/ui/ExitBar";
 import { requestSeed } from "@/components/ui/time";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
+import { loadPlanProgress } from "@/lib/daily-plan-data";
 import { buildLesson } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
 import { orderByNeed } from "@/lib/practice-order";
@@ -146,6 +147,7 @@ export default async function StepPage({
           scaffold={scaffoldFor(profile.reading.recent)}
           stale={stale}
           spare={spare}
+          dayPlan={await loadPlanProgress("read")}
         />
       </>
     );

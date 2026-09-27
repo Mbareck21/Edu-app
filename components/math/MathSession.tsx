@@ -17,6 +17,7 @@ import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { estimateXp, type Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
+import type { PlanProgress } from "@/lib/daily-plan";
 import type { SessionResult } from "@/lib/types";
 
 const COUNT = 10;
@@ -26,6 +27,8 @@ export type MathSessionProps = {
   level: Level;
   /** Question seed. The server makes one per visit; "Play again" makes a new one. */
   seed: number;
+  /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
+  dayPlan?: PlanProgress;
 };
 
 type Run = { seed: number; queue: number[] };
@@ -82,6 +85,7 @@ function MathSessionInner({
   skillId,
   level,
   seed,
+  dayPlan,
   saveKey,
   initial,
 }: MathSessionProps & { saveKey: string; initial: Saved | null }) {
@@ -282,6 +286,7 @@ function MathSessionInner({
         primary={{ label: "All skills", href: "/math" }}
         secondary={{ label: "Play again", onClick: playAgain }}
         note={outcome.note}
+        plan={dayPlan}
       />
     );
   }

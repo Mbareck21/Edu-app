@@ -24,7 +24,7 @@ import { currentLearner } from "@/lib/auth";
 import { LEARNER_NAMES } from "@/lib/learners";
 import { getFamilyProfiles, getProfile } from "@/lib/profile";
 import { currentRivalry } from "@/lib/rivalry-store";
-import { dayXp } from "@/lib/scoreboard";
+import { raceClosed, raceXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ export default async function MePage() {
   const scoreRows = family.map(({ learner, state: s }) => ({
     learner,
     name: s.name || LEARNER_NAMES[learner],
-    xp: dayXp(s.activity, today),
+    xp: raceXp(s.activity, today),
     isMe: learner === me,
   }));
   const rivalry = await currentRivalry(family, now);
@@ -111,7 +111,7 @@ export default async function MePage() {
         </div>
       </Card>
 
-      <FamilyScoreboard rows={scoreRows} rivalry={rivalry} />
+      <FamilyScoreboard rows={scoreRows} rivalry={rivalry} closed={raceClosed(now)} />
 
       {/* Words breakdown */}
       <Card className="mt-3">
@@ -189,6 +189,12 @@ export default async function MePage() {
               ["Words", pctLine("vocab")],
               ["Known words reviewed", String(digest.wordsKnownThisWeek)],
               ["Tables lit", `${digest.tablesLit} of ${allFactKeys().length}`],
+              [
+                "XP came from",
+                digest.xpByArea.length === 0
+                  ? "—"
+                  : digest.xpByArea.map((r) => `${r.area} ${r.xp}`).join(" · "),
+              ],
               [
                 "Due tomorrow",
                 `${digest.dueTomorrow.words} words · ${digest.dueTomorrow.facts} facts · ${digest.dueTomorrow.checks} spelling checks`,

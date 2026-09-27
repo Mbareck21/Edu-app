@@ -6,7 +6,7 @@ import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { LEARNER_IDS } from "@/lib/learners";
-import { isStuckMiss, scheduleSkill } from "@/lib/mastery";
+import { isStuckMiss, scheduleSkill, skillsKnowledge } from "@/lib/mastery";
 import { loadMasterySnapshot } from "@/lib/mastery-snapshot";
 import { addPoolWords, getPool } from "@/lib/word-source";
 import { applyRound } from "@/lib/models/MathProgress";
@@ -16,7 +16,7 @@ import {
   RECENT_SESSION_IDS,
   toClientProfile,
 } from "@/lib/models/Profile";
-import { SKILL_IDS, toSkillState } from "@/lib/models/WordList";
+import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
 import { applyReading, applySession, levelFor } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
@@ -77,7 +77,12 @@ type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
  * Set just before the first progress write goes out. Until then nothing of
  * this session is stored anywhere, so a failure can safely give the claim back.
  */
-type Writes = { started: boolean };
+type Writes = {
+  started: boolean;
+  /** Words that crossed into known / mastered in this session, once each. */
+  knownUp: Set<string>;
+  masteredUp: Set<string>;
+};
 
 /** Each step carries its own mark; unscored ones complete just for showing up. */
 function stepCompleted(step: StepId, pct: number): boolean {
@@ -112,6 +117,16 @@ async function applyPathProgress(
 
 type PoolWord = { word: string; clue: string; arabic: string };
 
+/** 0 below known, 1 known, 2 mastered: the Me page's rule, on a stored word. */
+function wordLevel(skills: unknown, now: Date): number {
+  const raw = (skills ?? {}) as Record<string, unknown>;
+  const all = Object.fromEntries(
+    SKILL_IDS.map((id) => [id, toSkillState(raw[id] as Parameters<typeof toSkillState>[0], now)])
+  ) as WordSkills;
+  const k = skillsKnowledge(all);
+  return k === "mastered" ? 2 : k === "known" ? 1 : 0;
+}
+
 /**
  * Per-word, per-skill answers for one list, in one read-modify-write. Words
  * he is stuck on (see isStuckMiss) are collected into `stuck`.
@@ -136,6 +151,7 @@ async function applyWordResults(
     const index = byWord.get(r.word.toLowerCase());
     if (index === undefined) continue;
     const skill = r.skill;
+    const before = doc.kind === "pool" ? null : wordLevel(doc.words[index].skills, now);
     const prev = toSkillState(doc.words[index].skills?.[skill], now);
     const next = scheduleSkill(prev, r.correct, now);
     if (doc.kind !== "pool" && isStuckMiss(prev, r.correct, now)) {
@@ -149,6 +165,12 @@ async function applyWordResults(
       lastAt: next.lastAt ? new Date(next.lastAt) : null,
       dueAt: new Date(next.dueAt),
     });
+    if (before !== null) {
+      const after = wordLevel(doc.words[index].skills, now);
+      const word = String(doc.words[index].word).toLowerCase();
+      if (before < 1 && after >= 1) writes.knownUp.add(word);
+      if (before < 2 && after >= 2) writes.masteredUp.add(word);
+    }
     touched = true;
   }
   if (!touched) return;
@@ -285,13 +307,15 @@ export async function POST(req: Request) {
   }
 
   const result: SessionResult = body;
-  const writes: Writes = { started: false };
+  const writes: Writes = { started: false, knownUp: new Set(), masteredUp: new Set() };
   try {
     // Progress first, profile last: a half-written session is better than XP
     // for work the list never recorded. Only the profile step re-runs when
     // another save got in first; the list and math writes happen once.
     await updateList(body, now, writes);
     await updateMath(body, now, writes);
+    result.wordsKnownUp = writes.knownUp.size;
+    result.wordsMasteredUp = writes.masteredUp.size;
     // For the Set 3 badges, read after the writes above so this session counts.
     // A failed read only means those badges wait for the next session.
     result.mastery = await loadMasterySnapshot().catch(() => undefined);

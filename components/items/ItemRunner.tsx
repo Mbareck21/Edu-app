@@ -16,6 +16,7 @@ import type { AccentColor } from "@/components/ui/colors";
 import { gradeItem, type LessonItem } from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
 import { insertRepeat, repeatsFor, SESSION_REPEAT_CAP } from "@/lib/repetition";
+import type { PlanProgress } from "@/lib/daily-plan";
 import type { Rng } from "@/lib/math/types";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, saveProgress } from "@/lib/resume";
@@ -73,6 +74,8 @@ export type ItemRunnerProps = {
    * the run does not resume.
    */
   resumeKey?: string;
+  /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
+  dayPlan?: PlanProgress;
 };
 
 /** Everything a reload needs to put him back mid-run. */
@@ -206,6 +209,7 @@ function ItemRunnerInner({
   report = false,
   emptyAction,
   resumeKey,
+  dayPlan,
   initial,
 }: ItemRunnerProps & { initial: Saved | null }) {
   // A resumed lesson is the one he was doing, not the one this request dealt.
@@ -511,6 +515,7 @@ function ItemRunnerInner({
           primary={primary}
           secondary={secondary}
           note={outcome.note}
+          plan={dayPlan}
         />
       </div>
     );

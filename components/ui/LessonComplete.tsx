@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import Creature from "@/components/badges/Creature";
+import ContinueReadingLink from "@/components/learn/ContinueReadingLink";
 import Button, { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import { fireConfetti } from "@/components/ui/Confetti";
 import { clock } from "@/components/ui/time";
 import { creatureFor } from "@/lib/creatures";
+import { planCheer, type PlanProgress } from "@/lib/daily-plan";
 import { sfx } from "@/lib/sfx";
 
 export type CompleteAction =
@@ -32,6 +34,12 @@ export type LessonCompleteProps = {
   secondary?: CompleteAction;
   /** "Saved later" note when the post was queued offline. */
   note?: string;
+  /**
+   * Set when this lesson is a beat of today's plan: shows how far through
+   * the day he is, and the main button goes on to the next beat instead of
+   * `primary`.
+   */
+  plan?: PlanProgress;
 };
 
 /** Counts from 0 to `target` on mount. Updates happen inside rAF, never
@@ -94,6 +102,7 @@ export default function LessonComplete({
   primary,
   secondary,
   note,
+  plan,
 }: LessonCompleteProps) {
   useEffect(() => {
     if (perfect) void fireConfetti("big");
@@ -101,6 +110,17 @@ export default function LessonComplete({
     if (leveledUp) sfx.levelUp();
     else if (perfect) sfx.chest();
   }, [perfect, leveledUp]);
+
+  // A finished beat of the plan gets its own cheer, unless the one above
+  // already fired: small for a beat, big for the last one of the day.
+  const inPlan = plan !== undefined;
+  const planDone = plan !== undefined && plan.done >= plan.total;
+  useEffect(() => {
+    if (!inPlan || perfect || leveledUp) return;
+    void fireConfetti(planDone ? "big" : "small");
+    if (planDone) sfx.levelUp();
+    else sfx.correct();
+  }, [inPlan, planDone, perfect, leveledUp]);
 
   const xpShown = useCountUp(xp);
   const pctShown = useCountUp(Math.round(Math.max(0, Math.min(1, accuracy ?? 0)) * 100));
@@ -162,6 +182,28 @@ export default function LessonComplete({
           </div>
         ) : null}
 
+        {plan ? (
+          <div className="mt-5 w-full">
+            <p className="font-display text-base font-bold" style={{ color: "var(--color-green-dark)" }}>
+              {planCheer(plan.done, plan.total)}
+            </p>
+            <ol className="mt-2 flex justify-center gap-2" aria-label="Today's plan">
+              {plan.beats.map((b) => (
+                <li
+                  key={b.id}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full${b.current ? " q-bounce-in" : ""}`}
+                  style={{
+                    background: b.done ? "var(--color-green)" : "var(--color-green-soft)",
+                    color: b.done ? "#fff" : "var(--color-green-dark)",
+                  }}
+                >
+                  <Icon name={b.done ? "check" : b.icon} size={18} strokeWidth={b.done ? 3 : 2.4} />
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
+
         {note ? (
           <p className="mt-4 text-sm" style={{ color: "var(--color-muted)" }}>
             {note}
@@ -180,7 +222,17 @@ export default function LessonComplete({
           background: "var(--color-bg)",
         }}
       >
-        <Action action={primary} variant="primary" />
+        {plan?.next.id === "read" ? (
+          <ContinueReadingLink
+            href={plan.next.href}
+            className={buttonClass({ color: "green", size: "lg", fullWidth: true })}
+            style={buttonStyle({ color: "green" })}
+          >
+            {plan.next.label}
+          </ContinueReadingLink>
+        ) : (
+          <Action action={plan ? plan.next : primary} variant="primary" />
+        )}
         {secondary ? <Action action={secondary} variant="secondary" /> : null}
       </div>
     </div>

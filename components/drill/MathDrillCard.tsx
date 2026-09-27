@@ -58,7 +58,7 @@ export default function MathDrillCard({ skills, bests, autoLevels }: MathDrillCa
           icon="math"
           color="purple"
           title="Math drills"
-          line={`${skills.length} skills · relaxed or against the clock`}
+          line={`${skills.length} skills · timed or relaxed`}
         />
       }
     >

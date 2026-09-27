@@ -1,6 +1,7 @@
 import StructureRunner from "@/components/reading/StructureRunner";
 import ExitBar from "@/components/ui/ExitBar";
 import { requestSeed } from "@/components/ui/time";
+import { loadPlanProgress } from "@/lib/daily-plan-data";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function StructurePage({
   return (
     <>
       <ExitBar />
-      <StructureRunner key={runKey} seed={seed} />
+      <StructureRunner key={runKey} seed={seed} dayPlan={await loadPlanProgress("structure")} />
     </>
   );
 }
