@@ -81,7 +81,7 @@ export default function WordDrillCard({ lists, all, total, weak, due }: WordDril
           icon="words"
           color="blue"
           title="Word drills"
-          line={total === 0 ? "No words yet" : all > 0 ? `${all} words to go · ${weak} weak` : "Every word known. Keep them sharp!"}
+          line={total === 0 ? "No words yet" : all > 0 ? `${all} to go · ${weak} weak` : "All known!"}
         />
       }
     >

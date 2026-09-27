@@ -1,6 +1,8 @@
 import DrillDuel from "@/components/drill/DrillDuel";
 import DrillRankCard from "@/components/drill/DrillRankCard";
 import MathDrillCard from "@/components/drill/MathDrillCard";
+import SuggestedDrill from "@/components/drill/SuggestedDrill";
+import { suggestDrill, type SkillSeen } from "@/components/drill/suggest";
 import WordDrillCard from "@/components/drill/WordDrillCard";
 import {
   MATH_MODES,
@@ -11,7 +13,6 @@ import {
 } from "@/components/drill/options";
 import { sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
-import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import { currentLearner } from "@/lib/auth";
 import { addDays, todayKey } from "@/lib/day";
@@ -47,8 +48,10 @@ export default async function DrillPage() {
 
   const today = todayKey(now);
   const levels = new Map<string, number>();
+  const seen = new Map<string, SkillSeen>();
   for (const doc of mathDocs) {
     const p = toClientMathProgress(doc);
+    seen.set(p.skill, { id: p.skill, name: "", recentPcts: p.recentPcts, lastAt: p.lastAt });
     levels.set(p.skill, servedLevel(p, today));
   }
   const autoLevels: Record<string, number> = {
@@ -90,12 +93,14 @@ export default async function DrillPage() {
         <h1 className="font-display text-2xl font-bold">Drill</h1>
       </div>
 
-      <Card color="blue" variant="soft" className="mt-2">
-        <p className="font-body text-[15px] leading-snug">
-          Free practice. Pick what you want, then go. Every drill still counts.
-        </p>
-      </Card>
-
+      <SuggestedDrill
+        suggestion={suggestDrill({
+          weakWords: counts.weak,
+          skills: MATH_SKILLS.map((s) => ({ ...(seen.get(s.id) ?? { recentPcts: [], lastAt: null }), id: s.id, name: s.name })),
+          todayRefs: profile.activity.filter((a) => todayKey(new Date(a.at)) === today).map((a) => a.ref),
+          seed: now.getTime(),
+        })}
+      />
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />
 

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
 import { fireConfetti } from "@/components/ui/Confetti";
 import ProgressBar from "@/components/ui/ProgressBar";
+import RankShape from "@/components/drill/RankShape";
 import { DRILL_RANKS, drillRank } from "@/lib/drill-rank";
 
 /**
@@ -34,24 +35,36 @@ export default function DrillRankCard({ points, learner }: { points: number; lea
 
   return (
     <Card className="mt-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-lg font-bold">
-          {rank.name} rank
-          {fresh ? (
-            <span
-              className="ml-2 rounded-full px-2 py-0.5 text-xs"
-              style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
-            >
-              New!
-            </span>
-          ) : null}
-        </h2>
-        <p className="font-display text-sm font-bold">{points} pts</p>
+      <div className="flex items-center gap-3">
+        <span className={fresh ? "q-bounce-in" : undefined}>
+          <RankShape name={rank.name} size={52} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-display text-lg font-bold">
+              {rank.name}
+              {fresh ? (
+                <span
+                  className="ml-2 rounded-full px-2 py-0.5 text-xs"
+                  style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
+                >
+                  New!
+                </span>
+              ) : null}
+            </h2>
+            <p className="font-display text-sm font-bold">{points.toLocaleString()} pts</p>
+          </div>
+          <ProgressBar value={progress} color={rank.color} height={8} className="mt-1" />
+          <p className="mt-1 text-xs" style={{ color: "var(--color-muted)" }}>
+            {next ? `${toNext.toLocaleString()} to ${next.name}` : "Top rank!"}
+          </p>
+        </div>
       </div>
-      <ProgressBar value={progress} color={rank.color} height={10} className="mt-2" />
-      <p className="mt-2 text-sm" style={{ color: "var(--color-muted)" }}>
-        {next ? `${toNext} drill points to ${next.name}.` : "Top rank. You are a drill Legend!"}
-      </p>
+      <div className="mt-3 flex justify-between px-1" aria-label="Drill ranks">
+        {DRILL_RANKS.map((r, i) => (
+          <RankShape key={r.name} name={r.name} size={28} reached={i <= index} />
+        ))}
+      </div>
     </Card>
   );
 }
