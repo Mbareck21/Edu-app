@@ -11,6 +11,7 @@ import { mulberry32 } from "@/lib/math/rng";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
+import type { PlanProgress } from "@/lib/daily-plan";
 import { sfx } from "@/lib/sfx";
 import {
   structureSession,
@@ -24,6 +25,8 @@ import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 export type StructureRunnerProps = {
   /** Server-minted seed. Same seed = same answer options, and the Again link. */
   seed: number;
+  /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
+  dayPlan?: PlanProgress;
 };
 
 type Phase = "intro" | "play" | "done";
@@ -86,6 +89,7 @@ export default function StructureRunner(props: StructureRunnerProps) {
 
 function StructureRunnerInner({
   seed: freshSeed,
+  dayPlan,
   saveKey,
   initial,
 }: StructureRunnerProps & { saveKey: string; initial: Saved | null }) {
@@ -200,6 +204,7 @@ function StructureRunnerInner({
         accuracy={rounds.length ? firstTry / rounds.length : 0}
         perfect={perfect}
         note={saving ? "Saving…" : queuedNote}
+        plan={dayPlan}
         primary={{ label: "Back to Learn", href: "/" }}
         // This visit's seed, not the resumed run's: that one is already the
         // page's ?r after an Again, and the same key would not remount.

@@ -43,6 +43,7 @@ import {
   type ReadingMode,
 } from "@/lib/reading-resume";
 import { readingProgress } from "@/lib/rewards";
+import type { PlanProgress } from "@/lib/daily-plan";
 import { sfx } from "@/lib/sfx";
 import type {
   ClientWordList,
@@ -71,6 +72,8 @@ export type ReadingRunnerProps = {
   spare?: { listId: string; title: string; href: string } | null;
   /** Called from the finish screen's main button. Falls back to a link home. */
   onDone?: () => void;
+  /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
+  dayPlan?: PlanProgress;
 };
 
 type Phase = "words" | "mode" | "read" | "questions" | "done";
@@ -172,6 +175,7 @@ function ReadingRunnerInner({
   stale = false,
   spare = null,
   onDone,
+  dayPlan,
   saveKey,
   initial,
 }: ReadingRunnerProps & { saveKey: string; initial: ReadingSaved | null }) {
@@ -527,6 +531,7 @@ function ReadingRunnerInner({
         accuracy={questions.length ? firstTry / questions.length : 0}
         perfect={perfect}
         note={busy === "saving" ? "Saving…" : (error ?? queuedNote ?? ladderNote)}
+        plan={dayPlan}
         primary={
           onDone
             ? { label: "Continue", onClick: onDone }

@@ -52,7 +52,7 @@ export default function FamilyScoreboard({
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {closed
           ? "Race closed for tonight. A new race starts at midnight."
-          : "Today, until 9:30 pm. Up to 5,000 XP counts."}
+          : "Today, until 9:30 pm. Up to 5,000 XP counts. Mix it up: the 3rd of the same thing counts half."}
       </p>
       <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
         {holder

@@ -16,10 +16,10 @@ import {
  * a different list's page from the one he was reading.
  */
 
-function fakeSession(): Map<string, string> {
+function fakeStorage(): Map<string, string> {
   const store = new Map<string, string>();
   (globalThis as { window?: unknown }).window = {
-    sessionStorage: {
+    localStorage: {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
       removeItem: (k: string) => void store.delete(k),
@@ -64,7 +64,7 @@ test("only a reading page of this app is ever followed", () => {
 });
 
 test("the open page is remembered, and forgotten only by that page", () => {
-  fakeSession();
+  fakeStorage();
   assert.equal(openReading(), null);
   rememberOpenReading("/learn/b/read", "2026-09-25");
   assert.deepEqual(openReading(), { href: "/learn/b/read", day: "2026-09-25" });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 
 import { todayKey } from "@/lib/day";
 import { continueHref, openReading } from "@/lib/reading-resume";
@@ -19,10 +19,12 @@ function subscribe(): () => void {
 export default function ContinueReadingLink({
   href,
   className,
+  style,
   children,
 }: {
   href: string;
   className?: string;
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   const to = useSyncExternalStore(
@@ -31,7 +33,7 @@ export default function ContinueReadingLink({
     () => href
   );
   return (
-    <Link href={to} className={className}>
+    <Link href={to} className={className} style={style}>
       {children}
     </Link>
   );

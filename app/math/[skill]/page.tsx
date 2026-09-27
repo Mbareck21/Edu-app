@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import MathSession from "@/components/math/MathSession";
 import { requestSeed } from "@/components/ui/time";
 import { todayKey } from "@/lib/day";
+import { loadPlanProgress } from "@/lib/daily-plan-data";
 import { db } from "@/lib/db";
 import { getSkill, isMathSkillId } from "@/lib/math";
 import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
@@ -25,5 +26,12 @@ export default async function MathSkillPage({ params }: Params) {
   // Grade 5 plays every skill at level 4 or higher; see levelForGrade.
   const level = servedLevel(doc ? toClientMathProgress(doc) : null, todayKey());
 
-  return <MathSession skillId={skill} level={level} seed={requestSeed()} />;
+  return (
+    <MathSession
+      skillId={skill}
+      level={level}
+      seed={requestSeed()}
+      dayPlan={await loadPlanProgress("math")}
+    />
+  );
 }
