@@ -25,6 +25,7 @@ import {
   reEnqueue,
   stepSkill,
 } from "@/lib/lesson-builder";
+import { scheduleSkill, wordKnowledge } from "@/lib/mastery";
 import { mulberry32 } from "@/lib/math/rng";
 import type { ClientWord, SkillState, WordSkills } from "@/lib/models/WordList";
 
@@ -443,6 +444,39 @@ test("a due recognize skill at streak 2+ is asked, and recorded, as recognize", 
   });
   assert.ok(match.some((i) => i.kind === "use-cloze"));
   assert.equal(match.every((i) => i.skill === "recognize"), true);
+});
+
+test("a due use skill on a word with no usable sentence is still recorded as use", () => {
+  // The sentences only hold another form of the word, so no use item can be
+  // built and the stand-in is tile spelling. It used to be tagged "spell", so
+  // "use" was never answered, stayed due at streak 0 and the word could never
+  // become known.
+  const due = new Date(NOW.getTime() - DAY).toISOString();
+  const later = new Date(NOW.getTime() + 5 * DAY).toISOString();
+  const w = word("decide", {
+    examples: ["She decided to stay home.", "We are deciding now."],
+    family: [],
+    skills: skills({
+      recognize: { correct: 3, streak: 3, dueAt: later },
+      listen: { correct: 3, streak: 3, dueAt: later },
+      spell: { correct: 3, streak: 3, dueAt: later },
+      use: { correct: 2, streak: 2, dueAt: due },
+    }),
+  });
+  assert.deepEqual(usableExamples(w), []);
+
+  const review = buildReviewSession({
+    lists: [{ listId: "aaa", words: [w, seen("plant", 2, 5), seen("climb", 2, 5)] }],
+    now: NOW,
+    rng: mulberry32(5),
+  });
+  const decide = review.filter((i) => i.word === "decide" && i.kind === "spell");
+  assert.ok(decide.length >= 1);
+  assert.equal(decide.every((i) => i.skill === "use"), true);
+
+  // And answering it right moves the word to known.
+  const next = scheduleSkill(w.skills.use, true, NOW);
+  assert.equal(wordKnowledge({ ...w, skills: { ...w.skills, use: next } }), "known");
 });
 
 test("remember box waits while a longer unfound word starts the same way", () => {

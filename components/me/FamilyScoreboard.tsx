@@ -2,6 +2,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
+import { pointsOf, type Rivalry } from "@/lib/rivalry";
 import { nudge } from "@/lib/scoreboard";
 
 export type ScoreRow = {
@@ -14,14 +15,19 @@ export type ScoreRow = {
 const COLORS: AccentColor[] = ["blue", "purple"];
 
 /**
- * Both children's XP today, a fresh race every day. The rows keep the same
- * order, each gets a nudge to catch up or stay ahead, and the headline is
- * what they made together.
+ * Both children's XP today, a fresh race every day, leader on top. Each keeps
+ * his colour, gets a nudge to catch up or stay ahead, and shows his trophy
+ * points: the days he is ahead in the tug of war (see lib/rivalry.ts). The
+ * headline is what they made together.
  */
-export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
+export default function FamilyScoreboard({ rows, rivalry }: { rows: ScoreRow[]; rivalry: Rivalry }) {
   if (rows.length < 2) return null;
   const top = Math.max(1, ...rows.map((r) => r.xp));
   const together = rows.reduce((sum, r) => sum + r.xp, 0);
+  const colorOf = new Map(rows.map((r, i) => [r.learner, COLORS[i % COLORS.length]]));
+  // Whoever is ahead today sits on top; a tie keeps the usual order.
+  const ranked = [...rows].sort((a, b) => b.xp - a.xp);
+  const holder = rows.find((r) => r.learner === rivalry.holder);
 
   return (
     <Card className="mt-3">
@@ -38,9 +44,14 @@ export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         Today. A new race starts at midnight.
       </p>
+      <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
+        {holder
+          ? `🏆 ${holder.name} is ${rivalry.points} ${rivalry.points === 1 ? "day" : "days"} ahead. Win tonight to ${holder.isMe ? "add one" : "take one back"}!`
+          : "🏆 Level on days. Win tonight to go ahead!"}
+      </p>
       <ul className="mt-3 space-y-3">
-        {rows.map((r, i) => {
-          const color = COLORS[i % COLORS.length];
+        {ranked.map((r) => {
+          const color = colorOf.get(r.learner) ?? "blue";
           return (
             <li key={r.learner} className="flex items-center gap-3">
               <span
@@ -59,6 +70,13 @@ export default function FamilyScoreboard({ rows }: { rows: ScoreRow[] }) {
                         (you)
                       </span>
                     ) : null}
+                    <span
+                      className="ml-2 rounded-full px-2 py-0.5 text-xs"
+                      style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
+                      title="Days ahead"
+                    >
+                      🏆 {pointsOf(rivalry, r.learner)}
+                    </span>
                   </p>
                   <p className="font-display text-sm font-bold">{r.xp} XP</p>
                 </div>

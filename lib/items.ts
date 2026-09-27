@@ -999,7 +999,10 @@ export function itemForSkill(
     const item = make(word, pool, rng);
     if (item) return item;
   }
-  return makeSpell(word, pool, rng);
+  // No sentence holds the word itself, so every use item is out. The stand-in
+  // must still feed "use", like the recognize stand-ins above: tagged "spell",
+  // "use" was never answered and the word could never become known.
+  return { ...makeSpell(word, pool, rng), skill: "use" };
 }
 
 /** Curriculum items that belong to no single word (word parts, sentences). */
