@@ -190,6 +190,12 @@ export default async function MePage() {
               ["Known words reviewed", String(digest.wordsKnownThisWeek)],
               ["Tables lit", `${digest.tablesLit} of ${allFactKeys().length}`],
               [
+                "XP came from",
+                digest.xpByArea.length === 0
+                  ? "—"
+                  : digest.xpByArea.map((r) => `${r.area} ${r.xp}`).join(" · "),
+              ],
+              [
                 "Due tomorrow",
                 `${digest.dueTomorrow.words} words · ${digest.dueTomorrow.facts} facts · ${digest.dueTomorrow.checks} spelling checks`,
               ],

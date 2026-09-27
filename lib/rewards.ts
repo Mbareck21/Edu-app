@@ -24,20 +24,24 @@ import { allFactKeys } from "@/lib/tables";
 // brothers whatever each one plays. A right answer is worth roughly what it
 // costs in time and effort; see rightXp().
 //
+// Reading, words and word mastery are the hard, slow work, so they pay more
+// than math, which the boys are quick at (the parent's call).
+//
 // First play today, every answer right (the day's first session adds 15):
-//   Times tables, 10 facts, ~1 min ....... 10 x 5 + 20 + 30         = 100 (was 150)
-//     same table again today ............. 10 x 5 + 30              =  80 (was 150)
-//   Math lesson, 10 questions, ~2 min .... L1 150 · L2 175 · L3 200 · L4 225 · L5 250
-//                                          (was 150 at every level)
-//   Timed drill 60 s, 15 right, 8 fast ... L1: 15 x 5 + 25 + 50     = 150 (was 240)
-//                                          L5: 15 x 10 + 25 + 50    = 225
-//   Reading passage, 4 questions, ~8 min . 4 x 125 + 20 + 30        = 550 (was 90)
-//     same list again today .............. 4 x 30 + 30              = 150
-//   Text structure, 6 texts, ~5 min ...... 6 x 30 + 50              = 230 (was 110)
-//   Vocab lesson, 10 items, all fast ..... 10 x 10 + 25 + 50        = 175 (was 200)
+//   Times tables, 10 facts, ~1 min ....... 10 x 3.5 + 20 + 30       =  85
+//   Math lesson, 10 questions, ~2 min .... L1 120 · L3 155 · L5 190
+//   Timed drill 60 s, 15 right, 8 fast ... L1: 15 x 3.5 + 25 + 20   =  98
+//   Reading passage, 4 questions, ~8 min . 4 x 150 + 20 + 30        = 650
+//     same list again today .............. 4 x 45 + 30              = 210
+//   Text structure, 6 texts, ~5 min ...... 6 x 45 + 50              = 320
+//   Vocab lesson, 10 items, all fast ..... 10 x 15 + 25 + 50        = 225
+//   A word reaching known +50, mastered +100, in the session that does it.
 // Under 3 answers pays no lesson or perfect bonus; 0 answers not the day either.
 export const XP = {
-  correct: 10,
+  /** Per right word answer (vocab: lessons, review, word drills). */
+  correct: 15,
+  /** Per right math answer at level 1; see rightXp. */
+  mathCorrect: 7,
   /** Per answer given in under 3 seconds, for at most FAST_PAID of them. */
   fast: 5,
   lessonDone: 20,
@@ -45,9 +49,12 @@ export const XP = {
   /** First session of a new day. */
   streakDay: 15,
   /** Per right answer in a reading: short texts, or a passage read again today. */
-  readingCorrect: 30,
+  readingCorrect: 45,
   /** Per right answer on a whole passage (about 8 minutes for 4 questions), first today. */
-  passageCorrect: 125,
+  passageCorrect: 150,
+  /** A word that reaches known in this session, and one that reaches mastered. */
+  wordKnown: 50,
+  wordMastered: 100,
 } as const;
 
 /** Most fast answers paid in one session: speed cannot stack past this. */
@@ -89,7 +96,7 @@ export function rightXp(
   }
   if (result.kind !== "math") return XP.correct;
   const level = Math.min(5, Math.max(1, Math.floor(Number(result.mathLevel)) || 1));
-  const rate = XP.correct * (1 + 0.25 * (level - 1));
+  const rate = XP.mathCorrect * (1 + 0.25 * (level - 1));
   return result.timed || result.ref.startsWith("tables:") ? rate / 2 : rate;
 }
 
@@ -637,7 +644,9 @@ export function applySession(
     Math.min(fast, FAST_PAID) * XP.fast +
     (bonuses && firstToday ? XP.lessonDone : 0) +
     (bonuses && perfect ? XP.perfect : 0) +
-    (streakExtended ? XP.streakDay : 0);
+    (streakExtended ? XP.streakDay : 0) +
+    Math.max(0, Math.floor(result.wordsKnownUp ?? 0)) * XP.wordKnown +
+    Math.max(0, Math.floor(result.wordsMasteredUp ?? 0)) * XP.wordMastered;
 
   const lessonsBefore = profile.today.day === now.today ? profile.today.lessons : 0;
   const lessonsToday = lessonsBefore + 1;

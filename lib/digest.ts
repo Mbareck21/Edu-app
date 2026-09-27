@@ -29,7 +29,22 @@ export type Digest = {
   tablesLit: number;
   /** What falls due by this time tomorrow. */
   dueTomorrow: { words: number; facts: number; checks: number };
+  /** XP earned this week, by area, biggest first: where his effort is going. */
+  xpByArea: { area: XpArea; xp: number }[];
 };
+
+export type XpArea = "Reading" | "Words" | "Word drills" | "Math lessons" | "Math drills" | "Times tables" | "Other";
+
+/** Which part of the app a session's XP came from, read off its kind and ref. */
+export function xpArea(a: Pick<ActivityEntry, "kind" | "ref">): XpArea {
+  if (a.ref.startsWith("drill:vocab")) return "Word drills";
+  if (a.ref.startsWith("drill:math")) return "Math drills";
+  if (a.ref.startsWith("tables:")) return "Times tables";
+  if (a.kind === "reading") return "Reading";
+  if (a.kind === "math") return "Math lessons";
+  if (a.kind === "vocab") return "Words";
+  return "Other";
+}
 
 export type DigestInput = {
   activity: ActivityEntry[];
@@ -86,5 +101,9 @@ export function buildDigest({ activity, words, facts, chains, now }: DigestInput
     wordsKnownThisWeek,
     tablesLit: facts.filter(isLit).length,
     dueTomorrow: { words: dueWords, facts: dueFacts, checks: dueChecks },
+    xpByArea: [...week.reduce((m, a) => m.set(xpArea(a), (m.get(xpArea(a)) ?? 0) + Math.max(0, a.xp || 0)), new Map<XpArea, number>())]
+      .map(([area, xp]) => ({ area, xp }))
+      .filter((r) => r.xp > 0)
+      .sort((x, y) => y.xp - x.xp),
   };
 }

@@ -98,3 +98,25 @@ test("due tomorrow counts words, met facts and finished chains", () => {
   // Lit is right once, as on the grid: the met fact and the known one.
   assert.equal(d.tablesLit, 2);
 });
+
+test("the week's XP is split by area, biggest first", () => {
+  const at = iso(1);
+  const d = buildDigest({
+    activity: [
+      { at, kind: "math", ref: "drill:math:mixed:t60#20", pct: 100, xp: 100, ms: 1 },
+      { at, kind: "math", ref: "drill:math:add:t60#18", pct: 100, xp: 90, ms: 1 },
+      { at, kind: "reading", ref: "read:x@1", pct: 100, xp: 650, ms: 1 },
+      { at, kind: "math", ref: "tables:7", pct: 100, xp: 85, ms: 1 },
+      { at: iso(9), kind: "vocab", ref: "quest:new", pct: 100, xp: 999, ms: 1 },
+    ],
+    words: [],
+    facts: [],
+    chains: [],
+    now,
+  });
+  assert.deepEqual(d.xpByArea, [
+    { area: "Reading", xp: 650 },
+    { area: "Math drills", xp: 190 },
+    { area: "Times tables", xp: 85 },
+  ]);
+});

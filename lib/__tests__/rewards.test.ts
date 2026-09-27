@@ -118,12 +118,13 @@ test("math right answers pay more at a higher level; a bad level claim is clampe
       result({ kind: "math", ref: "math:add", answered: 10, correct: 10, fastCount: 0, perfect: true, mathLevel: mathLevel as never }),
       now()
     ).gained.xp - XP.streakDay;
-  assert.equal(math(1), 150);
-  assert.equal(math(3), 200);
-  assert.equal(math(5), 250);
-  assert.equal(math(undefined), 150);
-  assert.equal(math(9), 250);
-  assert.equal(math(-2), 150);
+  // XP.mathCorrect (7) a right answer at level 1, x1.5 at 3, x2 at 5; + lesson + perfect.
+  assert.equal(math(1), 120);
+  assert.equal(math(3), 155);
+  assert.equal(math(5), 190);
+  assert.equal(math(undefined), 120);
+  assert.equal(math(9), 190);
+  assert.equal(math(-2), 120);
 });
 
 test("a tables round pays half a level-1 answer per fact", () => {
@@ -132,7 +133,7 @@ test("a tables round pays half a level-1 answer per fact", () => {
     result({ kind: "math", ref: "tables:7", answered: 10, correct: 10, fastCount: 0, perfect: true }),
     now()
   );
-  assert.equal(gained.xp, 10 * 5 + XP.lessonDone + XP.perfect + XP.streakDay);
+  assert.equal(gained.xp, (10 * XP.mathCorrect) / 2 + XP.lessonDone + XP.perfect + XP.streakDay);
 });
 
 test("a timed drill pays half per right answer, at most 20 of them, and speed is capped", () => {
@@ -142,8 +143,9 @@ test("a timed drill pays half per right answer, at most 20 of them, and speed is
       result({ kind: "math", ref: `drill:math:add:timed60#${correct}`, answered: correct, correct, fastCount, timed: true, perfect: true, mathLevel: 1 }),
       now()
     ).gained.xp - XP.streakDay;
-  assert.equal(drill(15, 8), 15 * 5 + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
-  assert.equal(drill(40, 40), 20 * 5 + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
+  const half = XP.mathCorrect / 2;
+  assert.equal(drill(15, 8), Math.round(15 * half) + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
+  assert.equal(drill(40, 40), 20 * half + FAST_PAID * XP.fast + XP.lessonDone + XP.perfect);
 });
 
 test("a good passage reading pays like the minutes it took", () => {
@@ -188,7 +190,7 @@ test("a timed drill with another score is still the same run", () => {
   const drill = (correct: number) =>
     result({ kind: "math", ref: `drill:math:add:timed60#${correct}`, answered: correct, correct, fastCount: 0, timed: true });
   const first = applySession(emptyProfile(), drill(10), now()).profile;
-  assert.equal(applySession(first, drill(12), now()).gained.xp, 12 * 5);
+  assert.equal(applySession(first, drill(12), now()).gained.xp, (12 * XP.mathCorrect) / 2);
 });
 
 test("under 3 answers pays no lesson or perfect bonus, but keeps the day", () => {
@@ -468,5 +470,17 @@ test("a two-minute drill pays for twice the right answers of a one-minute drill"
   const run = (ref: string) =>
     applySession(emptyProfile(), { kind: "math", ref, answered: 45, correct: 45, fastCount: 0, ms: 1, perfect: false, timed: true, mathLevel: 1 }, at)
       .gained.xp;
-  assert.equal(run("drill:math:mixed:t120#45") - run("drill:math:mixed:t60#45"), 20 * 5);
+  assert.equal(run("drill:math:mixed:t120#45") - run("drill:math:mixed:t60#45"), (20 * XP.mathCorrect) / 2);
+});
+
+test("words reaching known and mastered in a session earn a bonus", () => {
+  const base = applySession(emptyProfile(), result(), now()).gained.xp;
+  const up = applySession(emptyProfile(), result({ wordsKnownUp: 2, wordsMasteredUp: 1 }), now()).gained.xp;
+  assert.equal(up - base, 2 * XP.wordKnown + XP.wordMastered);
+});
+
+test("reading and words pay more per right answer than math", () => {
+  assert.ok(XP.correct > XP.mathCorrect);
+  assert.ok(XP.readingCorrect > XP.mathCorrect * 2);
+  assert.ok(XP.passageCorrect > XP.readingCorrect);
 });

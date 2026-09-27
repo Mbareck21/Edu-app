@@ -154,6 +154,9 @@ export type SessionResult = {
    * client never sends it; the route's schema drops it if it tries.
    */
   mastery?: MasterySnapshot;
+  /** Words this session took to known / to mastered. Server-set, like `mastery`. */
+  wordsKnownUp?: number;
+  wordsMasteredUp?: number;
 };
 
 /** The long goals Badge.check cannot see on the profile. */
