@@ -2,7 +2,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
-import { pointsOf, type Rivalry } from "@/lib/rivalry";
+import { pointsOf, rankRows, type Rivalry } from "@/lib/rivalry";
 import { nudge } from "@/lib/scoreboard";
 
 export type ScoreRow = {
@@ -25,8 +25,7 @@ export default function FamilyScoreboard({ rows, rivalry }: { rows: ScoreRow[]; 
   const top = Math.max(1, ...rows.map((r) => r.xp));
   const together = rows.reduce((sum, r) => sum + r.xp, 0);
   const colorOf = new Map(rows.map((r, i) => [r.learner, COLORS[i % COLORS.length]]));
-  // Whoever is ahead today sits on top; a tie keeps the usual order.
-  const ranked = [...rows].sort((a, b) => b.xp - a.xp);
+  const ranked = rankRows(rows, rivalry);
   const holder = rows.find((r) => r.learner === rivalry.holder);
 
   return (
