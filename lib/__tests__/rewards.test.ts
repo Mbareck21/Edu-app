@@ -9,6 +9,7 @@ import {
   applySession,
   emptyProfile,
   estimateXp,
+  timedPaid,
   levelFloor,
   levelFor,
   shownStreak,
@@ -457,4 +458,15 @@ test("the offline XP estimate matches what the server pays, bar the day bonus", 
     const { gained } = applySession(emptyProfile(), r, at);
     assert.equal(estimateXp(r), gained.xp - XP.streakDay, r.ref);
   }
+});
+
+test("a two-minute drill pays for twice the right answers of a one-minute drill", () => {
+  assert.equal(timedPaid("drill:math:mixed:t60#25"), 20);
+  assert.equal(timedPaid("drill:math:mixed:t120#45"), 40);
+  assert.equal(timedPaid("drill:math:mixed:t999#45"), 40, "no longer than two minutes");
+  const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
+  const run = (ref: string) =>
+    applySession(emptyProfile(), { kind: "math", ref, answered: 45, correct: 45, fastCount: 0, ms: 1, perfect: false, timed: true, mathLevel: 1 }, at)
+      .gained.xp;
+  assert.equal(run("drill:math:mixed:t120#45") - run("drill:math:mixed:t60#45"), 20 * 5);
 });

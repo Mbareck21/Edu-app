@@ -52,8 +52,19 @@ export const XP = {
 
 /** Most fast answers paid in one session: speed cannot stack past this. */
 export const FAST_PAID = 5;
-/** Most right answers paid in one timed run. */
+/** Most right answers paid per minute of a timed run. */
 export const TIMED_PAID = 20;
+
+/**
+ * Most right answers paid in this timed run: TIMED_PAID a minute. The drill's
+ * ref names its length (drill:math:<skill>:t120#n); the client picks it, so it
+ * is only trusted between one and two minutes.
+ */
+export function timedPaid(ref: string): number {
+  const m = /:t(\d+)(?:#|$)/.exec(ref);
+  const seconds = Math.min(120, Math.max(60, m ? Number(m[1]) : 60));
+  return Math.round((TIMED_PAID * seconds) / 60);
+}
 /** Fewest answers for the lesson and perfect bonuses. */
 export const BONUS_MIN_ANSWERED = 3;
 
@@ -91,7 +102,7 @@ export function estimateXp(result: SessionResult): number {
   const answered = Math.max(0, Math.floor(result.answered) || 0);
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
-  const paidRight = result.timed ? Math.min(correct, TIMED_PAID) : correct;
+  const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
   return (
     Math.round(paidRight * rightXp(result, true)) +
     Math.min(fast, FAST_PAID) * XP.fast +
@@ -620,7 +631,7 @@ export function applySession(
     (a) => sameRef(a.ref, result.ref) && todayKey(new Date(a.at)) === now.today
   );
   const bonuses = answered >= BONUS_MIN_ANSWERED;
-  const paidRight = result.timed ? Math.min(correct, TIMED_PAID) : correct;
+  const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
   const xpGained =
     Math.round(paidRight * rightXp(result, firstToday)) +
     Math.min(fast, FAST_PAID) * XP.fast +
