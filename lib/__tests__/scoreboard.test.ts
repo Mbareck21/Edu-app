@@ -1,21 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayXp, nudge } from "@/lib/scoreboard";
+import { RACE_CAP, nudge, raceClosed, raceXp } from "@/lib/scoreboard";
 
 const TZ = "America/Chicago";
 
-test("day XP counts only today in the kid's timezone", () => {
+test("race XP counts today in the kid's timezone, before 9:30 pm", () => {
   const activity = [
-    { at: "2026-09-25T15:00:00.000Z", xp: 40 }, // Friday
-    { at: "2026-09-25T20:00:00.000Z", xp: 30 }, // Friday
-    // Saturday 00:30 UTC is still Friday evening in Chicago.
+    { at: "2026-09-25T15:00:00.000Z", xp: 40 }, // Friday 10:00
+    { at: "2026-09-25T20:00:00.000Z", xp: 30 }, // Friday 15:00
+    // Saturday 00:30 UTC is still Friday evening (19:30) in Chicago.
     { at: "2026-09-26T00:30:00.000Z", xp: 5 },
+    // Saturday 02:45 UTC is Friday 21:45 in Chicago: after the race closed.
+    { at: "2026-09-26T02:45:00.000Z", xp: 900 },
     // Friday 03:00 UTC is Thursday night in Chicago: yesterday.
     { at: "2026-09-25T03:00:00.000Z", xp: 500 },
   ];
-  assert.equal(dayXp(activity, "2026-09-25", TZ), 75);
-  assert.equal(dayXp(activity, "2026-09-26", TZ), 0);
+  assert.equal(raceXp(activity, "2026-09-25", TZ), 75);
+  assert.equal(raceXp(activity, "2026-09-26", TZ), 0);
+});
+
+test("race XP stops counting at the cap, and the race closes at 9:30 pm", () => {
+  const long = Array.from({ length: 30 }, () => ({ at: "2026-09-25T15:00:00.000Z", xp: 250 }));
+  assert.equal(raceXp(long, "2026-09-25", TZ), RACE_CAP);
+  assert.equal(raceClosed(new Date("2026-09-26T02:29:00.000Z"), TZ), false); // 21:29
+  assert.equal(raceClosed(new Date("2026-09-26T02:30:00.000Z"), TZ), true); // 21:30
 });
 
 test("the nudge cheers the leader and tells the other how far to go", () => {

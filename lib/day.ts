@@ -68,3 +68,15 @@ export function startOfDay(key: string, timeZone: string = TZ): Date {
   t = utc - zoneOffsetMs(new Date(t), timeZone);
   return new Date(t);
 }
+
+/** "HH:MM" on the 24-hour clock for `now` in the kid's timezone. */
+export function clockKey(now: Date = new Date(), timeZone: string = TZ): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("hour")}:${get("minute")}`;
+}

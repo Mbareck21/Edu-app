@@ -4,20 +4,33 @@
 //
 // Pure: safe to import from client components.
 
-import { todayKey } from "@/lib/day";
+import { clockKey, todayKey } from "@/lib/day";
 import type { ActivityEntry } from "@/lib/types";
 
-/** XP earned on `today`. */
-export function dayXp(
+/** The race closes at bedtime: later play still earns XP, just not the day's win. */
+export const RACE_CLOSES = "21:30";
+/** The most XP that counts in one day's race, so it is not won by playing longest. */
+export const RACE_CAP = 5000;
+
+/** XP that counts in the race on `day`: played before RACE_CLOSES, up to RACE_CAP. */
+export function raceXp(
   activity: readonly Pick<ActivityEntry, "at" | "xp">[],
-  today: string,
+  day: string,
   timeZone?: string
 ): number {
   let sum = 0;
   for (const a of activity) {
-    if (todayKey(new Date(a.at), timeZone) === today) sum += Math.max(0, a.xp || 0);
+    const at = new Date(a.at);
+    if (todayKey(at, timeZone) === day && clockKey(at, timeZone) < RACE_CLOSES) {
+      sum += Math.max(0, a.xp || 0);
+    }
   }
-  return sum;
+  return Math.min(RACE_CAP, sum);
+}
+
+/** True once today's race has closed. */
+export function raceClosed(now: Date = new Date(), timeZone?: string): boolean {
+  return clockKey(now, timeZone) >= RACE_CLOSES;
 }
 
 /** A short cheer for one child, given everyone's XP today. */
