@@ -55,3 +55,11 @@ export function settleThrough(
 export function pointsOf(r: Rivalry, learner: string): number {
   return r.holder === learner ? r.points : 0;
 }
+
+/**
+ * Scoreboard order: most XP today on top; on a tie (a new day, both at 0)
+ * the one holding the trophy points. Otherwise the usual order.
+ */
+export function rankRows<T extends { learner: string; xp: number }>(rows: readonly T[], r: Rivalry): T[] {
+  return [...rows].sort((a, b) => b.xp - a.xp || pointsOf(r, b.learner) - pointsOf(r, a.learner));
+}

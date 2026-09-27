@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RIVALRY_START, freshRivalry, pointsOf, settleDay, settleThrough } from "@/lib/rivalry";
+import { RIVALRY_START, freshRivalry, pointsOf, rankRows, settleDay, settleThrough } from "@/lib/rivalry";
 
 test("the winner takes a point, and a win against the holder takes one back", () => {
   let r = freshRivalry();
@@ -47,4 +47,15 @@ test("settling runs every finished day since the start, and only once", () => {
   assert.equal(pointsOf(r, "wissam"), 2);
   assert.deepEqual(settleThrough(r, "2026-09-26", xpOn), r);
   assert.equal(freshRivalry().through < RIVALRY_START, true);
+});
+
+test("the scoreboard sorts by XP today, then by trophy points", () => {
+  const r = { through: "2026-09-26", holder: "wissam", points: 2 };
+  const rows = [
+    { learner: "nour", xp: 0 },
+    { learner: "wissam", xp: 0 },
+  ];
+  assert.deepEqual(rankRows(rows, r).map((x) => x.learner), ["wissam", "nour"], "a new day: points decide");
+  rows[0].xp = 40;
+  assert.deepEqual(rankRows(rows, r).map((x) => x.learner), ["nour", "wissam"], "during the day: XP decides");
 });
