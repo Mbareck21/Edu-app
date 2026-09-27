@@ -12,7 +12,7 @@ import {
 import { mulberry32 } from "@/lib/math/rng";
 import { resumeKey } from "@/lib/resume";
 import { type ClientWordList } from "@/lib/models/WordList";
-import { newWordsList } from "@/app/learn/today/new-words-list";
+import { newWordsList, productionList } from "@/app/learn/today/new-words-list";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function TodayBeatPage({
   const seed = requestSeed();
   const now = new Date(seed);
   const rng = mulberry32(seed % 2147483647);
-  const unit = lists[0];
+  const unit = productionList(lists);
   const fill = lists.filter(needsExamples).map((l) => l._id);
 
   const shared = {
