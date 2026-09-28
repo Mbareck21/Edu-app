@@ -33,7 +33,7 @@ import type { StepId } from "@/lib/types";
 
 export const LESSON_SIZE = 12;
 export const CHALLENGE_SIZE = 15;
-export const REVIEW_CAP = 30;
+export const REVIEW_CAP = 20;
 /** Fewest items in a review: one or two due skills used to be the whole beat. */
 export const REVIEW_MIN = 8;
 export const PRODUCTION_SIZE = 6;
