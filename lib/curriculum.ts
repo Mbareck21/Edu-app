@@ -23,6 +23,53 @@ export const FPS_QUARTERS: Quarter[] = [
 export const SCHOOL_YEAR_START = "2026-08-11";
 export const SCHOOL_YEAR_END = "2027-05-20";
 
+/**
+ * Weekdays inside a quarter with no school, from the FPS 2026-27 district
+ * calendar (reported by the Northwest Arkansas Democrat-Gazette, 30 Jan 2026):
+ * Labor Day, parent-teacher conferences, Thanksgiving week, MLK Day, spring
+ * break and the two flexible make-up days. Breaks between quarters (fall,
+ * winter) need no entry. With these,
+ * Q1, Q2 and Q4 count out to the district's own day totals exactly; Q3 comes
+ * to 46 against its 45, so one Q3 day off is not public yet.
+ */
+export const FPS_DAYS_OFF: readonly string[] = [
+  "2026-09-07",
+  "2026-10-23",
+  "2026-11-23",
+  "2026-11-24",
+  "2026-11-25",
+  "2026-11-26",
+  "2026-11-27",
+  "2027-01-18",
+  "2027-02-15",
+  "2027-03-22",
+  "2027-03-23",
+  "2027-03-24",
+  "2027-03-25",
+  "2027-03-26",
+  "2027-04-23",
+];
+
+/** Every school day of a quarter, in order: its weekdays minus FPS_DAYS_OFF. */
+export function schoolDaysOf(q: Quarter): string[] {
+  const out: string[] = [];
+  const off = new Set(FPS_DAYS_OFF);
+  for (let n = dayNum(q.start); n <= dayNum(q.end); n++) {
+    const weekday = (n + 4) % 7; // 0 = Sunday; 1970-01-01 was a Thursday
+    const iso = new Date(n * 86_400_000).toISOString().slice(0, 10);
+    if (weekday !== 0 && weekday !== 6 && !off.has(iso)) out.push(iso);
+  }
+  return out;
+}
+
+/** The date of school day `n` (1-based) of quarter `id`. */
+export function quarterDay(id: Quarter["id"], n: number): string {
+  const q = FPS_QUARTERS.find((x) => x.id === id);
+  const days = q ? schoolDaysOf(q) : [];
+  const clamped = Math.max(1, Math.min(days.length, n));
+  return days[clamped - 1] ?? SCHOOL_YEAR_START;
+}
+
 /** Days since the Unix epoch for an ISO date, timezone-free. */
 function dayNum(dateISO: string): number {
   const [y, m, d] = dateISO.slice(0, 10).split("-").map(Number);
@@ -137,6 +184,20 @@ export const ELA_STANDARDS: ElaStandard[] = [
     itemTypes: ["sentence-combine", "use", "retell-pick"],
   },
 ];
+
+/**
+ * The quarter's essential standards, two a week, taking turns. They are all
+ * taught across the quarter; showing the same first two every day for nine
+ * weeks made the "At school now" card look stuck.
+ */
+export function elaFocus(dateISO: string, count = 2): ElaStandard[] {
+  const quarter = currentQuarter(dateISO);
+  if (quarter === "summer") return [];
+  const inQuarter = ELA_STANDARDS.filter((s) => s.quarters.includes(quarter));
+  if (inQuarter.length <= count) return inQuarter;
+  const first = (schoolWeekIndex(dateISO) * count) % inQuarter.length;
+  return Array.from({ length: count }, (_, i) => inQuarter[(first + i) % inQuarter.length]);
+}
 
 /* ------------------------------------------------------------------ *
  * Reading themes (Benchmark Advance Grade 4 units)

@@ -13,6 +13,8 @@ What Nour's school teaches, when, and which parts of this app exercise it.
 | Q3 | Jan 5 – Mar 11, 2027 | 45 |
 | Q4 | Mar 12 – May 20, 2027 | 44 |
 
+**Days off inside the quarters** (FPS 2026-27 district calendar, reported by the Northwest Arkansas Democrat-Gazette, 30 Jan 2026): Labor Day Sep 7; parent-teacher conferences Oct 23; Thanksgiving Nov 23–27; MLK Day Jan 18; flex make-up days Feb 15 and Apr 23; spring break Mar 22–26. Fall break (Oct 9, 12) and winter break (Dec 21 – Jan 4) fall between quarters. Counted out, these match the quarter totals above for Q1, Q2 and Q4; Q3 comes to 46, so one Q3 day off is not public yet. `lib/curriculum.ts` (`FPS_DAYS_OFF`, `quarterDay`) uses them to place the math units by their day counts.
+
 FPS note on the ELA sheet: if a student is not proficient (3) on a standard in Q1–Q3, that standard is reassessed in Q4, and every standard carries a Q4 grade.
 
 ---

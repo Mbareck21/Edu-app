@@ -153,3 +153,35 @@ test("leftover weeks cycle back through the units for review", () => {
   assert.equal(themeForWeek(late).id, READING_THEMES[0].id);
   assert.equal(themeForWeek("2027-04-19").id, READING_THEMES[1].id);
 });
+
+test("the school calendar counts out to the district's own day totals", async () => {
+  const { schoolDaysOf } = await import("@/lib/curriculum");
+  const counts = Object.fromEntries(FPS_QUARTERS.map((q) => [q.id, schoolDaysOf(q).length]));
+  assert.equal(counts.Q1, 42);
+  assert.equal(counts.Q2, 43);
+  assert.equal(counts.Q4, 44);
+  // One Q3 day off is not public yet.
+  assert.ok(Math.abs(counts.Q3 - 45) <= 1, `Q3 ${counts.Q3}`);
+  assert.ok(!schoolDaysOf(FPS_QUARTERS[0]).includes("2026-09-07"), "Labor Day");
+  assert.ok(!schoolDaysOf(FPS_QUARTERS[3]).includes("2027-03-24"), "spring break");
+});
+
+test("the reading-skills line moves with the weeks and stays in the quarter", async () => {
+  const { elaFocus } = await import("@/lib/curriculum");
+  // It showed the same two Q1 standards every day for the whole quarter.
+  const q1 = ELA_STANDARDS.filter((s) => s.quarters.includes("Q1")).map((s) => s.code);
+  const shown = new Set<string>();
+  const pairs: string[] = [];
+  for (const monday of ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"]) {
+    const focus = elaFocus(monday);
+    assert.equal(focus.length, 2, monday);
+    for (const s of focus) {
+      assert.ok(q1.includes(s.code), `${monday}: ${s.code} is not a Q1 standard`);
+      shown.add(s.code);
+    }
+    pairs.push(focus.map((s) => s.code).join("+"));
+  }
+  assert.deepEqual([...shown].sort(), [...q1].sort(), "every Q1 standard gets its turn");
+  for (let i = 1; i < pairs.length; i++) assert.notEqual(pairs[i], pairs[i - 1], "next week is a different pair");
+  assert.deepEqual(elaFocus("2027-07-01"), []);
+});
