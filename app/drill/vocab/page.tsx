@@ -119,6 +119,10 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
         senses={senses}
         chains={chains}
         resumeId="drill:write"
+        // Posted like every other drill: without it the sitting paid no XP and
+        // left no trace, so the suggestion never saw it played and "Next drill"
+        // dealt the same writing sitting on the same words again and again.
+        post={{ ref: sessionRef }}
         exit={{ label: "Next drill", href: "/drill/next" }}
       />
     );

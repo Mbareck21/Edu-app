@@ -21,7 +21,8 @@ import {
 } from "@/lib/spell-chain";
 import { postSession } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import type { StepId } from "@/lib/types";
+import { estimateXp } from "@/lib/rewards";
+import type { SessionResult, StepId } from "@/lib/types";
 import { playTextThroughTTS } from "@/lib/voice";
 
 /** How many writes make one sitting. Enough to move, short enough to finish. */
@@ -37,10 +38,10 @@ export type ChainRunnerProps = {
   senses: Record<string, WordSense>;
   /**
    * Set when this sitting is a step on a unit path, so finishing it marks the
-   * step done. Left off for the Words tab, where writing is its own thing and
-   * completes nothing.
+   * step done, or a drill, so it pays and logs like any other drill. Left off
+   * for the Words tab, where writing is its own thing and completes nothing.
    */
-  post?: { ref: string; listId: string; step: StepId };
+  post?: { ref: string; listId?: string; step?: StepId };
   /** Where the finish screen sends him. Defaults back to the Words tab. */
   exit?: { label: string; href: string };
   /**
@@ -118,7 +119,7 @@ export function chainResumeKey(ref: string | undefined): string {
 }
 
 export default function ChainRunner(props: ChainRunnerProps) {
-  const key = chainResumeKey(props.post?.ref ?? props.resumeId);
+  const key = chainResumeKey(props.resumeId ?? props.post?.ref);
   const stored = useSavedRun(key, isChainSaved);
   // A sitting can only resume on words this page has chains for; otherwise
   // it would draw nothing and save that nothing back.
@@ -180,6 +181,7 @@ function ChainRunnerInner({
   const [shake, setShake] = useState(false);
   const [done, setDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [xp, setXp] = useState(0);
   const [hidden, setHidden] = useState(false);
 
   const watch = useRef<Stopwatch | null>(null);
@@ -285,7 +287,7 @@ function ChainRunnerInner({
           // Unscored step: it completes on being played, so the score here is
           // only for the activity log. The chain itself is the real record and
           // it was written per attempt, so a lost post costs nothing but XP.
-          void postSession({
+          const result: SessionResult = {
             kind: "vocab",
             ref: post.ref,
             listId: post.listId,
@@ -295,7 +297,8 @@ function ChainRunnerInner({
             fastCount: 0,
             ms,
             perfect: false,
-          });
+          };
+          void postSession(result).then((res) => setXp(res.saved ? res.gained.xp : estimateXp(result)));
         }
       } else {
         watch.current?.mark();
@@ -326,7 +329,7 @@ function ChainRunnerInner({
             ? parts.join(" ")
             : `Your best run today: ${Math.max(0, ...best)} in a row.`
         }
-        xp={0}
+        xp={xp}
         ms={elapsedMs}
         accuracy={null}
         perfect={wonNow}
