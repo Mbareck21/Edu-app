@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { newWordsList, productionList } from "@/app/learn/today/new-words-list";
+import { newWordsList, productionList, unitLists } from "@/app/learn/today/new-words-list";
 import type { ClientWord } from "@/lib/models/WordList";
 
 const blank = { correct: 0, wrong: 0, streak: 0, lastAt: null, dueAt: "" };
@@ -38,4 +38,11 @@ test("Write and use works on the unit, never the Stuck-words pool that leads the
   assert.equal(productionList([pool, done, next])?.name, "unit 2");
   assert.equal(productionList([pool, done])?.name, "unit 1");
   assert.equal(productionList([pool]), undefined);
+});
+
+test("Review and New words leave the Stuck-words pool out", () => {
+  const pool = { name: "Stuck words", kind: "pool", words: [word(false)] };
+  const unit = { name: "unit 1", kind: "unit", words: [word(false)] };
+  assert.deepEqual(unitLists([pool, unit]).map((l) => l.name), ["unit 1"]);
+  assert.equal(newWordsList(unitLists([pool, unit]))?.name, "unit 1");
 });
