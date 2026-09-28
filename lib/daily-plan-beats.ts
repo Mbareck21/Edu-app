@@ -22,13 +22,13 @@ export function asWord(w: SummaryWord): ClientWord {
 
 /**
  * The unit in play: the newest list that still has a word he has not met,
- * so the quest does not stall on a list he has finished.
+ * so the quest does not stall on a list he has finished. Never an empty list:
+ * its beats would open "Add a word list first" every time.
  */
 export function unitOf(lists: readonly ListSummary[]): ListSummary | null {
   return (
     lists.find((l) => l.words.some((w) => isNewWord(asWord(w)))) ??
     lists.find((l) => l.words.length > 0) ??
-    lists[0] ??
     null
   );
 }
@@ -65,6 +65,9 @@ export function planBeats({
   today: string;
 }): PlanBeat[] {
   const unit = unitOf(lists);
+  // Review only takes words he has met. Before the first one it was empty,
+  // and Start sent him back to it every time.
+  const met = lists.some((l) => l.words.some((w) => !isNewWord(asWord(w))));
   const done = doneToday(activity, today);
   const skill = getSkill(mathSkillFor(today, mathLevels));
   const beats: Record<BeatId, Omit<PlanBeat, "id" | "done">> = {
@@ -72,7 +75,8 @@ export function planBeats({
       name: "Review",
       blurb: "Words that are due",
       icon: "clock",
-      href: unit ? "/learn/today/review" : null,
+      href: unit && met ? "/learn/today/review" : null,
+      lockedBlurb: unit ? "After New words" : undefined,
     },
     read: {
       name: "Reading",

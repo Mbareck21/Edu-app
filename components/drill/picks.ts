@@ -14,6 +14,7 @@ import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList"
 import { itemForSkill, makeWrite, type ItemPool, type LessonItem } from "@/lib/items";
 
 import type { DrillSource, VocabMode } from "@/components/drill/options";
+import { SUGGESTED_WORD_MODES } from "@/components/drill/suggest";
 
 /** Below this streak a skill still gets tile support. */
 export const WEAK_STREAK = 2;
@@ -42,7 +43,12 @@ export type PickedWord = {
  * 181 of 182, so "Weak" was just "All" under another name.
  */
 export function isWeak(word: SkillsOnly, now: Date): boolean {
-  return SKILL_IDS.some((id) => {
+  return weakSkills(word, now).length > 0;
+}
+
+/** The skills that make a word weak (see isWeak). */
+export function weakSkills(word: SkillsOnly, now: Date): SkillId[] {
+  return SKILL_IDS.filter((id) => {
     const s = word.skills[id];
     if (s.lastAt === null) return false;
     // Same reading as isStuckMiss: streak 0, or an early miss's dueAt === lastAt.
@@ -50,6 +56,20 @@ export function isWeak(word: SkillsOnly, now: Date): boolean {
     const recent = now.getTime() - new Date(s.lastAt).getTime() <= STUCK_WINDOW_DAYS * 86_400_000;
     return (lastWasMiss && recent) || (s.streak === 0 && skillDue(s, now));
   });
+}
+
+/**
+ * The suggested word-drill types that can fix these weak skills. A word weak
+ * on spelling is only fixed by a drill that asks for spelling: Match and
+ * Listen on it answered other skills, so it stayed weak drill after drill.
+ * Writing counts as spelling practice. None of them left: every type.
+ */
+export function modesFor(skills: readonly SkillId[]): VocabMode[] {
+  const helps = SUGGESTED_WORD_MODES.filter((mode) => {
+    const skill = mode === "flashcards" ? "spell" : modeSkill(mode);
+    return skill !== null && skills.includes(skill);
+  });
+  return helps.length > 0 ? helps : [...SUGGESTED_WORD_MODES];
 }
 
 /** Any skill due for review right now. */
@@ -63,6 +83,8 @@ export type SourceCounts = {
   /** Every word, learned or not. */
   total: number;
   weak: number;
+  /** Every skill that makes one of the weak words weak. */
+  weakSkills: SkillId[];
   due: number;
   /** Sorted so the lists with the most left come first and finished ones sink. */
   lists: { listId: string; name: string; total: number; toGo: number }[];
@@ -92,7 +114,9 @@ export function isDoneForNow(word: SkillsOnly, now: Date): boolean {
   const today = todayKey(now);
   const rightToday = SKILL_IDS.some((id) => {
     const s = word.skills[id];
-    return s.streak >= 1 && s.lastAt !== null && todayKey(new Date(s.lastAt)) === today;
+    // An early miss only halves the streak and stamps dueAt === lastAt: that
+    // is a wrong answer today, not a right one.
+    return s.streak >= 1 && s.lastAt !== null && s.dueAt !== s.lastAt && todayKey(new Date(s.lastAt)) === today;
   });
   return rightToday || (isSettled(word) && !isDue(word, now));
 }
@@ -105,12 +129,15 @@ export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
   let total = 0;
   let weak = 0;
   let due = 0;
+  const skills = new Set<SkillId>();
   const perList = lists.map((l) => {
     const toGo = l.words.filter((w) => !isDoneForNow(w, now)).length;
     all += toGo;
     total += l.words.length;
     for (const word of l.words) {
-      if (isWeak(word, now)) weak++;
+      const ws = weakSkills(word, now);
+      if (ws.length > 0) weak++;
+      for (const id of ws) skills.add(id);
       if (isDue(word, now)) due++;
     }
     return { listId: l.listId, name: l.name, total: l.words.length, toGo };
@@ -119,6 +146,7 @@ export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
     all,
     total,
     weak,
+    weakSkills: SKILL_IDS.filter((id) => skills.has(id)),
     due,
     lists: perList.sort((a, b) => b.toGo - a.toGo),
   };
@@ -140,6 +168,38 @@ export function pickWords(lists: DrillList[], source: DrillSource, now: Date): P
     }
   }
   return out;
+}
+
+/** Most times one word comes round in a drill before other words fill in. */
+export const MAX_PER_WORD = 3;
+
+/**
+ * Two or three weak words in a 10-item drill came round four or five times
+ * each, one of them back to back. Weak and due drills only. Past MAX_PER_WORD a turn, fill with other
+ * words he is still learning: the ones due now first, then the lowest streak.
+ */
+export function withFill(
+  picked: PickedWord[],
+  lists: DrillList[],
+  count: number,
+  now: Date,
+  rng: Rng
+): PickedWord[] {
+  // One copy of each word. A stuck word is in the pool and in its unit, and
+  // both copies came round. The later one wins: getPractice puts the pool
+  // first, and the unit copy is the one that counts toward Known.
+  const one = new Map<string, PickedWord>();
+  for (const p of picked) one.set(p.word.word, p);
+  const unique = [...one.values()];
+  const need = Math.ceil(count / MAX_PER_WORD);
+  if (unique.length >= need) return unique;
+  const have = new Set(one.keys());
+  const rest = pickWords(lists, { kind: "all" }, now).filter((p) => {
+    if (have.has(p.word.word) || isSettled(p.word)) return false;
+    have.add(p.word.word); // a pool copy and its unit copy are one word
+    return true;
+  });
+  return [...unique, ...orderWords(rest, now, rng).slice(0, need - unique.length)];
 }
 
 /** The skill a single-skill mode drills. `null` = the mode mixes them. */

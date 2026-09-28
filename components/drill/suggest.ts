@@ -44,15 +44,23 @@ export function weakestSkill(skills: readonly SkillSeen[]): { skill: SkillSeen; 
 export const SUGGESTED_WORD_MODES: readonly VocabMode[] = ["match", "listen", "spell", "use", "flashcards", "write"];
 
 /** The word drill type played least today; ties go to the earlier one. */
-export function nextWordMode(todayRefs: readonly string[]): VocabMode {
+export function nextWordMode(
+  todayRefs: readonly string[],
+  modes: readonly VocabMode[] = SUGGESTED_WORD_MODES
+): VocabMode {
   const plays = (mode: VocabMode) => todayRefs.filter((r) => r === `drill:vocab:${mode}`).length;
-  return SUGGESTED_WORD_MODES.reduce((best, mode) => (plays(mode) < plays(best) ? mode : best));
+  return modes.reduce((best, mode) => (plays(mode) < plays(best) ? mode : best));
 }
 
-/** Skills not drilled today, or every skill once all have been. */
-function notDrilledToday(skills: readonly SkillSeen[], todayRefs: readonly string[]): readonly SkillSeen[] {
-  const fresh = skills.filter((s) => !todayRefs.some((r) => r.startsWith(`drill:math:${s.id}:`)));
-  return fresh.length > 0 ? fresh : skills;
+/**
+ * The skills drilled the fewest times today. Once every skill had been
+ * drilled it fell back to all of them, and the weakest was the same slipping
+ * skill every time: fractions forty times in a row.
+ */
+function leastDrilledToday(skills: readonly SkillSeen[], todayRefs: readonly string[]): readonly SkillSeen[] {
+  const times = (s: SkillSeen) => todayRefs.filter((r) => r.startsWith(`drill:math:${s.id}:`)).length;
+  const fewest = Math.min(...skills.map(times));
+  return skills.filter((s) => times(s) === fewest);
 }
 
 /**
@@ -61,6 +69,8 @@ function notDrilledToday(skills: readonly SkillSeen[], todayRefs: readonly strin
  */
 export function suggestDrill(opts: {
   weakWords: number;
+  /** Word drill types that can fix the weak words (modesFor). Default: all. */
+  wordModes?: readonly VocabMode[];
   skills: readonly SkillSeen[];
   /** Refs of the sessions played today. */
   todayRefs: readonly string[];
@@ -68,12 +78,12 @@ export function suggestDrill(opts: {
 }): Suggestion | null {
   const wordDrills = opts.todayRefs.filter((r) => r.startsWith("drill:vocab")).length;
   const mathDrills = opts.todayRefs.filter((r) => r.startsWith("drill:math")).length;
-  const math = weakestSkill(notDrilledToday(opts.skills, opts.todayRefs));
+  const math = weakestSkill(leastDrilledToday(opts.skills, opts.todayRefs));
   const wordsFirst = opts.weakWords > 0 && (wordDrills === 0 || !math || wordDrills <= mathDrills);
 
   if (wordsFirst || !math) {
     if (opts.weakWords === 0) return null;
-    const mode = nextWordMode(opts.todayRefs);
+    const mode = nextWordMode(opts.todayRefs, opts.wordModes);
     return {
       kind: "words",
       title: `Weak words · ${VOCAB_MODE_LABEL[mode]}`,
@@ -95,6 +105,7 @@ export function suggestDrill(opts: {
  */
 export function suggestionFor(opts: {
   weakWords: number;
+  wordModes?: readonly VocabMode[];
   /** Math progress rows, one per skill played. */
   played: readonly { skill: string; recentPcts: number[]; lastAt: string | null }[];
   activity: readonly { ref: string; at: string }[];
@@ -103,6 +114,7 @@ export function suggestionFor(opts: {
   const today = todayKey(opts.now);
   return suggestDrill({
     weakWords: opts.weakWords,
+    wordModes: opts.wordModes,
     skills: MATH_SKILLS.map((s) => {
       const p = opts.played.find((x) => x.skill === s.id);
       return { id: s.id, name: s.name, recentPcts: p?.recentPcts ?? [], lastAt: p?.lastAt ?? null };

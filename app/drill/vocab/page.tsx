@@ -9,7 +9,8 @@ import {
   parseSource,
   type VocabMode,
 } from "@/components/drill/options";
-import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/components/drill/picks";
+import { buildDrillItems, orderWords, pickWords, withFill, type DrillList } from "@/components/drill/picks";
+import ExitBar from "@/components/ui/ExitBar";
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
@@ -113,22 +114,29 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
       if (!senses[word]) senses[word] = { clue: "", arabic: "" };
     }
     return (
-      <ChainRunner
-        key={runKey}
-        words={chosen}
-        senses={senses}
-        chains={chains}
-        resumeId="drill:write"
-        // Posted like every other drill: without it the sitting paid no XP and
-        // left no trace, so the suggestion never saw it played and "Next drill"
-        // dealt the same writing sitting on the same words again and again.
-        post={{ ref: sessionRef }}
-        exit={{ label: "Next drill", href: "/drill/next" }}
-      />
+      <>
+        <ExitBar href="/drill" label="Drill" />
+        <ChainRunner
+          key={runKey}
+          words={chosen}
+          senses={senses}
+          chains={chains}
+          // One saved sitting per source: a half-done weak-words sitting must
+          // not come back inside an All-words or a list drill.
+          resumeId={`drill:write:${q.src ?? "all"}`}
+          // Posted like every other drill: without it the sitting paid no XP and
+          // left no trace, so the suggestion never saw it played and "Next drill"
+          // dealt the same writing sitting on the same words again and again.
+          post={{ ref: sessionRef }}
+          exit={{ label: "Next drill", href: "/drill/next" }}
+        />
+      </>
     );
   }
 
-  const items = buildDrillItems({ picked, mode, count, now, rng });
+  // A weak or due pick of two or three words is topped up (see withFill).
+  const dealt = source.kind === "weak" || source.kind === "due" ? withFill(picked, lists, count, now, rng) : picked;
+  const items = buildDrillItems({ picked: dealt, mode, count, now, rng });
 
   return (
     <VocabDrillRunner

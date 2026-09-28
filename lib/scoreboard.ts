@@ -37,29 +37,30 @@ export function activityKind(ref: string): string {
 
 /**
  * XP that counts in the race on `day`: played before RACE_CLOSES, up to
- * RACE_CAP. Past the RACE_FULL_PER_KIND-th session of one kind, a session
- * counts half, so the race is won by mixing it up. Levels and the profile
- * still get every point; this is only the race.
+ * RACE_CAP. Of each kind, the RACE_FULL_PER_KIND biggest sessions count in
+ * full and the rest half, so the race is won by mixing it up. Biggest, not
+ * first: by order played, a session sent late from an offline phone could
+ * push a bigger one into third place and take points off the board. Levels
+ * and the profile still get every point; this is only the race.
  */
 export function raceXp(
   activity: readonly Pick<ActivityEntry, "at" | "xp" | "ref">[],
   day: string,
   timeZone?: string
 ): number {
-  const played = activity
-    .filter((a) => {
-      const at = new Date(a.at);
-      return todayKey(at, timeZone) === day && clockKey(at, timeZone) < RACE_CLOSES;
-    })
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  const seen = new Map<string, number>();
-  let sum = 0;
-  for (const a of played) {
+  const byKind = new Map<string, number[]>();
+  for (const a of activity) {
+    const at = new Date(a.at);
+    if (todayKey(at, timeZone) !== day || clockKey(at, timeZone) >= RACE_CLOSES) continue;
     const kind = activityKind(a.ref);
-    const n = (seen.get(kind) ?? 0) + 1;
-    seen.set(kind, n);
-    const xp = Math.max(0, a.xp || 0);
-    sum += n > RACE_FULL_PER_KIND ? Math.floor(xp / 2) : xp;
+    byKind.set(kind, [...(byKind.get(kind) ?? []), Math.max(0, a.xp || 0)]);
+  }
+  let sum = 0;
+  for (const xps of byKind.values()) {
+    xps.sort((x, y) => y - x);
+    xps.forEach((xp, i) => {
+      sum += i < RACE_FULL_PER_KIND ? xp : Math.floor(xp / 2);
+    });
   }
   return Math.min(RACE_CAP, sum);
 }

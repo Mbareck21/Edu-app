@@ -13,6 +13,7 @@ import { postSession, saveNote } from "@/lib/offline-queue";
 import { FALL_START_MS, blanksFor, letterChoices, nextFallMs } from "@/lib/rescue";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { SessionResult } from "@/lib/types";
 
 export type RescueWord = { word: string; clue: string; arabic: string };
@@ -59,7 +60,8 @@ export default function RescueRunner({
   const [wiggle, setWiggle] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
-  const startedAt = useRef(0);
+  // Time on task: a phone locked mid-fall must not count as hours played.
+  const watch = useRef<Stopwatch | null>(null);
   const fallStart = useRef(0);
   const missedThisWord = useRef(false);
 
@@ -85,6 +87,7 @@ export default function RescueRunner({
   }, [status, fallMs, idx]);
 
   const next = useCallback(() => {
+    watch.current?.mark();
     if (idx + 1 >= puzzles.length) {
       setStatus("done");
       return;
@@ -109,7 +112,7 @@ export default function RescueRunner({
   useEffect(() => {
     if (status !== "done" || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    const ms = watch.current?.read() ?? 0;
     const result: SessionResult = {
       kind: "vocab",
       ref: sessionRef,
@@ -128,7 +131,7 @@ export default function RescueRunner({
 
   function start() {
     sfx.tap();
-    startedAt.current = Date.now();
+    watch.current = startStopwatch();
     fallStart.current = performance.now();
     setStatus("falling");
   }

@@ -85,3 +85,30 @@ test("suggestionFor counts only today's sessions", () => {
   assert.equal(s?.kind, "words");
   assert.equal(s?.title, "Weak words · Listen");
 });
+
+test("once every math skill is drilled, the least drilled today comes next, not the same one", () => {
+  const all = skills.map((s) => `drill:math:${s.id}:relaxed`);
+  const dealt: string[] = [];
+  let refs = [...all];
+  for (let i = 0; i < 6; i++) {
+    const s = suggestDrill({ weakWords: 0, skills, todayRefs: refs, seed: 1 });
+    dealt.push(s?.title ?? "");
+    const id = skills.find((k) => k.name === s?.title)?.id;
+    refs = [...refs, `drill:math:${id}:relaxed`];
+  }
+  // Angles is slipping, but it only comes round again with the others.
+  assert.deepEqual(dealt, ["Angles", "Decimals", "Fractions", "Angles", "Decimals", "Fractions"]);
+});
+
+test("the weak-word drill type turns only through the ones that fix the weak skill", () => {
+  const s = suggestDrill({ weakWords: 3, wordModes: ["spell", "flashcards", "write"], skills: [], todayRefs: [], seed: 1 });
+  assert.equal(s?.title, "Weak words · Spell");
+  const next = suggestDrill({
+    weakWords: 3,
+    wordModes: ["spell", "flashcards", "write"],
+    skills: [],
+    todayRefs: ["drill:vocab:spell"],
+    seed: 1,
+  });
+  assert.ok(next?.href.includes("mode=flashcards"));
+});

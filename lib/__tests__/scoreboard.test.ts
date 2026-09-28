@@ -33,9 +33,8 @@ test("race XP stops counting at the cap, and the race closes at 9:30 pm", () => 
   assert.equal(raceClosed(new Date("2026-09-26T02:30:00.000Z"), TZ), true); // 21:30
 });
 
-test("the third of the same kind counts half in the race, in the order played", () => {
+test("past two of the same kind, the rest count half: the two biggest stay full", () => {
   const at = (h: number) => `2026-09-25T${String(h).padStart(2, "0")}:00:00.000Z`;
-  // Listed out of order: the two earliest count in full.
   const drills = [
     { at: at(18), xp: 100, ref: "drill:math:place-value:quick" },
     { at: at(15), xp: 100, ref: "drill:math:fractions:timed" },
@@ -43,13 +42,26 @@ test("the third of the same kind counts half in the race, in the order played", 
     { at: at(17), xp: 100, ref: "drill:math:rounding:quick" },
   ];
   assert.equal(raceXp(drills, "2026-09-25", TZ), 300); // 2 full + 2 half
-  // The earliest two are full, whatever their XP: 40 + 60 full, then 100 / 2.
+  // 100 + 60 full, then 40 / 2 — whatever order they were played in.
   const uneven = [
     { at: at(17), xp: 100, ref: "tables:7" },
     { at: at(15), xp: 40, ref: "tables:3" },
     { at: at(16), xp: 60, ref: "tables:lightning" },
   ];
-  assert.equal(raceXp(uneven, "2026-09-25", TZ), 150);
+  assert.equal(raceXp(uneven, "2026-09-25", TZ), 180);
+});
+
+test("a session that arrives late never takes race points away", () => {
+  const at = (h: number) => `2026-09-25T${String(h).padStart(2, "0")}:00:00.000Z`;
+  const two = [
+    { at: at(16), xp: 200, ref: "drill:math:fractions:relaxed" },
+    { at: at(17), xp: 200, ref: "drill:math:rounding:relaxed" },
+  ];
+  const before = raceXp(two, "2026-09-25", TZ);
+  // Played earlier offline, sent after: it is the one that counts half.
+  const after = raceXp([...two, { at: at(15), xp: 30, ref: "drill:math:angles:relaxed" }], "2026-09-25", TZ);
+  assert.equal(before, 400);
+  assert.equal(after, 415);
 });
 
 test("mixing kinds counts every session in full", () => {
