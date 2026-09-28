@@ -171,8 +171,8 @@ test("currentUnit finds the unit school is in", () => {
   assert.equal(currentUnit("2026-10-20").id, 2);
   assert.equal(currentUnit("2026-11-06").id, 2);
   assert.equal(currentUnit("2026-11-09").id, 3);
-  assert.equal(currentUnit("2027-02-24").id, 4);
-  assert.equal(currentUnit("2027-02-25").id, 5);
+  assert.equal(currentUnit("2027-02-25").id, 4);
+  assert.equal(currentUnit("2027-02-26").id, 5);
   assert.equal(currentUnit("2027-03-30").id, 5);
   assert.equal(currentUnit("2027-03-31").id, 6);
   assert.equal(currentUnit("2026-12-01").id, 3);

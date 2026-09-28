@@ -99,13 +99,16 @@ test("science units have enough words and monotonic weeks", () => {
 
 test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2026-08-11")?.id, undefined); // week 1: no unit yet
-  // The 2-9 span is shared and splits in list order, so adding the Growing
-  // Plants investigation moved the other two along. It goes first on purpose:
-  // it is the investigation his class is running now, and a reading topic a
-  // month after the worksheet is no use to him.
+  // The district plan has two units in weeks 2-9, Adaptations then Senses.
+  // The Growing Plants investigation opens the first (weeks 2-3), then
+  // Adaptations 4-5 and Senses 6-9. Split three ways, the card still said
+  // Adaptations on 28 September.
   assert.equal(scienceUnitForWeek("2026-08-18")?.id, "growing-plants"); // week 2
-  assert.equal(scienceUnitForWeek("2026-09-22")?.id, "adaptations"); // week 7
-  assert.equal(scienceUnitForWeek("2026-09-29")?.id, "senses"); // week 8
+  assert.equal(scienceUnitForWeek("2026-08-25")?.id, "growing-plants"); // week 3
+  assert.equal(scienceUnitForWeek("2026-09-01")?.id, "adaptations"); // week 4
+  assert.equal(scienceUnitForWeek("2026-09-15")?.id, "senses"); // week 6
+  assert.equal(scienceUnitForWeek("2026-09-28")?.id, "senses"); // week 7
+  assert.equal(scienceUnitForWeek("2026-10-06")?.id, "senses"); // week 9
   assert.equal(scienceUnitForWeek("2026-11-03")?.id, "earth-features");
   assert.equal(scienceUnitForWeek("2027-01-12")?.id, "energy");
   assert.equal(scienceUnitForWeek("2027-03-16")?.id, "waves");
@@ -159,9 +162,8 @@ test("the school calendar counts out to the district's own day totals", async ()
   const counts = Object.fromEntries(FPS_QUARTERS.map((q) => [q.id, schoolDaysOf(q).length]));
   assert.equal(counts.Q1, 42);
   assert.equal(counts.Q2, 43);
+  assert.equal(counts.Q3, 45);
   assert.equal(counts.Q4, 44);
-  // One Q3 day off is not public yet.
-  assert.ok(Math.abs(counts.Q3 - 45) <= 1, `Q3 ${counts.Q3}`);
   assert.ok(!schoolDaysOf(FPS_QUARTERS[0]).includes("2026-09-07"), "Labor Day");
   assert.ok(!schoolDaysOf(FPS_QUARTERS[3]).includes("2027-03-24"), "spring break");
 });

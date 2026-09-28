@@ -25,12 +25,11 @@ export const SCHOOL_YEAR_END = "2027-05-20";
 
 /**
  * Weekdays inside a quarter with no school, from the FPS 2026-27 district
- * calendar (reported by the Northwest Arkansas Democrat-Gazette, 30 Jan 2026):
- * Labor Day, parent-teacher conferences, Thanksgiving week, MLK Day, spring
- * break and the two flexible make-up days. Breaks between quarters (fall,
- * winter) need no entry. With these,
- * Q1, Q2 and Q4 count out to the district's own day totals exactly; Q3 comes
- * to 46 against its 45, so one Q3 day off is not public yet.
+ * calendar ("2026-27 District Calendar for Parents", approved 22 Jan 2026,
+ * linked from asbell.fayar.net): Labor Day, parent-teacher conferences,
+ * Thanksgiving week, MLK Day, the 12 Feb PD day, spring break and the two
+ * flexible make-up days. Breaks between quarters (fall, winter) need no entry.
+ * With these, every quarter counts out to the district's own day total.
  */
 export const FPS_DAYS_OFF: readonly string[] = [
   "2026-09-07",
@@ -41,6 +40,7 @@ export const FPS_DAYS_OFF: readonly string[] = [
   "2026-11-26",
   "2026-11-27",
   "2027-01-18",
+  "2027-02-12",
   "2027-02-15",
   "2027-03-22",
   "2027-03-23",
@@ -476,16 +476,18 @@ export type ScienceUnit = {
 
 export const SCIENCE_UNITS: ScienceUnit[] = [
   {
-    // The Growing Plants investigation his class is running now. It sits
-    // inside the same weeks as adaptations and senses because it is a short
-    // investigation taught alongside them, not a unit of its own; the shared
-    // span splits between the three, so it gets its turn as a reading topic.
+    // The Growing Plants investigation his class ran at the start of the
+    // year. The district plan (Asbell's curriculum link, 4th Grade Science)
+    // has two units in weeks 2-9, Adaptations then Senses; this short
+    // investigation opens the first of them, so it takes weeks 2-3, then
+    // Adaptations 4-5 and Senses 6-9: an even split of the district's two.
+    // Split three ways, the card still said Adaptations in late September.
     // Standards here are the science PRACTICE, not a content expectation:
     // the point of the lesson is planning a fair test, not plant biology.
     id: "growing-plants",
     title: "Growing Plants: Fair Tests",
     weekStart: 2,
-    weekEnd: 9,
+    weekEnd: 3,
     standards: [
       {
         code: "NGSS SEP 3",
@@ -505,8 +507,8 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
   {
     id: "adaptations",
     title: "Plants & Animals: Adaptations",
-    weekStart: 2,
-    weekEnd: 9,
+    weekStart: 4,
+    weekEnd: 5,
     standards: [
       {
         code: "4-LS1-1",
@@ -525,7 +527,7 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
   {
     id: "senses",
     title: "Animals: Senses & Information Processing",
-    weekStart: 2,
+    weekStart: 6,
     weekEnd: 9,
     standards: [
       {
@@ -641,8 +643,8 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
  * Because breaks are ignored, week 36 falls in mid-April; the remaining school
  * weeks stay on the last unit rather than going blank. Outside the school year,
  * and in week 1 (launch week, before Unit 1 starts), the answer is null.
- * Two units share weeks 2-9 and two share weeks 31-32; a shared span is split
- * evenly between the units that claim it, in list order.
+ * Two units share weeks 31-32; a shared span is split evenly between the
+ * units that claim it, in list order.
  */
 export function scienceUnitForWeek(dateISO: string): ScienceUnit | null {
   const n = dayNum(dateISO);
