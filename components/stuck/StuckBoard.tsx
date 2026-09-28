@@ -183,49 +183,48 @@ function StuckBoardInner({
       )}
 
       {working.length > 0 ? (
-        <ul className="space-y-2">
-          {working.map((w) => {
-            const c = state[w];
-            const done = c?.current ?? 0;
-            return (
-              <li key={w}>
-                <Card>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-display text-lg font-bold">{w}</p>
-                      {senses[w]?.clue ? (
-                        <p className="truncate text-sm" style={{ color: "var(--color-muted)" }}>
-                          {senses[w].clue}
-                        </p>
-                      ) : null}
-                      <p className="text-sm" style={{ color: "var(--color-muted)" }}>
-                        {c && checkDue(c, nowIso)
-                          ? "Check it again — one write"
-                          : `${done} of ${CHAIN_TARGET} in a row${c && c.best > done ? ` · best ${c.best}` : ""}`}
+        <Card padded={false} className="overflow-hidden">
+          <ul className="divide-y" style={{ borderColor: "var(--color-line)" }}>
+            {working.map((w) => {
+              const c = state[w];
+              const done = c?.current ?? 0;
+              const due = c ? checkDue(c, nowIso) : false;
+              return (
+                <li key={w} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display font-bold leading-tight">{w}</p>
+                    {senses[w]?.clue ? (
+                      <p className="truncate text-xs" style={{ color: "var(--color-muted)" }}>
+                        {senses[w].clue}
                       </p>
+                    ) : null}
+                  </div>
+                  <div className="w-24 shrink-0 text-right">
+                    <p className="text-xs font-bold" style={{ color: due ? "var(--color-gold-ink)" : "var(--color-muted)" }}>
+                      {due ? "Check again" : `${done}/${CHAIN_TARGET}${c && c.best > done ? ` · best ${c.best}` : ""}`}
+                    </p>
+                    <div className="mt-1 flex gap-0.5" aria-hidden>
+                      {Array.from({ length: CHAIN_TARGET }, (_, i) => (
+                        <span
+                          key={i}
+                          className="h-1.5 flex-1 rounded-full"
+                          style={{
+                            background:
+                              i < done
+                                ? "var(--color-blue)"
+                                : i < (c?.best ?? 0)
+                                  ? "var(--color-blue-soft)"
+                                  : "var(--color-line)",
+                          }}
+                        />
+                      ))}
                     </div>
                   </div>
-                  <div className="mt-3 flex gap-1" aria-hidden>
-                    {Array.from({ length: CHAIN_TARGET }, (_, i) => (
-                      <span
-                        key={i}
-                        className="h-2 flex-1 rounded-full"
-                        style={{
-                          background:
-                            i < done
-                              ? "var(--color-blue)"
-                              : i < (c?.best ?? 0)
-                                ? "var(--color-blue-soft)"
-                                : "var(--color-line)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       ) : null}
 
       {waiting.length > 0 ? (
