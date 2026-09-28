@@ -37,9 +37,9 @@ test("past two of the same kind, the rest count half: the two biggest stay full"
   const at = (h: number) => `2026-09-25T${String(h).padStart(2, "0")}:00:00.000Z`;
   const drills = [
     { at: at(18), xp: 100, ref: "drill:math:place-value:quick" },
-    { at: at(15), xp: 100, ref: "drill:math:fractions:timed" },
+    { at: at(15), xp: 100, ref: "drill:math:place-value:t60#9" },
     { at: at(16), xp: 100, ref: "drill:math:place-value:quick" },
-    { at: at(17), xp: 100, ref: "drill:math:rounding:quick" },
+    { at: at(17), xp: 100, ref: "drill:math:place-value:relaxed" },
   ];
   assert.equal(raceXp(drills, "2026-09-25", TZ), 300); // 2 full + 2 half
   // 100 + 60 full, then 40 / 2 — whatever order they were played in.
@@ -55,11 +55,11 @@ test("a session that arrives late never takes race points away", () => {
   const at = (h: number) => `2026-09-25T${String(h).padStart(2, "0")}:00:00.000Z`;
   const two = [
     { at: at(16), xp: 200, ref: "drill:math:fractions:relaxed" },
-    { at: at(17), xp: 200, ref: "drill:math:rounding:relaxed" },
+    { at: at(17), xp: 200, ref: "drill:math:fractions:quick" },
   ];
   const before = raceXp(two, "2026-09-25", TZ);
   // Played earlier offline, sent after: it is the one that counts half.
-  const after = raceXp([...two, { at: at(15), xp: 30, ref: "drill:math:angles:relaxed" }], "2026-09-25", TZ);
+  const after = raceXp([...two, { at: at(15), xp: 30, ref: "drill:math:fractions:relaxed" }], "2026-09-25", TZ);
   assert.equal(before, 400);
   assert.equal(after, 415);
 });
@@ -98,9 +98,14 @@ test("activity kinds group by what he is learning", () => {
   assert.equal(activityKind("read:a@1"), activityKind("read:b@2"));
   assert.equal(activityKind("abc:read"), activityKind("read:a@1"));
   assert.notEqual(activityKind("read:structure"), activityKind("read:a@1"));
-  assert.equal(activityKind("math:place-value"), activityKind("math:fractions"));
+  // A math skill is its own thing, and so is each type of word drill.
+  assert.notEqual(activityKind("math:place-value"), activityKind("math:fractions"));
+  assert.equal(activityKind("math:place-value"), activityKind("math:place-value"));
   assert.notEqual(activityKind("math:place-value"), activityKind("drill:math:place-value:quick"));
-  assert.equal(activityKind("drill:vocab:mixed"), activityKind("drill:vocab:spell"));
+  assert.equal(activityKind("drill:math:angles:t60#12"), activityKind("drill:math:angles:relaxed"));
+  assert.notEqual(activityKind("drill:math:angles:relaxed"), activityKind("drill:math:fractions:relaxed"));
+  assert.notEqual(activityKind("drill:vocab:mixed"), activityKind("drill:vocab:spell"));
+  assert.equal(activityKind("drill:vocab:spell"), activityKind("drill:vocab:spell"));
   assert.equal(activityKind("tables:7"), activityKind("tables:voice"));
   assert.equal(activityKind("abc:spell"), activityKind("def:spell"));
   assert.notEqual(activityKind("abc:spell"), activityKind("abc:match"));
@@ -122,4 +127,19 @@ test("the nudge handles a fresh day, a zero and a tie", () => {
   assert.equal(nudge(a, [a, b]), "Play a round to catch Wissam!");
   a.xp = 20;
   assert.equal(nudge(a, [a, b]), "Tied! One more round breaks it.");
+});
+
+test("a long run through the suggested drills counts in full: each type and skill is its own kind", () => {
+  const refs = [
+    "drill:vocab:match",
+    "drill:math:angles:relaxed",
+    "drill:vocab:listen",
+    "drill:math:fractions:relaxed",
+    "drill:vocab:spell",
+    "drill:math:decimals:relaxed",
+    "drill:vocab:use",
+    "drill:math:rounding:relaxed",
+  ];
+  const run = refs.map((ref, i) => ({ at: `2026-09-25T1${i}:00:00.000Z`, xp: 100, ref }));
+  assert.equal(raceXp(run, "2026-09-25", TZ), 800);
 });

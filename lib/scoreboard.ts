@@ -18,15 +18,18 @@ export const RACE_FULL_PER_KIND = 2;
 /**
  * The kind of thing a session was, from its activity ref, for the race's
  * variety rule. Grouped by what he is learning, not by the exact ref: a math
- * drill on another skill is still a math drill.
+ * skill is its own thing, and so is each type of word drill — Spell practises
+ * something Match does not. They used to be one "math drill" and one "word
+ * drill", so a long run through the Drill tab's suggestions, which turn
+ * through exactly these, counted half from the fifth drill on.
  */
 export function activityKind(ref: string): string {
   if (ref.startsWith("quest:")) return ref; // each beat its own kind
   if (ref === "read:structure") return "structure";
   if (ref.startsWith("read:")) return "reading";
-  if (ref.startsWith("math:")) return "math lesson";
-  if (ref.startsWith("drill:math:")) return "math drill";
-  if (ref.startsWith("drill:vocab:")) return "word drill";
+  if (ref.startsWith("math:")) return `math lesson:${ref.split(":")[1]}`;
+  if (ref.startsWith("drill:math:")) return `math drill:${ref.split(":")[2]}`;
+  if (ref.startsWith("drill:vocab:")) return `word drill:${ref.split(":")[2]}`;
   if (ref.startsWith("drill:")) return `drill:${ref.split(":")[1]}`;
   if (ref.startsWith("tables:")) return "tables";
   // A unit step, "<listId>:<step>": kind by step. Its reading is reading.
