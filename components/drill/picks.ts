@@ -66,6 +66,8 @@ export function weakSkills(word: SkillsOnly, now: Date): SkillId[] {
  */
 export function modesFor(skills: readonly SkillId[]): VocabMode[] {
   const helps = SUGGESTED_WORD_MODES.filter((mode) => {
+    // Mixed asks each word's weakest skill first, so it always helps.
+    if (mode === "mixed") return skills.length > 0;
     const skill = mode === "flashcards" ? "spell" : modeSkill(mode);
     return skill !== null && skills.includes(skill);
   });

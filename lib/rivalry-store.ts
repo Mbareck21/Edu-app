@@ -10,7 +10,7 @@
 import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
 import { freshRivalry, rivalryView, type Rivalry } from "@/lib/rivalry";
-import { raceXp } from "@/lib/scoreboard";
+import { winXp } from "@/lib/scoreboard";
 import type { ProfileState } from "@/lib/types";
 
 type Doc = { _id: string } & Rivalry;
@@ -32,7 +32,7 @@ export async function currentRivalry(
     ? { through: stored.through, holder: stored.holder, points: stored.points }
     : freshRivalry();
   const { store, shown } = rivalryView(before, todayKey(now), (day) =>
-    Object.fromEntries(family.map(({ learner, state }) => [learner, raceXp(state.activity, day)]))
+    Object.fromEntries(family.map(({ learner, state }) => [learner, winXp(state.activity, day)]))
   );
   if (!store) return shown;
   // Only lands on the count it read: two pages settling at once write once.

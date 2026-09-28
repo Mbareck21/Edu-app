@@ -83,8 +83,10 @@ export const BONUS_MIN_ANSWERED = 3;
 // 2,430). Each has its own tests in lib/__tests__/fair-play.test.ts.
 //
 // 1. Variety. The same kind of thing again today (see activityKind: a math
-//    skill, a word-drill type, a beat…) pays less: the 3rd and 4th half, the
-//    5th on a quarter. Mixing it up is how he learns different things.
+//    skill, a word-drill type, a beat…) pays less. A lesson or quest beat is
+//    full once, then half, then a quarter; a drill is full twice, then half
+//    twice, then a quarter. Mixing it up is how he learns different things,
+//    and the day is only won with the whole quest done (lib/scoreboard.ts).
 // 2. Correctness. Only right answers pay, and the lesson bonus needs at
 //    least BONUS_MIN_PCT right: tapping through earns nothing on top.
 // 3. Pace. The work in a session can earn at most PACE_CAP XP per minute
@@ -108,13 +110,25 @@ export function paced(work: number, result: Pick<SessionResult, "kind" | "ms">):
   return Math.min(work, Math.round((ms / 60_000) * PACE_CAP[result.kind]));
 }
 
-/** Sessions of one kind a day that pay in full. */
+/** Sessions of one kind a day that pay in full: drills and practice rounds. */
 export const FULL_PER_KIND = 2;
 
-/** What the next session of this kind pays, given how many were played today. */
-export function varietyFactor(playedToday: number): number {
-  if (playedToday < FULL_PER_KIND) return 1;
-  if (playedToday < FULL_PER_KIND * 2) return 0.5;
+/**
+ * Sessions of this kind a day that pay in full. A lesson — a quest beat, a
+ * reading, a math lesson — is full once: after the day's quest,
+ * doing it again brings new material but not the same weight. Drills, tables
+ * and stuck-word writing are practice, and the drill driver already turns
+ * through them, so they get two; so do the steps of a unit path.
+ */
+export function fullPerKind(kind: string): number {
+  const practice = ["math drill:", "word drill:", "drill:", "tables", "stuck words", "step:"];
+  return practice.some((p) => kind.startsWith(p)) ? FULL_PER_KIND : 1;
+}
+
+/** What the next session of a kind pays, given how many were played today. */
+export function varietyFactor(playedToday: number, full = FULL_PER_KIND): number {
+  if (playedToday < full) return 1;
+  if (playedToday < full * 2) return 0.5;
   return 0.25;
 }
 
@@ -150,10 +164,10 @@ export function rightXp(
 
 /**
  * What a session is worth before the server has seen it: offline, the runners
- * show this instead of "+0". Counts it as a repeat of something played today —
- * no lesson bonus, no first-read passage rate, no new streak day, no perfect
- * bonus — so it never promises more than it pays. It used to count it as the
- * first play today, and a drill replayed offline showed +77 and paid +57.
+ * show this instead of "+0". No lesson bonus, no first-read passage rate, no
+ * new streak day, no perfect bonus: it used to add them, and a drill replayed
+ * offline showed +77 and paid +57. The phone does not know what else he
+ * played today, so a lesson repeated offline (variety) may still pay less.
  */
 export function estimateXp(result: SessionResult): number {
   const answered = Math.max(0, Math.floor(result.answered) || 0);
@@ -161,7 +175,7 @@ export function estimateXp(result: SessionResult): number {
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
   // Offline the phone does not know what else he played today, so this is
-  // the pay of a first or second of its kind; a third pays less (variety).
+  // the pay of the first of its kind; a repeat pays less (variety).
   return paced(Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast, result);
 }
 
@@ -724,7 +738,7 @@ export function applySession(
     (bonuses && firstToday && tried ? XP.lessonDone : 0) +
     (bonuses && perfect ? XP.perfect : 0);
   const work = paced(earned, result);
-  const factor = varietyFactor(sameKindToday);
+  const factor = varietyFactor(sameKindToday, fullPerKind(kind));
   const tip = fairPlayTip({ factor, nth: sameKindToday + 1, rushed: work < earned, tried: tried || !bonuses });
   const xpGained =
     Math.round(work * factor) +

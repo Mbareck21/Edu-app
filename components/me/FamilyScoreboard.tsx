@@ -2,6 +2,7 @@ import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
+import { PLAN_ORDER } from "@/lib/daily-plan";
 import { pointsOf, rankRows, type Rivalry } from "@/lib/rivalry";
 import { nudge } from "@/lib/scoreboard";
 
@@ -12,6 +13,8 @@ export type ScoreRow = {
   xp: number;
   /** Every XP he earned today, all of which his level keeps. */
   earned: number;
+  /** Beats of today's quest still to do: until 0 he cannot win the day. */
+  questLeft: number;
   isMe: boolean;
 };
 
@@ -57,7 +60,7 @@ export default function FamilyScoreboard({
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {closed
           ? "Race closed for tonight. A new race starts at midnight."
-          : "Today, until 9:30 pm. Up to 10,000 pts counts. Mix it up: the 3rd of the same thing counts half."}
+          : "Today, until 9:30 pm. Finish the quest to be in the race, then mix it up: a repeat counts less. Up to 10,000 pts."}
       </p>
       <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
         {holder
@@ -85,13 +88,6 @@ export default function FamilyScoreboard({
                         (you)
                       </span>
                     ) : null}
-                    <span
-                      className="ml-2 rounded-full px-2 py-0.5 text-xs"
-                      style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
-                      title="Days ahead"
-                    >
-                      🏆 {pointsOf(rivalry, r.learner)}
-                    </span>
                   </p>
                   <p className="shrink-0 text-right font-display text-sm font-bold">
                     {r.xp} pts
@@ -100,7 +96,28 @@ export default function FamilyScoreboard({
                     </span>
                   </p>
                 </div>
-                <ProgressBar value={r.xp / top} color={color} height={10} className="mt-1" />
+                {/* Days ahead, and the quest that has to be done to win tonight. */}
+                <div className="mt-0.5 flex flex-wrap gap-1 text-xs font-bold">
+                  <span
+                    className="whitespace-nowrap rounded-full px-2 py-0.5"
+                    style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
+                    title="Days ahead"
+                  >
+                    🏆 {pointsOf(rivalry, r.learner)}
+                  </span>
+                  <span
+                    className="whitespace-nowrap rounded-full px-2 py-0.5"
+                    style={
+                      r.questLeft === 0
+                        ? { background: "var(--color-green-soft)", color: "var(--color-green-dark)" }
+                        : { background: "var(--color-line)", color: "var(--color-muted)" }
+                    }
+                    title="Today's quest"
+                  >
+                    {r.questLeft === 0 ? "✓ quest done" : `quest ${PLAN_ORDER.length - r.questLeft}/${PLAN_ORDER.length}`}
+                  </span>
+                </div>
+                <ProgressBar value={r.xp / top} color={color} height={10} className="mt-1.5" />
                 <p className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>
                   {nudge(r, rows)}
                 </p>

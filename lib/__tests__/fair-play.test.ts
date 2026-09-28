@@ -12,8 +12,8 @@ import {
   emptyProfile,
   varietyFactor,
 } from "@/lib/rewards";
-import { raceXp } from "@/lib/scoreboard";
-import type { ProfileState, SessionResult } from "@/lib/types";
+import { nudge, questLeft, raceXp, winXp } from "@/lib/scoreboard";
+import type { ProfileState, SessionKind, SessionResult } from "@/lib/types";
 
 const DAY = "2026-09-28";
 const at = (h: number, m = 0) => ({
@@ -48,7 +48,7 @@ function play(results: SessionResult[], start: ProfileState = emptyProfile()): n
 // ── 1. Variety ────────────────────────────────────────────────────────────
 
 test("variety: the 3rd and 4th of the same kind pay half, the 5th on a quarter", () => {
-  assert.deepEqual([0, 1, 2, 3, 4, 9].map(varietyFactor), [1, 1, 0.5, 0.5, 0.25, 0.25]);
+  assert.deepEqual([0, 1, 2, 3, 4, 9].map((n) => varietyFactor(n)), [1, 1, 0.5, 0.5, 0.25, 0.25]);
   const xp = play(Array.from({ length: 6 }, () => drill()));
   const full = xp[1];
   assert.equal(xp[2], Math.round(full / 2));
@@ -190,4 +190,56 @@ test("the finish screen says which rule cut the XP, so he learns the rules by pl
   assert.equal(rushed, "Take your time: rushing earns less XP.");
   const guessed = applySession(emptyProfile(), drill({ correct: 2 }), at(15)).gained.tip;
   assert.equal(guessed, "Get at least half right to earn the finish bonus.");
+});
+
+// ── The day is won with the whole quest ───────────────────────────────────
+
+test("a lesson or quest beat is full once a day: a repeat pays half, then a quarter", () => {
+  const review: SessionResult = {
+    kind: "vocab",
+    ref: "quest:review",
+    answered: 10,
+    correct: 10,
+    fastCount: 0,
+    ms: 3 * 60_000,
+    perfect: false,
+  };
+  const xp = play([review, review, review]);
+  // The first carries the day's streak bonus; the repeats pay no lesson bonus.
+  const repeat = 10 * XP.correct;
+  assert.equal(xp[1], Math.round(repeat / 2));
+  assert.equal(xp[2], Math.round(repeat / 4));
+  // Drills stay full twice: the driver already turns through them.
+  const d = play([drill(), drill()]);
+  assert.equal(d[1], d[0] - XP.streakDay - XP.lessonDone);
+});
+
+test("nobody wins the day without the whole quest done by 9:30 pm", () => {
+  const Q = ["quest:review", "read:abc@2026-09-28T10:00:00.000Z", "math:fractions", "quest:new", "read:structure", "quest:production"];
+  const kindOf = (ref: string): SessionKind =>
+    ref.startsWith("read:") ? "reading" : ref.startsWith("math:") ? "math" : "vocab";
+  const log = (refs: string[], xp: number, hour = 15) =>
+    refs.map((ref, i) => ({ at: `2026-09-28T${hour}:${String(i).padStart(2, "0")}:00.000Z`, kind: kindOf(ref), ref, xp }));
+  const all = log(Q, 100);
+  const five = log(Q.slice(0, 5), 1000);
+  assert.equal(questLeft(all, "2026-09-28", "UTC"), 0);
+  assert.equal(questLeft(five, "2026-09-28", "UTC"), 1);
+  // Five beats and 5,000 points cannot win; the whole quest can.
+  assert.equal(winXp(five, "2026-09-28", "UTC"), 0);
+  assert.equal(winXp(all, "2026-09-28", "UTC"), 600);
+  // The last beat after 9:30 pm is too late.
+  const late = [...five, ...log(Q.slice(5), 100, 22)];
+  assert.equal(questLeft(late, "2026-09-28", "UTC"), 1);
+  // Days before the rule are settled on points, as they were.
+  const old = five.map((a) => ({ ...a, at: a.at.replace("2026-09-28", "2026-09-27") }));
+  assert.equal(winXp(old, "2026-09-27", "UTC"), raceXp(old, "2026-09-27", "UTC"));
+});
+
+test("the nudge sends him to finish the quest first", () => {
+  const nour = { name: "Nour", xp: 900, questLeft: 2 };
+  const wissam = { name: "Wissam", xp: 300, questLeft: 0 };
+  assert.equal(nudge(nour, [nour, wissam]), "Finish today's quest to be in the race: 2 to go!");
+  assert.equal(nudge(wissam, [nour, wissam]), "Quest done: you're in the race! Keep it up.");
+  nour.questLeft = 0;
+  assert.equal(nudge(wissam, [nour, wissam]), "600 pts to catch Nour!");
 });

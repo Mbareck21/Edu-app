@@ -4,6 +4,7 @@
 //
 // Pure: safe to import from client components.
 
+import { doneToday, PLAN_ORDER } from "@/lib/daily-plan";
 import { clockKey, todayKey } from "@/lib/day";
 import type { ActivityEntry } from "@/lib/types";
 
@@ -81,14 +82,58 @@ export function raceXp(
   return Math.min(RACE_CAP, sum);
 }
 
+/**
+ * From this day a child can only win the day once he has finished the whole
+ * quest before the race closes: a taste of every subject first, then the
+ * points. Days before are settled on points alone, so they do not move.
+ */
+export const QUEST_RULE_FROM = "2026-09-28";
+
+/** Beats of the day's quest still to do, counting what he played before RACE_CLOSES. */
+export function questLeft(
+  activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref">[],
+  day: string,
+  timeZone?: string
+): number {
+  const inTime = activity.filter((a) => {
+    const at = new Date(a.at);
+    return todayKey(at, timeZone) === day && clockKey(at, timeZone) < RACE_CLOSES;
+  });
+  const done = doneToday(inTime, day);
+  return PLAN_ORDER.filter((id) => !done[id]).length;
+}
+
+/**
+ * The points that can win `day`: the race points, or 0 while the quest is
+ * unfinished (from QUEST_RULE_FROM). Nobody finished: nobody wins.
+ */
+export function winXp(
+  activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref" | "xp">[],
+  day: string,
+  timeZone?: string
+): number {
+  if (day >= QUEST_RULE_FROM && questLeft(activity, day, timeZone) > 0) return 0;
+  return raceXp(activity, day, timeZone);
+}
+
 /** True once today's race has closed. */
 export function raceClosed(now: Date = new Date(), timeZone?: string): boolean {
   return clockKey(now, timeZone) >= RACE_CLOSES;
 }
 
-/** A short cheer for one child, given everyone's race points today. */
-export function nudge(me: { xp: number }, rows: readonly { name: string; xp: number }[]): string {
-  const others = rows.filter((r) => r !== me);
+/**
+ * A short cheer for one child, given everyone's race points today and how
+ * much of the quest each has left: until his quest is done he is not in the
+ * race, and only rivals who are in it count.
+ */
+export function nudge(
+  me: { xp: number; questLeft?: number },
+  rows: readonly { name: string; xp: number; questLeft?: number }[]
+): string {
+  const left = me.questLeft ?? 0;
+  if (left > 0) return `Finish today's quest to be in the race: ${left} to go!`;
+  const others = rows.filter((r) => r !== me && (r.questLeft ?? 0) === 0);
+  if (others.length === 0 && rows.length > 1) return "Quest done: you're in the race! Keep it up.";
   const best = others.reduce((a, b) => (b.xp > a.xp ? b : a), others[0]);
   if (!best) return "";
   if (me.xp === 0 && best.xp === 0) return "New day! First to play takes the lead.";

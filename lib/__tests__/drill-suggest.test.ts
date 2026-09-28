@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  SUGGESTED_WORD_MODES,
+  nextMathMode,
   nextWordMode,
   suggestDrill,
   suggestionFor,
@@ -39,35 +41,73 @@ test("no weak words: math; nothing at all: no suggestion", () => {
   assert.equal(suggestDrill({ weakWords: 0, skills: [], todayRefs: [], seed: 1 }), null);
 });
 
-test("word drills turn through the types, least played today first", () => {
-  assert.equal(nextWordMode([]), "match");
-  assert.equal(nextWordMode(["drill:vocab:match"]), "listen");
-  assert.equal(nextWordMode(["drill:vocab:match", "drill:vocab:listen", "drill:vocab:mixed"]), "spell");
-  const everyOnce = ["match", "listen", "spell", "use", "flashcards", "write"].map((m) => `drill:vocab:${m}`);
-  assert.equal(nextWordMode(everyOnce), "match", "a tie goes back to the start of the order");
-  assert.equal(nextWordMode([...everyOnce, "drill:vocab:match"]), "listen");
+const param = (href: string | undefined, key: string) =>
+  new URL(href ?? "/", "http://x").searchParams.get(key);
 
-  const words = suggestDrill({ weakWords: 5, skills, todayRefs: ["drill:vocab:match"], seed: 1 });
-  // One word drill and no math yet: math is next. Then words again, a new type.
-  assert.equal(words?.kind, "math");
-  const again = suggestDrill({
-    weakWords: 5,
-    skills,
-    todayRefs: ["drill:vocab:match", "drill:math:angles:relaxed"],
-    seed: 1,
-  });
-  assert.equal(again?.title, "Weak words · Listen");
-  assert.ok(again?.href.includes("mode=listen"));
-  assert.ok(again?.href.includes("src=weak"));
+test("word drills turn through every type, least played today first, shuffled among equals", () => {
+  // Nothing played: any type. Played once: never that one again until all have been.
+  const seen = new Set<string>();
+  let refs: string[] = [];
+  for (let i = 0; i < SUGGESTED_WORD_MODES.length; i++) {
+    const mode = nextWordMode(refs, SUGGESTED_WORD_MODES, 1000 + i);
+    assert.ok(!seen.has(mode), `${mode} again before every type had a turn`);
+    seen.add(mode);
+    refs = [...refs, `drill:vocab:${mode}`];
+  }
+  assert.equal(seen.size, SUGGESTED_WORD_MODES.length);
+  assert.ok(seen.has("mixed") && seen.has("rescue"), "mixed and rescue are in the turn");
+  // The order is shuffled: different seeds start on different types.
+  const starts = new Set(Array.from({ length: 40 }, (_, i) => nextWordMode([], SUGGESTED_WORD_MODES, i + 1)));
+  assert.ok(starts.size >= 4, `only ${[...starts]}`);
+});
+
+test("math drills turn through relaxed and timed, but a slipping skill is drilled relaxed", () => {
+  const seen = new Set<string>();
+  let refs: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const mode = nextMathMode(refs, false, 50 + i);
+    assert.ok(!seen.has(mode));
+    seen.add(mode);
+    refs = [...refs, mode === "relaxed" ? "drill:math:fractions:relaxed" : `drill:math:fractions:${mode}#12`];
+  }
+  assert.deepEqual([...seen].sort(), ["relaxed", "t120", "t60"]);
+  assert.equal(nextMathMode([], true, 7), "relaxed");
+  // Angles is slipping (60%): its drill is relaxed, whatever the turn says.
+  const s = suggestDrill({ weakWords: 0, skills, todayRefs: ["drill:math:x:relaxed"], seed: 3 });
+  assert.equal(param(s?.href, "skill"), "angles");
+  assert.equal(param(s?.href, "mode"), "relaxed");
+});
+
+test("a run of Next drill taps alternates words and math and never repeats a type or skill early", () => {
+  let refs: string[] = [];
+  const kinds: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const s = suggestDrill({ weakWords: 0, dueWords: 9, toGoWords: 40, skills, todayRefs: refs, seed: 77 + i });
+    assert.ok(s);
+    kinds.push(s.kind);
+    const mode = param(s.href, "mode") ?? "";
+    refs = [
+      ...refs,
+      s.kind === "words"
+        ? `drill:vocab:${mode}`
+        : `drill:math:${param(s.href, "skill")}:${mode}${mode === "relaxed" ? "" : "#10"}`,
+    ];
+  }
+  assert.deepEqual(kinds, Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? "words" : "math")));
+  const wordModes = refs.filter((r) => r.startsWith("drill:vocab:"));
+  assert.equal(new Set(wordModes).size, wordModes.length, "six word drills, six different types");
+  const mathSkills = refs.filter((r) => r.startsWith("drill:math:")).map((r) => r.split(":")[2]);
+  // Three skills here: each comes round twice, never twice in a row.
+  for (let i = 1; i < mathSkills.length; i++) assert.notEqual(mathSkills[i], mathSkills[i - 1]);
 });
 
 test("a math skill drilled today waits while others are left", () => {
   const first = suggestDrill({ weakWords: 0, skills, todayRefs: [], seed: 1 });
-  assert.equal(first?.title, "Angles");
+  assert.equal(param(first?.href, "skill"), "angles");
   const next = suggestDrill({ weakWords: 0, skills, todayRefs: ["drill:math:angles:t60#12"], seed: 1 });
-  assert.equal(next?.title, "Decimals", "angles was drilled today, so the untried one");
+  assert.equal(param(next?.href, "skill"), "decimals", "angles was drilled today, so the untried one");
   const all = skills.map((s) => `drill:math:${s.id}:relaxed`);
-  assert.equal(suggestDrill({ weakWords: 0, skills, todayRefs: all, seed: 1 })?.title, "Angles", "all done: back to the weakest");
+  assert.equal(param(suggestDrill({ weakWords: 0, skills, todayRefs: all, seed: 1 })?.href, "skill"), "angles", "all done: back to the weakest");
 });
 
 test("suggestionFor counts only today's sessions", () => {
@@ -83,7 +123,8 @@ test("suggestionFor counts only today's sessions", () => {
     now,
   });
   assert.equal(s?.kind, "words");
-  assert.equal(s?.title, "Weak words · Listen");
+  assert.ok(s?.title.startsWith("Weak words · "));
+  assert.notEqual(param(s?.href, "mode"), "match", "match was played today");
 });
 
 test("once every math skill is drilled, the least drilled today comes next, not the same one", () => {
@@ -92,34 +133,36 @@ test("once every math skill is drilled, the least drilled today comes next, not 
   let refs = [...all];
   for (let i = 0; i < 6; i++) {
     const s = suggestDrill({ weakWords: 0, skills, todayRefs: refs, seed: 1 });
-    dealt.push(s?.title ?? "");
-    const id = skills.find((k) => k.name === s?.title)?.id;
+    const id = param(s?.href, "skill") ?? "";
+    dealt.push(id);
     refs = [...refs, `drill:math:${id}:relaxed`];
   }
   // Angles is slipping, but it only comes round again with the others.
-  assert.deepEqual(dealt, ["Angles", "Decimals", "Fractions", "Angles", "Decimals", "Fractions"]);
+  assert.deepEqual(dealt, ["angles", "decimals", "fractions", "angles", "decimals", "fractions"]);
 });
 
 test("the weak-word drill type turns only through the ones that fix the weak skill", () => {
-  const s = suggestDrill({ weakWords: 3, wordModes: ["spell", "flashcards", "write"], skills: [], todayRefs: [], seed: 1 });
-  assert.equal(s?.title, "Weak words · Spell");
-  const next = suggestDrill({
-    weakWords: 3,
-    wordModes: ["spell", "flashcards", "write"],
-    skills: [],
-    todayRefs: ["drill:vocab:spell"],
-    seed: 1,
-  });
-  assert.ok(next?.href.includes("mode=flashcards"));
+  const fixes = ["spell", "flashcards", "write"] as const;
+  let refs: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const s = suggestDrill({ weakWords: 3, wordModes: fixes, skills: [], todayRefs: refs, seed: 9 + i });
+    const mode = param(s?.href, "mode") ?? "";
+    assert.ok((fixes as readonly string[]).includes(mode), mode);
+    refs = [...refs, `drill:vocab:${mode}`];
+  }
+  assert.equal(new Set(refs).size, 3);
+  // Rescue needs several fair puzzles: never on a handful of weak words.
+  const all = suggestDrill({ weakWords: 2, skills: [], todayRefs: [], seed: 1, wordModes: ["rescue", "spell"] });
+  assert.equal(param(all?.href, "mode"), "spell");
 });
 
 test("with no weak words the driver still drills words: due ones, then the ones to go", () => {
   const due = suggestDrill({ weakWords: 0, dueWords: 7, toGoWords: 40, skills, todayRefs: [], seed: 1 });
   assert.equal(due?.kind, "words");
-  assert.equal(due?.title, "Due words · Match");
+  assert.ok(due?.title.startsWith("Due words · "));
   assert.ok(due?.href.includes("src=due"));
   const toGo = suggestDrill({ weakWords: 0, dueWords: 0, toGoWords: 40, skills, todayRefs: [], seed: 1 });
-  assert.equal(toGo?.title, "Your words · Match");
+  assert.ok(toGo?.title.startsWith("Your words · "));
   assert.equal(toGo?.line, "40 words to go today");
   // Words and math still take turns.
   const next = suggestDrill({ weakWords: 0, dueWords: 7, toGoWords: 40, skills, todayRefs: ["drill:vocab:match"], seed: 1 });

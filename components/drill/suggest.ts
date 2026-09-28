@@ -3,12 +3,16 @@
 // still pick anything they like below it. Pure: no React, no Mongo.
 
 import {
+  MATH_MODES,
+  MATH_MODE_LABEL,
   VOCAB_MODE_LABEL,
   mathHref,
   vocabHref,
   type DrillSource,
+  type MathMode,
   type VocabMode,
 } from "@/components/drill/options";
+import { mulberry32 } from "@/lib/math/rng";
 import { todayKey } from "@/lib/day";
 import { MATH_SKILLS } from "@/lib/math";
 
@@ -43,19 +47,57 @@ export function weakestSkill(skills: readonly SkillSeen[]): { skill: SkillSeen; 
 }
 
 /**
- * Word drill types the suggestion turns through, in the order ties go.
- * Not mixed or rescue, and not remember: it drills one whole list and would
- * ignore the weak words.
+ * Word drill types the suggestion turns through. Not remember: it drills one
+ * whole list and would ignore the words picked.
  */
-export const SUGGESTED_WORD_MODES: readonly VocabMode[] = ["match", "listen", "spell", "use", "flashcards", "write"];
+export const SUGGESTED_WORD_MODES: readonly VocabMode[] = [
+  "match",
+  "listen",
+  "spell",
+  "use",
+  "mixed",
+  "flashcards",
+  "write",
+  "rescue",
+];
 
-/** The word drill type played least today; ties go to the earlier one. */
+/** One of `options`, picked by `seed`: the shuffle among equals. */
+function shuffledPick<T>(options: readonly T[], seed: number): T {
+  const rng = mulberry32(Math.abs(Math.floor(seed)) % 2147483647 || 1);
+  return options[Math.floor(rng() * options.length) % options.length];
+}
+
+/**
+ * The word drill type played least today; among those, a shuffled one, so
+ * the order is new each time rather than Match, Listen, Spell… every day.
+ */
 export function nextWordMode(
   todayRefs: readonly string[],
-  modes: readonly VocabMode[] = SUGGESTED_WORD_MODES
+  modes: readonly VocabMode[] = SUGGESTED_WORD_MODES,
+  seed = 1
 ): VocabMode {
   const plays = (mode: VocabMode) => todayRefs.filter((r) => r === `drill:vocab:${mode}`).length;
-  return modes.reduce((best, mode) => (plays(mode) < plays(best) ? mode : best));
+  const fewest = Math.min(...modes.map(plays));
+  return shuffledPick(
+    modes.filter((m) => plays(m) === fewest),
+    seed
+  );
+}
+
+/**
+ * Relaxed or timed: the mode played least today across math drills, shuffled
+ * among equals. A slipping skill is drilled relaxed: speed comes after
+ * getting it right.
+ */
+export function nextMathMode(todayRefs: readonly string[], slipping: boolean, seed = 1): MathMode {
+  if (slipping) return "relaxed";
+  const plays = (mode: MathMode) =>
+    todayRefs.filter((r) => r.startsWith("drill:math:") && r.split("#")[0].endsWith(`:${mode}`)).length;
+  const fewest = Math.min(...MATH_MODES.map(plays));
+  return shuffledPick(
+    MATH_MODES.filter((m) => plays(m) === fewest),
+    seed
+  );
 }
 
 /**
@@ -96,7 +138,12 @@ export function suggestDrill(opts: {
   if (wordsFirst || !math) {
     if (!words) return null;
     // The weak-skill types only fix weak words; due and new words get every type.
-    const mode = nextWordMode(opts.todayRefs, words.source.kind === "weak" ? opts.wordModes : undefined);
+    // Rescue needs several words that make fair puzzles, so not on a handful of weak ones.
+    const modes =
+      words.source.kind === "weak"
+        ? (opts.wordModes ?? SUGGESTED_WORD_MODES).filter((m) => m !== "rescue")
+        : SUGGESTED_WORD_MODES;
+    const mode = nextWordMode(opts.todayRefs, modes, opts.seed);
     return {
       kind: "words",
       title: `${words.title} · ${VOCAB_MODE_LABEL[mode]}`,
@@ -104,11 +151,13 @@ export function suggestDrill(opts: {
       href: vocabHref({ source: words.source, mode, count: 10, seed: opts.seed }),
     };
   }
+  const slipping = math.skill.recentPcts.length > 0 && math.skill.recentPcts[0] < SLIPPING_PCT;
+  const mode = nextMathMode(opts.todayRefs, slipping, opts.seed);
   return {
     kind: "math",
-    title: math.skill.name,
+    title: mode === "relaxed" ? math.skill.name : `${math.skill.name} · ${MATH_MODE_LABEL[mode]}`,
     line: math.why,
-    href: mathHref({ skill: math.skill.id, level: "auto", count: 10, mode: "relaxed", seed: opts.seed }),
+    href: mathHref({ skill: math.skill.id, level: "auto", count: 10, mode, seed: opts.seed }),
   };
 }
 

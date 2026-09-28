@@ -167,8 +167,9 @@ test("a good passage reading pays like the minutes it took", () => {
     );
   const first = read(emptyProfile());
   assert.equal(first.gained.xp, 4 * XP.passageCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
-  // Reading it again today: the ordinary reading rate, no lesson bonus.
-  assert.equal(read(first.profile).gained.xp, 4 * XP.readingCorrect + XP.perfect);
+  // Reading it again today: the ordinary reading rate, no lesson bonus, and
+  // a second reading today counts half (variety: a lesson is full once).
+  assert.equal(read(first.profile).gained.xp, Math.round((4 * XP.readingCorrect + XP.perfect) / 2));
 });
 
 test("a short reading without a passage pays the reading rate", () => {
@@ -452,7 +453,7 @@ test("reading progress counts good readings in a row at this level", () => {
   assert.equal(readingProgress({ level: 2, recent: [log(100, 1)] }, now).goodInARow, 0);
 });
 
-test("the offline XP estimate never promises more than the server pays", () => {
+test("the offline XP estimate is a first play's pay, without the day and lesson bonuses", () => {
   const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
   const cases: SessionResult[] = [
     { kind: "math", ref: "math:fractions", answered: 10, correct: 8, fastCount: 0, ms: 120_000, perfect: false, mathLevel: 4 },
@@ -464,9 +465,10 @@ test("the offline XP estimate never promises more than the server pays", () => {
     const first = applySession(emptyProfile(), r, at);
     const bonus = r.answered >= 3 ? XP.lessonDone : 0;
     assert.equal(estimateXp(r), first.gained.xp - XP.streakDay - bonus, r.ref);
-    // Played again the same day: exactly what the server pays.
+    // A drill played again the same day is still full: exactly what it pays.
+    // (A lesson again pays half, which the phone cannot know offline.)
     const again = applySession(first.profile, r, at);
-    assert.equal(estimateXp(r), again.gained.xp, r.ref);
+    if (r.ref.startsWith("drill:")) assert.equal(estimateXp(r), again.gained.xp, r.ref);
   }
 });
 
@@ -499,5 +501,6 @@ test("Text structure pays the reading rate once a day; again, the quick-choice r
   const first = applySession(emptyProfile(), r, at);
   assert.equal(first.gained.xp, 6 * XP.readingCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
   const again = applySession(first.profile, r, at);
-  assert.equal(again.gained.xp, 6 * XP.correct + XP.perfect);
+  // The quick-choice rate, and half of it: a lesson is full once a day.
+  assert.equal(again.gained.xp, Math.round((6 * XP.correct + XP.perfect) / 2));
 });
