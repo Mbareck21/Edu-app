@@ -219,7 +219,7 @@ test("modeSkill maps the single-skill modes", () => {
   assert.equal(modeSkill("flashcards"), null);
 });
 
-test("a drill has exactly the asked-for number of items, never two in a row on one word", () => {
+test("a drill has the asked-for number of items as far as the words allow, never two in a row on one word", () => {
   const picked = pickWords(lists(), { kind: "all" }, NOW);
   const items = buildDrillItems({
     picked,
@@ -228,7 +228,8 @@ test("a drill has exactly the asked-for number of items, never two in a row on o
     now: NOW,
     rng: mulberry32(7),
   });
-  assert.equal(items.length, 20);
+  // Four words, one round per skill: 16, not 20 with four repeats.
+  assert.equal(items.length, Math.min(20, picked.length * 4));
   for (let i = 1; i < items.length; i++) {
     assert.notEqual(items[i].word, items[i - 1].word);
   }
@@ -243,7 +244,7 @@ test("the spelling test is typed dictation for every item", () => {
     now: NOW,
     rng: mulberry32(3),
   });
-  assert.equal(items.length, 10);
+  assert.equal(items.length, Math.min(10, picked.length * MAX_PER_WORD));
   assert.ok(items.every((i) => i.kind === "write"));
   assert.ok(items.every((i) => i.skill === "spell"));
 });
@@ -311,12 +312,12 @@ test("the suggested word drill fixes the weak skill, not just any", () => {
   assert.deepEqual(sourceCounts([{ listId: "l", name: "L", words: [missed, word("new")] }], NOW).weakSkills, ["spell"]);
 });
 
-test("a weak drill on few words is topped up so no word comes round more than 3 times", () => {
+test("a weak drill on few words is topped up so no word comes round more than twice", () => {
   const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
   const weak = ["crippled", "criteria", "events"].map((w) =>
     word(w, { skills: skills({ spell: { wrong: 1, lastAt: earlier } }) })
   );
-  const others = ["alpha", "beta", "gamma", "delta"].map((w) => word(w));
+  const others = ["alpha", "beta", "gamma", "delta", "echo", "fox", "golf", "hotel"].map((w) => word(w));
   const lists: DrillList[] = [
     // The pool comes first; its copy of a weak word is the same word.
     { listId: "p", name: "Stuck", words: [weak[0]] },
@@ -335,4 +336,19 @@ test("a weak drill on few words is topped up so no word comes round more than 3 
     withFill(picked, lists, 6, NOW, mulberry32(1)).map((p) => p.word.word).sort(),
     ["crippled", "criteria", "events"]
   );
+});
+
+test("a drill longer than its list stops before asking the same question a third time", () => {
+  const few = Array.from({ length: 6 }, (_, i) => word(`w${i}`));
+  const picked = pickWords([{ listId: "l", name: "L", words: few }], { kind: "all" }, NOW);
+  const listen = buildDrillItems({ picked, mode: "listen", count: 40, now: NOW, rng: mulberry32(2) });
+  assert.equal(listen.length, 6 * MAX_PER_WORD);
+  const perWord = new Map<string, number>();
+  for (const it of listen) perWord.set(it.word ?? "", (perWord.get(it.word ?? "") ?? 0) + 1);
+  assert.ok([...perWord.values()].every((n) => n <= MAX_PER_WORD));
+  // Mixed asks another skill each round, so it may go round once per skill.
+  const mixed = buildDrillItems({ picked, mode: "mixed", count: 40, now: NOW, rng: mulberry32(2) });
+  assert.equal(mixed.length, 24);
+  const seen = new Set(mixed.map((it) => `${it.word}:${it.skill}`));
+  assert.equal(seen.size, mixed.length, "no word asked the same skill twice");
 });

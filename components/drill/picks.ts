@@ -170,8 +170,14 @@ export function pickWords(lists: DrillList[], source: DrillSource, now: Date): P
   return out;
 }
 
-/** Most times one word comes round in a drill before other words fill in. */
-export const MAX_PER_WORD = 3;
+/**
+ * Most times one word comes round in a single-skill drill: once, and once
+ * more a whole round later, which is spaced practice. A third identical
+ * question is repetition for its own sake (a 14-word list at 40 items asked
+ * 65% of its listen and spell questions again). Mixed asks a different skill
+ * each round, so it may go round once per skill.
+ */
+export const MAX_PER_WORD = 2;
 
 /**
  * Two or three weak words in a 10-item drill came round four or five times
@@ -260,17 +266,21 @@ export type BuildDrillArgs = {
 };
 
 /**
- * `count` items, round-robin over the words so the same word never lands twice
- * in a row. A short list simply comes round again.
+ * Up to `count` items, round-robin over the words so the same word never
+ * lands twice in a row. A short list comes round again at most MAX_PER_WORD
+ * times (once per skill in a mixed drill), so the drill ends early rather
+ * than repeat the same question.
  */
 export function buildDrillItems({ picked, mode, count, now, rng }: BuildDrillArgs): LessonItem[] {
   const ordered = orderWords(picked, now, rng);
   if (ordered.length === 0 || count <= 0) return [];
 
+  const passes = mode === "mixed" ? SKILL_IDS.length : MAX_PER_WORD;
+  const total = Math.min(count, ordered.length * passes);
   const items: LessonItem[] = [];
-  for (let pass = 0; items.length < count; pass++) {
+  for (let pass = 0; items.length < total; pass++) {
     for (const p of ordered) {
-      if (items.length >= count) break;
+      if (items.length >= total) break;
       items.push(itemFor(p, mode, pass, now, rng));
     }
   }
