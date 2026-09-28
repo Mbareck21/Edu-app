@@ -16,6 +16,14 @@ export const RACE_CAP = 10000;
 export const RACE_FULL_PER_KIND = 2;
 
 /**
+ * From this day the XP of each session already carries the variety rule
+ * (lib/rewards.ts varietyFactor), so the race adds it up as it is: halving
+ * it again here would count a third session at a quarter. Days before keep
+ * the race's own rule, so settled days do not move.
+ */
+export const XP_VARIETY_FROM = "2026-09-28";
+
+/**
  * The kind of thing a session was, from its activity ref, for the race's
  * variety rule. Grouped by what he is learning, not by the exact ref: a math
  * skill is its own thing, and so is each type of word drill — Spell practises
@@ -44,8 +52,9 @@ export function activityKind(ref: string): string {
  * RACE_CAP. Of each kind, the RACE_FULL_PER_KIND biggest sessions count in
  * full and the rest half, so the race is won by mixing it up. Biggest, not
  * first: by order played, a session sent late from an offline phone could
- * push a bigger one into third place and take points off the board. Levels
- * and the profile still get every point; this is only the race.
+ * push a bigger one into third place and take points off the board. From
+ * XP_VARIETY_FROM each session's XP already carries the rule, and the race
+ * adds it up as it is.
  */
 export function raceXp(
   activity: readonly Pick<ActivityEntry, "at" | "xp" | "ref">[],
@@ -53,12 +62,15 @@ export function raceXp(
   timeZone?: string
 ): number {
   const byKind = new Map<string, number[]>();
+  let plain = 0;
   for (const a of activity) {
     const at = new Date(a.at);
     if (todayKey(at, timeZone) !== day || clockKey(at, timeZone) >= RACE_CLOSES) continue;
+    plain += Math.max(0, a.xp || 0);
     const kind = activityKind(a.ref);
     byKind.set(kind, [...(byKind.get(kind) ?? []), Math.max(0, a.xp || 0)]);
   }
+  if (day >= XP_VARIETY_FROM) return Math.min(RACE_CAP, plain);
   let sum = 0;
   for (const xps of byKind.values()) {
     xps.sort((x, y) => y - x);

@@ -112,3 +112,16 @@ test("the weak-word drill type turns only through the ones that fix the weak ski
   });
   assert.ok(next?.href.includes("mode=flashcards"));
 });
+
+test("with no weak words the driver still drills words: due ones, then the ones to go", () => {
+  const due = suggestDrill({ weakWords: 0, dueWords: 7, toGoWords: 40, skills, todayRefs: [], seed: 1 });
+  assert.equal(due?.kind, "words");
+  assert.equal(due?.title, "Due words · Match");
+  assert.ok(due?.href.includes("src=due"));
+  const toGo = suggestDrill({ weakWords: 0, dueWords: 0, toGoWords: 40, skills, todayRefs: [], seed: 1 });
+  assert.equal(toGo?.title, "Your words · Match");
+  assert.equal(toGo?.line, "40 words to go today");
+  // Words and math still take turns.
+  const next = suggestDrill({ weakWords: 0, dueWords: 7, toGoWords: 40, skills, todayRefs: ["drill:vocab:match"], seed: 1 });
+  assert.equal(next?.kind, "math");
+});

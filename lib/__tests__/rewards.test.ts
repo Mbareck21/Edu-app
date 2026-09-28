@@ -159,6 +159,7 @@ test("a good passage reading pays like the minutes it took", () => {
         answered: 4,
         correct: 4,
         fastCount: 0,
+        ms: 8 * 60_000,
         perfect: true,
         reading: { level: 3, pct: 100, wordsCount: 300 },
       }),
@@ -173,7 +174,7 @@ test("a good passage reading pays like the minutes it took", () => {
 test("a short reading without a passage pays the reading rate", () => {
   const { gained } = applySession(
     emptyProfile(),
-    result({ kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, perfect: true }),
+    result({ kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, ms: 5 * 60_000, perfect: true }),
     now()
   );
   assert.equal(gained.xp, 6 * XP.readingCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
@@ -454,9 +455,9 @@ test("reading progress counts good readings in a row at this level", () => {
 test("the offline XP estimate never promises more than the server pays", () => {
   const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
   const cases: SessionResult[] = [
-    { kind: "math", ref: "math:fractions", answered: 10, correct: 8, fastCount: 0, ms: 1, perfect: false, mathLevel: 4 },
-    { kind: "math", ref: "drill:math:mixed:timed#25", answered: 25, correct: 25, fastCount: 9, ms: 1, perfect: false, timed: true, mathLevel: 2 },
-    { kind: "vocab", ref: "drill:vocab:mixed", answered: 2, correct: 2, fastCount: 2, ms: 1, perfect: false },
+    { kind: "math", ref: "math:fractions", answered: 10, correct: 8, fastCount: 0, ms: 120_000, perfect: false, mathLevel: 4 },
+    { kind: "math", ref: "drill:math:mixed:timed#25", answered: 25, correct: 25, fastCount: 9, ms: 60_000, perfect: false, timed: true, mathLevel: 2 },
+    { kind: "vocab", ref: "drill:vocab:mixed", answered: 2, correct: 2, fastCount: 2, ms: 20_000, perfect: false },
   ];
   for (const r of cases) {
     // First play today: the estimate leaves out the day and lesson bonuses.
@@ -475,7 +476,7 @@ test("a two-minute drill pays for twice the right answers of a one-minute drill"
   assert.equal(timedPaid("drill:math:mixed:t999#45"), 40, "no longer than two minutes");
   const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
   const run = (ref: string) =>
-    applySession(emptyProfile(), { kind: "math", ref, answered: 45, correct: 45, fastCount: 0, ms: 1, perfect: false, timed: true, mathLevel: 1 }, at)
+    applySession(emptyProfile(), { kind: "math", ref, answered: 45, correct: 45, fastCount: 0, ms: 120_000, perfect: false, timed: true, mathLevel: 1 }, at)
       .gained.xp;
   assert.equal(run("drill:math:mixed:t120#45") - run("drill:math:mixed:t60#45"), (20 * XP.mathCorrect) / 2);
 });
@@ -494,7 +495,7 @@ test("reading and words pay more per right answer than math", () => {
 
 test("Text structure pays the reading rate once a day; again, the quick-choice rate", () => {
   const at = { at: new Date("2026-09-27T01:00:00Z"), today: "2026-09-26" };
-  const r: SessionResult = { kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, ms: 30_000, perfect: true };
+  const r: SessionResult = { kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, ms: 5 * 60_000, perfect: true };
   const first = applySession(emptyProfile(), r, at);
   assert.equal(first.gained.xp, 6 * XP.readingCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
   const again = applySession(first.profile, r, at);

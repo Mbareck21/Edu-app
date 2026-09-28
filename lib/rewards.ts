@@ -6,6 +6,7 @@ import { previousDay, todayKey } from "@/lib/day";
 import { isDrillRef } from "@/lib/drill-rank";
 import { gradeOn, type Grade } from "@/lib/grade";
 import { maxReadingLevel } from "@/lib/reading";
+import { activityKind } from "@/lib/scoreboard";
 import type {
   ActivityEntry,
   EarnedBadge,
@@ -76,6 +77,47 @@ export function timedPaid(ref: string): number {
 /** Fewest answers for the lesson and perfect bonuses. */
 export const BONUS_MIN_ANSWERED = 3;
 
+// ── Fair play ─────────────────────────────────────────────────────────────
+// Three rules so that XP follows learning, not a pattern that farms it
+// (2026-09-27: nine memorised Text structure rounds in eight minutes paid
+// 2,430). Each has its own tests in lib/__tests__/fair-play.test.ts.
+//
+// 1. Variety. The same kind of thing again today (see activityKind: a math
+//    skill, a word-drill type, a beat…) pays less: the 3rd and 4th half, the
+//    5th on a quarter. Mixing it up is how he learns different things.
+// 2. Correctness. Only right answers pay, and the lesson bonus needs at
+//    least BONUS_MIN_PCT right: tapping through earns nothing on top.
+// 3. Pace. The work in a session can earn at most PACE_CAP XP per minute
+//    he actually spent on it, with room above honest work: that peaked
+//    near 300 a minute (ten listening items in 42 s); memorised taps ran
+//    at 600.
+//
+// Word-known and word-mastered bonuses and the day's streak are never cut:
+// they are the learning itself.
+
+/** The lesson bonus is for a real attempt: at least this share right. */
+export const BONUS_MIN_PCT = 50;
+
+/** Most work XP one active minute can earn, by kind of session. */
+export const PACE_CAP = { vocab: 360, math: 240, reading: 200 } as const;
+
+/** Work XP cut to the pace cap. No cap when the time is unknown (0). */
+export function paced(work: number, result: Pick<SessionResult, "kind" | "ms">): number {
+  const ms = Math.max(0, Math.floor(result.ms) || 0);
+  if (ms === 0) return work;
+  return Math.min(work, Math.round((ms / 60_000) * PACE_CAP[result.kind]));
+}
+
+/** Sessions of one kind a day that pay in full. */
+export const FULL_PER_KIND = 2;
+
+/** What the next session of this kind pays, given how many were played today. */
+export function varietyFactor(playedToday: number): number {
+  if (playedToday < FULL_PER_KIND) return 1;
+  if (playedToday < FULL_PER_KIND * 2) return 0.5;
+  return 0.25;
+}
+
 /** A timed drill's ref carries its score after `#`; the run itself is the part before. */
 function sameRef(a: string, b: string): boolean {
   return a.split("#")[0] === b.split("#")[0];
@@ -118,7 +160,9 @@ export function estimateXp(result: SessionResult): number {
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
-  return Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast;
+  // Offline the phone does not know what else he played today, so this is
+  // the pay of a first or second of its kind; a third pays less (variety).
+  return paced(Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast, result);
 }
 
 /**
@@ -451,7 +495,25 @@ export type Gained = {
   level: number;
   /** This session is the one that hit today's goal. */
   goalMet: boolean;
+  /** Why it paid less, in his words: the fair-play rule it met (fairPlayTip). */
+  tip?: string;
 };
+
+const ORDINAL = ["", "1st", "2nd", "3rd"];
+
+/**
+ * One line for the finish screen when a fair-play rule cut the XP, so he
+ * learns the rules by playing: mix it up, take your time, get them right.
+ */
+export function fairPlayTip(s: { factor: number; nth: number; rushed: boolean; tried: boolean }): string | undefined {
+  if (s.factor < 1) {
+    const nth = ORDINAL[s.nth] ?? `${s.nth}th`;
+    return `${nth} time today: ${s.factor === 0.5 ? "half" : "a quarter of the"} XP. Switch to something new for full XP!`;
+  }
+  if (s.rushed) return "Take your time: rushing earns less XP.";
+  if (!s.tried) return "Get at least half right to earn the finish bonus.";
+  return undefined;
+}
 
 export type Now = {
   /** Wall clock, used for timestamps. */
@@ -648,11 +710,24 @@ export function applySession(
   );
   const bonuses = answered >= BONUS_MIN_ANSWERED;
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
-  const xpGained =
+  // Fair play (see the rules above BONUS_MIN_PCT): correctness gates the
+  // lesson bonus, the pace cap limits the work to the time it took, and the
+  // variety factor cuts a third session of the same kind today.
+  const tried = sessionPct({ answered, correct, timed: result.timed }) >= BONUS_MIN_PCT;
+  const kind = activityKind(result.ref);
+  const sameKindToday = profile.activity.filter(
+    (a) => todayKey(new Date(a.at)) === now.today && activityKind(a.ref) === kind
+  ).length;
+  const earned =
     Math.round(paidRight * rightXp(result, firstToday)) +
     Math.min(fast, FAST_PAID) * XP.fast +
-    (bonuses && firstToday ? XP.lessonDone : 0) +
-    (bonuses && perfect ? XP.perfect : 0) +
+    (bonuses && firstToday && tried ? XP.lessonDone : 0) +
+    (bonuses && perfect ? XP.perfect : 0);
+  const work = paced(earned, result);
+  const factor = varietyFactor(sameKindToday);
+  const tip = fairPlayTip({ factor, nth: sameKindToday + 1, rushed: work < earned, tried: tried || !bonuses });
+  const xpGained =
+    Math.round(work * factor) +
     (streakExtended ? XP.streakDay : 0) +
     Math.max(0, Math.floor(result.wordsKnownUp ?? 0)) * XP.wordKnown +
     Math.max(0, Math.floor(result.wordsMasteredUp ?? 0)) * XP.wordMastered;
@@ -712,6 +787,7 @@ export function applySession(
     profile: next,
     gained: {
       xp: xpGained,
+      ...(tip ? { tip } : {}),
       newBadges,
       streakExtended,
       leveledUp: after.level > before.level,
