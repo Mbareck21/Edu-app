@@ -418,10 +418,17 @@ function lcm(a: number, b: number): number {
   return (a * b) / gcd(a, b);
 }
 
-/** Grade 5 fraction denominators. Neither number of a pair fits into the other. */
-const COMMON_BASES: readonly number[] = [2, 3, 4, 5, 6, 8, 9, 10, 12];
+/**
+ * Grade 5 fraction denominators. Neither number of a pair fits into the other.
+ * Up to 12 alone gave 24 pairs he soon knew by heart; 14 to 20 add the pairs
+ * that share a factor (6 and 15 make 30, not 90). The cap keeps the counting
+ * as short as before.
+ */
+const COMMON_BASES: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 18, 20];
 const COMMON_PAIRS: readonly [number, number][] = COMMON_BASES.flatMap((x) =>
-  COMMON_BASES.filter((y) => x !== y && x % y !== 0 && y % x !== 0).map((y): [number, number] => [x, y]),
+  COMMON_BASES.filter((y) => x !== y && x % y !== 0 && y % x !== 0 && lcm(x, y) <= 100).map(
+    (y): [number, number] => [x, y],
+  ),
 );
 
 /** The common denominator he needs to add unlike fractions. */
@@ -1122,6 +1129,56 @@ function pvTenTimes(rng: Rng, times: number): MathQuestion {
   };
 }
 
+/**
+ * Level 1's "10 times" question. Asked only as "how many times", the answer was
+ * always 10, and typing 10 was right a third of the time. Now it is 10 or 100,
+ * asked two ways, and half the time it asks for the value instead.
+ */
+function pvTimesAsMuch(rng: Rng): MathQuestion {
+  const digit = randInt(rng, 2, 9);
+  const times = pick(rng, [10, 100]);
+  const places: number[] = [];
+  for (let p = 10; p * times <= 100000; p *= 10) places.push(p);
+  const low = digit * pick(rng, places);
+  const high = low * times;
+  const rule = "Each place to the left is 10 times bigger.";
+  const roll = randInt(rng, 1, 4);
+  if (roll <= 2) {
+    return {
+      prompt:
+        roll === 1
+          ? `The value of the ${digit} in ${group(high)} is how many times the value of the ${digit} in ${group(low)}?`
+          : `How many times bigger is the ${digit} in ${group(high)} than the ${digit} in ${group(low)}?`,
+      answer: times,
+      visual: NONE,
+      how: `${rule} ${group(high)} ÷ ${group(low)} = ${group(times)}`,
+      op: "?",
+      a: high,
+      b: low,
+    };
+  }
+  if (roll === 3) {
+    return {
+      prompt: `What is ${group(times)} times as much as ${group(low)}?`,
+      answer: high,
+      visual: NONE,
+      how: `${rule} ${group(low)} × ${group(times)} = ${group(high)}`,
+      op: "×",
+      a: low,
+      b: times,
+    };
+  }
+  return {
+    prompt: `${group(high)} is ${group(times)} times as much as what number?`,
+    answer: low,
+    visual: NONE,
+    how: `${rule} ${group(high)} ÷ ${group(times)} = ${group(low)}`,
+    op: "÷",
+    a: high,
+    b: times,
+  };
+}
+
 function pvRound(rng: Rng, unit: number): MathQuestion {
   const n = randInt(rng, 12, 400) * unit + randInt(rng, 1, unit - 1);
   const answer = Math.floor(n / unit + 0.5) * unit;
@@ -1257,7 +1314,7 @@ function genPlaceValue(level: Level, rng: Rng): MathQuestion {
   if (level === 1) {
     if (roll === 1) return pvDigitValue(rng, 4);
     if (roll === 2) return pvExpanded(rng, 4);
-    return pvTenTimes(rng, 10);
+    return pvTimesAsMuch(rng);
   }
   if (level === 2) {
     if (roll === 1) return pvRound(rng, pick(rng, [10, 100, 1000]));
@@ -1586,8 +1643,23 @@ function genAnglesG5(level: Level, rng: Rng): MathQuestion {
 
 function genAngles(level: Level, rng: Rng): MathQuestion {
   if (level >= 4) return genAnglesG5(level, rng);
+  // Levels 1 and 2 were 15 and 33 questions, all fives. Any whole degree, and
+  // at level 1 a second part to add first, keeps him working them out.
   if (level === 1) {
-    const known = randInt(rng, 2, 16) * 5;
+    if (rng() < 0.5) {
+      const first = randInt(rng, 1, 8) * 5;
+      const second = randInt(rng, 1, 8) * 5;
+      return {
+        prompt: `A right angle is 90°. Parts are ${first}° and ${second}°. The rest?`,
+        answer: 90 - first - second,
+        visual: { kind: "angle", total: 90, known: first + second },
+        how: `${first} + ${second} = ${first + second}. 90 - ${first + second} = ${90 - first - second}`,
+        op: "-",
+        a: 90,
+        b: first + second,
+      };
+    }
+    const known = randInt(rng, 5, 85);
     return {
       prompt: `A right angle is 90°. One part is ${known}°. The rest?`,
       answer: 90 - known,
@@ -1599,7 +1671,7 @@ function genAngles(level: Level, rng: Rng): MathQuestion {
     };
   }
   if (level === 2) {
-    const known = randInt(rng, 2, 34) * 5;
+    const known = randInt(rng, 5, 175);
     return {
       prompt: `A straight angle is 180°. One part is ${known}°. The rest?`,
       answer: 180 - known,
@@ -1845,16 +1917,70 @@ function genShapeMeasures(rng: Rng): MathQuestion {
   );
 }
 
+function plural(name: ShapeName): string {
+  return name.endsWith("s") ? `${name}es` : `${name}s`;
+}
+
+/** "3 squares", or "a square" for one. */
+function shapeCount(n: number, name: ShapeName): string {
+  return n === 1 ? `${article(name)} ${name}` : `${n} ${plural(name)}`;
+}
+
+/**
+ * Levels 1-4 count one of the level's facts over several shapes. Asked about
+ * one shape at a time, each level was 12 or 14 facts he could learn by heart,
+ * and "4" was right three times in four. Counting the sides of 6 trapezoids,
+ * or of 3 squares and a right triangle, still needs the fact, and the answers
+ * spread out.
+ */
 function genShapes(level: Level, rng: Rng): MathQuestion {
   if (level === 5) return genShapeMeasures(rng);
-  const fact = pick(rng, FACTS_BY_LEVEL[level]);
+  const facts = FACTS_BY_LEVEL[level];
+  // A shape with none of the thing counted (0 right angles) only makes sense
+  // next to one that has some, so it is only ever the partner.
+  const fact = pick(rng, facts.filter((f) => f.answer > 0));
+  const partners = facts.filter((f) => f.ask === fact.ask && f.name !== fact.name);
+  const roll = randInt(rng, 1, 3);
+
+  if (roll === 1 && partners.length > 0) {
+    const other = pick(rng, partners);
+    // Either may come first, so the second shape is not always the one with 0.
+    const [one, two] = rng() < 0.5 ? [fact, other] : [other, fact];
+    const x = randInt(rng, 1, 6);
+    const y = randInt(rng, 1, 6);
+    const total = x * one.answer + y * two.answer;
+    return {
+      prompt: `How many ${fact.ask} in ${shapeCount(x, one.name)} and ${shapeCount(y, two.name)}?`,
+      answer: total,
+      visual: { kind: "shape", name: one.name, second: two.name },
+      how: `Each ${one.name} has ${one.answer}, each ${two.name} ${two.answer}. ${x} × ${one.answer} + ${y} × ${two.answer} = ${total}`,
+      op: "+",
+      a: x * one.answer,
+      b: y * two.answer,
+    };
+  }
+
+  const n = randInt(rng, 2, 10);
+  const total = n * fact.answer;
+  if (roll === 2 && fact.answer > 1) {
+    return {
+      prompt: `Some ${plural(fact.name)} have ${total} ${fact.ask} in all. How many shapes?`,
+      answer: n,
+      visual: { kind: "shape", name: fact.name },
+      how: `${fact.how} ${total} ÷ ${fact.answer} = ${n}`,
+      op: "÷",
+      a: total,
+      b: fact.answer,
+    };
+  }
   return {
-    prompt: `How many ${fact.ask} does ${article(fact.name)} ${fact.name} have?`,
-    answer: fact.answer,
+    prompt: `How many ${fact.ask} do ${n} ${plural(fact.name)} have in all?`,
+    answer: total,
     visual: { kind: "shape", name: fact.name },
-    how: fact.how,
-    op: "?",
-    a: fact.answer,
+    how: `${fact.how} ${n} × ${fact.answer} = ${total}`,
+    op: "×",
+    a: n,
+    b: fact.answer,
   };
 }
 

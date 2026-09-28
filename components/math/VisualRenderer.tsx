@@ -34,7 +34,7 @@ export default function VisualRenderer({ visual, op }: VisualRendererProps) {
     case "angle":
       return <Frame><AngleWedge total={visual.total} known={visual.known} /></Frame>;
     case "shape":
-      return <Frame><PlaneShape name={visual.name} /></Frame>;
+      return <Frame><PlaneShape names={visual.second ? [visual.name, visual.second] : [visual.name]} /></Frame>;
     default:
       return null;
   }
@@ -479,7 +479,20 @@ function arrowPaths(a: Pt, b: Pt, count: number): string[] {
   });
 }
 
-function PlaneShape({ name }: { name: ShapeName }) {
+/** One figure, or two side by side when the question counts two kinds. */
+function PlaneShape({ names }: { names: ShapeName[] }) {
+  return (
+    <svg viewBox={`0 0 ${200 * names.length} 132`} className={FIGURE} role="img" aria-label={names.join(" and ")}>
+      {names.map((name, i) => (
+        <g key={i} transform={`translate(${200 * i} 0)`}>
+          <ShapeFigure name={name} />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function ShapeFigure({ name }: { name: ShapeName }) {
   const def = SHAPES[name];
   const pts = def.points;
   const marks: string[] = [];
@@ -495,7 +508,7 @@ function PlaneShape({ name }: { name: ShapeName }) {
   });
 
   return (
-    <svg viewBox="0 0 200 132" className={FIGURE} role="img" aria-label={name}>
+    <>
       <polygon
         points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
         fill={PURPLE_SOFT}
@@ -506,7 +519,7 @@ function PlaneShape({ name }: { name: ShapeName }) {
       {marks.map((d, i) => (
         <path key={i} d={d} fill="none" stroke="var(--color-purple-dark)" strokeWidth={2} strokeLinecap="round" />
       ))}
-    </svg>
+    </>
   );
 }
 

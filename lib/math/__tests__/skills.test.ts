@@ -33,7 +33,8 @@ const MAX_ANSWER: Record<MathSkillId, number> = {
   decimals: 1000,
   geometry: 250,
   angles: 360,
-  shapes: 12,
+  // Counting over several shapes: 6 squares and 6 rectangles have 48 sides.
+  shapes: 48,
 };
 
 /** Grade 5 numbers run bigger: millions, 4-digit × 2-digit, volume, thousandths. */
@@ -270,6 +271,12 @@ test("shape questions only use the eight named figures", () => {
       if (q.visual.kind === "shape") {
         assert.ok(names.includes(q.visual.name), `unknown shape ${q.visual.name}`);
         assert.ok(q.prompt.includes(q.visual.name), `prompt and picture disagree: "${q.prompt}"`);
+        const second = q.visual.second;
+        if (second !== undefined) {
+          assert.ok(names.includes(second), `unknown shape ${second}`);
+          assert.notEqual(second, q.visual.name, `the same shape twice: "${q.prompt}"`);
+          assert.ok(q.prompt.includes(second), `prompt and picture disagree: "${q.prompt}"`);
+        }
       }
       asked.add(q.prompt);
     }
@@ -292,19 +299,88 @@ test("buildSession is seeded, sized and repeat-free", () => {
   }
 });
 
-test("buildSession takes counts up to 40 and never repeats twice in a row", () => {
+test("buildSession takes counts up to 40 and never repeats a prompt", () => {
   for (const skill of MATH_SKILLS) {
     for (const level of ALL_LEVELS) {
       const qs = buildSession({ skillId: skill.id, level, seed: 7, count: 40 });
-      assert.equal(qs.length, 40);
-      for (let i = 1; i < qs.length; i++) {
-        assert.notEqual(qs[i].prompt, qs[i - 1].prompt, `${skill.id} L${level}: prompt repeated back to back`);
-      }
+      // A level with fewer questions than that gives a shorter batch, never a repeat.
+      assert.ok(qs.length >= 10 && qs.length <= 40, `${skill.id} L${level}: ${qs.length} questions`);
+      assert.equal(new Set(qs.map((q) => q.prompt)).size, qs.length, `${skill.id} L${level}: prompt repeated`);
     }
   }
   assert.equal(buildSession({ skillId: "mul-facts", level: 1, seed: 3, count: 99 }).length, MAX_SESSION_COUNT);
   assert.equal(buildSession({ skillId: "mul-facts", level: 1, seed: 3, count: 0 }).length, 1);
 });
+
+test("a later timed batch skips every prompt already asked", () => {
+  const first = buildSession({ skillId: "shapes", level: 1, seed: 1, count: 40 });
+  const avoid = first.map((q) => q.prompt);
+  const second = buildSession({ skillId: "shapes", level: 1, seed: 2, count: 40, avoid });
+  assert.equal(second.length, 40);
+  for (const q of second) assert.ok(!avoid.includes(q.prompt), `asked again: "${q.prompt}"`);
+
+  // Once a level has nothing new, the batch ends short instead of repeating.
+  const all = new Set<string>();
+  for (let seed = 1; seed <= 300; seed++) {
+    for (const q of buildSession({ skillId: "data", level: 1, seed, count: 40 })) all.add(q.prompt);
+  }
+  const more = buildSession({ skillId: "data", level: 1, seed: 999, count: 40, avoid: [...all] });
+  for (const q of more) assert.ok(!all.has(q.prompt), `asked again: "${q.prompt}"`);
+  assert.equal(mixedSession({ level: 1, seed: 4, count: 40, avoid }).filter((q) => avoid.includes(q.prompt)).length, 0);
+});
+
+/**
+ * Levels that were a short list he could learn by heart: shapes 1-4 (12-14
+ * facts, "4" right three times in four), place value 1 (a third of it
+ * answered "10"), angles 1-2 and the smallest-common-multiple pairs.
+ */
+const WIDENED: readonly [MathSkillId, Level][] = [
+  ["shapes", 1],
+  ["shapes", 2],
+  ["shapes", 3],
+  ["shapes", 4],
+  ["place-value", 1],
+  ["angles", 1],
+  ["angles", 2],
+  ["factors-multiples", 4],
+];
+
+for (const [id, level] of WIDENED) {
+  test(`${id} level ${level}: lessons do not repeat or give the answer away`, () => {
+    const SEEDS = 2000;
+    const prompts = new Set<string>();
+    const answers = new Map<number, number>();
+    let asked = 0;
+    let shared = 0;
+    let previous = new Set<string>();
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const qs = buildSession({ skillId: id, level, seed });
+      const lesson = new Set(qs.map((q) => q.prompt));
+      assert.equal(lesson.size, qs.length, `seed ${seed}: a prompt came twice in one lesson`);
+      for (const q of qs) {
+        prompts.add(q.prompt);
+        answers.set(q.answer, (answers.get(q.answer) ?? 0) + 1);
+        asked++;
+      }
+      for (const p of lesson) if (previous.has(p)) shared++;
+      previous = lesson;
+    }
+    assert.ok(prompts.size >= 60, `only ${prompts.size} different questions`);
+
+    const overlap = shared / ((SEEDS - 1) * 10);
+    assert.ok(overlap < 0.1, `back-to-back lessons share ${(overlap * 100).toFixed(1)}% of questions`);
+
+    const [top, count] = [...answers].reduce((a, b) => (b[1] > a[1] ? b : a));
+    assert.ok(count / asked <= 0.15, `typing ${top} is right ${((count / asked) * 100).toFixed(1)}% of the time`);
+
+    // A timed drill draws 40 at a time.
+    for (let seed = 1; seed <= 50; seed++) {
+      const batch = buildSession({ skillId: id, level, seed, count: 40 });
+      assert.equal(batch.length, 40, `seed ${seed}: ran out of questions`);
+      assert.equal(new Set(batch.map((q) => q.prompt)).size, 40, `seed ${seed}: a prompt came twice in 40`);
+    }
+  });
+}
 
 test("mixedSession spreads over every skill", () => {
   for (const level of ALL_LEVELS) {

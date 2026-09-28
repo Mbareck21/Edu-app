@@ -12,6 +12,8 @@ export type SessionOptions = {
   seed: number;
   /** 1..40. Defaults to 10. */
   count?: number;
+  /** Prompts already asked in this run (an earlier timed batch). None comes back. */
+  avoid?: readonly string[];
 };
 
 export type MixedSessionOptions = {
@@ -19,6 +21,8 @@ export type MixedSessionOptions = {
   seed: number;
   /** 1..40. Defaults to 10. */
   count?: number;
+  /** Prompts already asked in this run (an earlier timed batch). None comes back. */
+  avoid?: readonly string[];
 };
 
 function clampCount(count: number): number {
@@ -27,44 +31,51 @@ function clampCount(count: number): number {
 }
 
 /**
- * Draws `count` questions. Retries a draw that repeats a prompt already used in
- * this session, and never puts the same prompt twice in a row.
+ * Draws up to `count` questions, never the same prompt twice. A skill and level
+ * with fewer questions than that gives a shorter list: padding it out with
+ * repeats let him answer from memory, not by working it out.
  */
-function draw(count: number, level: Level, rng: Rng, skillAt: (index: number) => MathSkill): MathQuestion[] {
+function draw(
+  count: number,
+  level: Level,
+  rng: Rng,
+  skillAt: (index: number) => MathSkill,
+  avoid: readonly string[],
+): MathQuestion[] {
   const out: MathQuestion[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<string>(avoid);
   for (let i = 0; i < count; i++) {
     const skill = skillAt(i);
-    let fresh: MathQuestion | null = null;
-    let spare: MathQuestion | null = null;
     for (let tries = 0; tries < 100; tries++) {
       const q = skill.generate(level, rng);
-      if (out.length > 0 && out[out.length - 1].prompt === q.prompt) continue;
-      if (!spare) spare = q;
       if (!seen.has(q.prompt)) {
-        fresh = q;
+        seen.add(q.prompt);
+        out.push(q);
         break;
       }
     }
-    const chosen = fresh ?? spare ?? skill.generate(level, rng);
-    seen.add(chosen.prompt);
-    out.push(chosen);
   }
   return out;
 }
 
 /** One skill, one level. Same seed always gives the same questions. */
-export function buildSession({ skillId, level, seed, count = DEFAULT_SESSION_COUNT }: SessionOptions): MathQuestion[] {
+export function buildSession({
+  skillId,
+  level,
+  seed,
+  count = DEFAULT_SESSION_COUNT,
+  avoid = [],
+}: SessionOptions): MathQuestion[] {
   const skill = getSkill(skillId);
   const rng = mulberry32(seed);
-  return draw(clampCount(count), level, rng, () => skill);
+  return draw(clampCount(count), level, rng, () => skill, avoid);
 }
 
 /** Drill mode: spreads the questions evenly over every skill. */
-export function mixedSession({ level, seed, count = DEFAULT_SESSION_COUNT }: MixedSessionOptions): MathQuestion[] {
+export function mixedSession({ level, seed, count = DEFAULT_SESSION_COUNT, avoid = [] }: MixedSessionOptions): MathQuestion[] {
   const rng = mulberry32(seed);
   const order = shuffle(rng, MATH_SKILLS);
-  return draw(clampCount(count), level, rng, (i) => order[i % order.length]);
+  return draw(clampCount(count), level, rng, (i) => order[i % order.length], avoid);
 }
 
 /** Only whole numbers count. Spaces, commas and a leading $ are ignored. */
