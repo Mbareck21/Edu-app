@@ -170,3 +170,23 @@ export function dueSkills(word: ClientWord, now: Date): SkillId[] {
     (a, b) => word.skills[a].streak - word.skills[b].streak
   );
 }
+
+/**
+ * Stuck words he has since fixed, to leave the pool: the copy on a unit list
+ * is known again. A word goes to the pool after two misses in a row, which
+ * leaves that skill at streak 0; a streak only grows on a right answer given
+ * when the skill is due, and the ladder puts days between those. So "known"
+ * (every skill at KNOWN_STREAK, spelled or used at least once) means the
+ * missed skill has been answered right in three separate review windows
+ * since — and the rest of the word held up too. A word on no unit list stays
+ * until its chain is finished, as before.
+ */
+export function settledStuck(
+  poolWords: readonly string[],
+  unitWords: readonly { word: string; skills: WordSkills }[]
+): string[] {
+  const known = new Set(
+    unitWords.filter((w) => skillsKnowledge(w.skills) !== null).map((w) => w.word.trim().toLowerCase())
+  );
+  return poolWords.filter((w) => known.has(w.trim().toLowerCase()));
+}

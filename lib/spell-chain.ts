@@ -285,3 +285,34 @@ export function rotate(words: readonly string[], writeIndex: number): string {
 
 /** How many words share one sitting. Three keeps the gap real but short. */
 export const ROTATE_WIDTH = 3;
+
+/** Unfinished stuck words he works on at once; older ones wait their turn. */
+export const ACTIVE_STUCK = 20;
+
+/**
+ * The Stuck words board, split. A pool of 72 unfinished words is a wall, not
+ * a to-do list, so only the ACTIVE_STUCK most recently added unfinished words
+ * are worked on (board, drills, review); the older ones wait and come in as
+ * these finish. `words` is the pool in the order added, oldest first.
+ *
+ *   working  — finished words due a re-check (one write each, never held
+ *              back) and the active unfinished ones, in pool order.
+ *   waiting  — older unfinished words, oldest first.
+ *   finished — ten in a row and not due a re-check.
+ */
+export function splitStuck(
+  words: readonly string[],
+  chains: Readonly<Record<string, ChainState | undefined>>,
+  nowIso: string
+): { working: string[]; waiting: string[]; finished: string[] } {
+  const unfinished = words.filter((w) => !chains[w] || !isFinished(chains[w]));
+  const waiting = unfinished.slice(0, Math.max(0, unfinished.length - ACTIVE_STUCK));
+  const working: string[] = [];
+  const finished: string[] = [];
+  for (const w of words) {
+    const c = chains[w];
+    if (c && isFinished(c) && !checkDue(c, nowIso)) finished.push(w);
+    else if (!waiting.includes(w)) working.push(w);
+  }
+  return { working, waiting, finished };
+}

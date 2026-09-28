@@ -25,7 +25,6 @@ export type RememberRunnerProps = {
   listName: string;
   words: string[];
   sessionRef: string;
-  againHref: string;
 };
 
 type Phase = "ready" | "go" | "done";
@@ -41,7 +40,6 @@ export default function RememberRunner({
   listName,
   words,
   sessionRef,
-  againHref,
 }: RememberRunnerProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("ready");
@@ -208,7 +206,7 @@ export default function RememberRunner({
           perfect={words.length > 0 && found.length === words.length}
           leveledUp={outcome.gained?.leveledUp}
           newBadge={badge ? { id: badge.id, name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
-          primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
+          primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
           secondary={{ label: "All drills", href: "/drill" }}
           note={outcome.note}
         />

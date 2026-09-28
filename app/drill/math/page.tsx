@@ -1,7 +1,6 @@
 import MathDrillRunner from "@/components/drill/MathDrillRunner";
 import {
   MIXED_SKILL,
-  mathHref,
   mixedAutoLevel,
   parseLength,
   parseLevelChoice,
@@ -45,7 +44,7 @@ export default async function MathDrillPage({ searchParams }: { searchParams: Se
   const count = parseLength(q.n);
   const mode = parseMathMode(q.mode);
   const seed = Number(q.seed) || requestSeed();
-  // See the note in app/drill/vocab/page.tsx: "Again" only changes ?seed, and
+  // See the note in app/drill/vocab/page.tsx: "Next drill" may change only ?seed, and
   // the runner would otherwise keep its finished state across that soft nav.
   const runKey = q.seed ?? "first";
 
@@ -60,7 +59,6 @@ export default async function MathDrillPage({ searchParams }: { searchParams: Se
       count={count}
       mode={mode}
       seed={seed}
-      againHref={mathHref({ skill, level: choice, count, mode })}
     />
   );
 }
