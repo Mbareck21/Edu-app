@@ -49,7 +49,7 @@ type Base = {
   feedback: string;
   /** Arabic gloss for the AR chip. Empty string = no gloss to show. */
   arabic?: string;
-  /** srs.interval >= 7: the chip is not offered, long-press still reveals. */
+  /** Past the recall rung: the chip is not offered, long-press still reveals. */
   glossFaded?: boolean;
 };
 
@@ -430,7 +430,10 @@ const CLUE_OVERLAP = 3;
  *     uses three cups of water", where both fit).
  * A distractor is meant to be wrong. If it might be right, it is not one.
  */
-export function tooClose(target: ClientWord, candidate: ClientWord): boolean {
+export function tooClose(
+  target: Pick<ClientWord, "word" | "clue">,
+  candidate: Pick<ClientWord, "word" | "clue">
+): boolean {
   const a = target.word.toLowerCase().split(/\s+/);
   const b = candidate.word.toLowerCase().split(/\s+/);
   const contained = a.every((t) => b.includes(t)) || b.every((t) => a.includes(t));
@@ -469,7 +472,12 @@ export function wordDistractors(
   const sameFirst = others.filter((w) => w[0] === t[0]);
   const samePrefix = prefix ? others.filter((w) => w.startsWith(prefix)) : [];
   const sameLength = others.filter((w) => Math.abs(w.length - t.length) <= 1);
-  const tiers = [shuffle(rng, samePrefix), shuffle(rng, sameFirst), shuffle(rng, sameLength), shuffle(rng, others), shuffle(rng, FILLER_WORDS)];
+  // Filler goes through the same check. "calm" is "feeling quiet and relaxed",
+  // and "quiet" came in as its wrong answer on a one-word list.
+  const filler = shuffle(rng, FILLER_WORDS).filter(
+    (f) => !targets.some((tw) => tooClose(tw, { word: f, clue: "" }))
+  );
+  const tiers = [shuffle(rng, samePrefix), shuffle(rng, sameFirst), shuffle(rng, sameLength), shuffle(rng, others), filler];
 
   const out: string[] = [];
   for (const tier of tiers) {
@@ -483,7 +491,11 @@ export function wordDistractors(
   return out.slice(0, count);
 }
 
-/** Three wrong meanings, taken from other words on the list where possible. */
+/**
+ * Three wrong meanings, taken from other words on the list where possible.
+ * A close word's meaning is out, as it is for the word pickers: fertilizer's
+ * "plant food you add to soil" was a wrong meaning of compost.
+ */
 function meaningDistractors(
   target: ClientWord,
   pool: ClientWord[],
@@ -492,10 +504,12 @@ function meaningDistractors(
 ): string[] {
   const mine = meaningOf(target);
   const others = shuffle(rng, otherWords(target.word, pool))
+    .filter((w) => !tooClose(target, w))
     .map(meaningOf)
     .filter((m) => m && m !== mine);
+  const filler = shuffle(rng, FILLER_MEANINGS).filter((m) => !fillerFits(target, m));
   const out: string[] = [];
-  for (const m of [...others, ...shuffle(rng, FILLER_MEANINGS)]) {
+  for (const m of [...others, ...filler]) {
     if (out.length >= count) break;
     if (!m || out.includes(m)) continue;
     out.push(m);
@@ -503,8 +517,51 @@ function meaningDistractors(
   return out.slice(0, count);
 }
 
+/**
+ * Could a filler meaning also be this word's meaning? A filler is a few words
+ * long, so tooClose's three shared words can never happen; one shared idea is
+ * enough ("to keep something safe" beside "protect: to keep something safe
+ * from harm"). A synonym with no word in common still gets through.
+ */
+function fillerFits(target: ClientWord, filler: string): boolean {
+  const said = new Set([...clueTokens(target.clue || ""), ...clueTokens(target.explanation || "")]);
+  return namesWord(filler, target.word) || [...clueTokens(filler)].some((t) => said.has(t));
+}
+
+/**
+ * Does the text use the word, or a form of it: help in "always ready to help
+ * others" for helpful, value and place in a meaning of place value.
+ */
+function namesWord(text: string, word: string): boolean {
+  const said = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  const parts = word.toLowerCase().split(/[\s-]+/).filter(Boolean);
+  // "than" in "greater than" gives nothing away; "number" as the word does.
+  const content = parts.length > 1 ? parts.filter((p) => !CLUE_STOP.has(p)) : parts;
+  return content.some((p) =>
+    said.some((t) => {
+      // A short word counts only as itself or with an ending: sum, sums.
+      if (p.length < 4 || t.length < 4) return t.startsWith(p);
+      // A longer one may change its ending: decide / decision share "deci".
+      let same = 0;
+      while (same < p.length && p[same] === t[same]) same++;
+      return same >= Math.max(4, Math.min(p.length, t.length) - 2);
+    })
+  );
+}
+
+/**
+ * The meaning a question may show. The parent's clue comes first: it is
+ * hand-edited and written never to contain the word. The AI explanation is
+ * allowed to reuse a form of the word ("helpful: always ready to help
+ * others"), and when it came first it overrode the clue in every prompt and
+ * could give the answer away. It is used only when there is no clue, and
+ * only when it does not name the word.
+ */
 function meaningOf(word: ClientWord): string {
-  return (word.explanation || word.clue || "").trim();
+  const clue = (word.clue || "").trim();
+  if (clue) return clue;
+  const explanation = (word.explanation || "").trim();
+  return explanation && !namesWord(explanation, word.word) ? explanation : "";
 }
 
 function fourOptions(answer: string, wrong: string[], rng: Rng): string[] {
@@ -530,6 +587,80 @@ export function usableExamples(word: ClientWord): string[] {
 
 function blankOut(sentence: string, word: string): string {
   return sentence.replace(wordRegex(word), BLANK);
+}
+
+/**
+ * A blank only works when the word is in the sentence once. "Each ____ of
+ * rock is older than the layer on top" answers itself.
+ */
+function holdsOnce(sentence: string, word: string): boolean {
+  return (sentence.match(new RegExp(wordRegex(word).source, "gi")) ?? []).length === 1;
+}
+
+/**
+ * The plain words a form could be an ending on: helps, helped, helping → help;
+ * decided → decide; carried → carry; stopped → stop.
+ */
+function inflectionBases(form: string): string[] {
+  const f = form.toLowerCase();
+  const out = [f];
+  if (/(ies|ied)$/.test(f)) out.push(`${f.slice(0, -3)}y`);
+  if (f.endsWith("es")) out.push(f.slice(0, -2));
+  if (f.endsWith("s")) out.push(f.slice(0, -1));
+  if (f.endsWith("ed")) out.push(f.slice(0, -2), f.slice(0, -1));
+  if (f.endsWith("ing")) out.push(f.slice(0, -3), `${f.slice(0, -3)}e`);
+  for (const b of [...out]) if (b.length > 2 && b.at(-1) === b.at(-2)) out.push(b.slice(0, -1));
+  return out;
+}
+
+/**
+ * Two tenses or numbers of one word: help / helps / helped, helper /
+ * helpers. Not a different kind of word made from it: help / helpful.
+ */
+function sameWordInflected(a: string, b: string): boolean {
+  const bases = new Set(inflectionBases(a));
+  return inflectionBases(b).some((x) => bases.has(x));
+}
+
+/** Words that come right before a verb: "to ____", "will ____", "did ____". */
+const BEFORE_VERB = new Set([
+  "to", "will", "can", "must", "did", "does", "do", "could", "would", "should",
+  "may", "might", "shall", "cannot", "don't", "didn't", "doesn't", "can't", "won't",
+]);
+
+/** Words that come right before a noun (or its describing word): "a ____", "the ____". */
+const BEFORE_NOUN = new Set([
+  "a", "an", "the", "this", "these", "those", "my", "your", "his", "her", "its",
+  "our", "their", "some", "any", "every", "each", "no", "much", "many",
+]);
+
+type Slot = "verb" | "noun" | "number";
+
+/**
+ * What the word's place in a sentence takes, judged by the word just before
+ * it. `loose` also looks one word further back, past a describing word ("a
+ * green sprout", "did you observe"). That guess is often wrong ("the seeds
+ * sprout"), so it is only used to find every kind a word MIGHT be.
+ */
+function slotOf(sentence: string, word: string, loose = false): Slot | null {
+  const m = wordRegex(word).exec(sentence);
+  if (!m) return null;
+  const before = sentence.slice(0, m.index).toLowerCase().replace(/’/g, "'").match(/[a-z']+/g) ?? [];
+  for (const prev of loose ? before.slice(-2).reverse() : before.slice(-1)) {
+    if (BEFORE_VERB.has(prev)) return "verb";
+    if (BEFORE_NOUN.has(prev)) return "noun";
+  }
+  return null;
+}
+
+/** Every kind of place a word might take in its own sentences. */
+function slotsOf(word: ClientWord): Set<Slot> {
+  const slots = new Set<Slot>();
+  for (const s of usableExamples(word)) {
+    const slot = slotOf(s, word.word, true);
+    if (slot) slots.add(slot);
+  }
+  return slots;
 }
 
 /**
@@ -562,6 +693,9 @@ function itemId(kind: ItemKind, word: string): string {
   return `${kind}:${word || "x"}:${counter}`;
 }
 
+/** The streak at which a skill moves to its harder rung (HARD_STREAK in the lesson builder). */
+const GLOSS_FADE_STREAK = 2;
+
 function baseFor(word: ClientWord, pool: ItemPool, skill: ItemSkill, kind: ItemKind) {
   return {
     id: itemId(kind, word.word),
@@ -569,7 +703,13 @@ function baseFor(word: ClientWord, pool: ItemPool, skill: ItemSkill, kind: ItemK
     listId: pool.listId,
     skill,
     arabic: word.arabic || "",
-    glossFaded: word.srs.interval >= 7,
+    // docs/pedagogy.md: drop the Arabic once the word reaches the recall rung,
+    // the one after recognise and listen. Here that is both of those skills on
+    // their harder rung. It used to read srs.interval >= 7, which only the old
+    // flashcard route writes, so the gloss never faded at all.
+    glossFaded:
+      word.skills.recognize.streak >= GLOSS_FADE_STREAK &&
+      word.skills.listen.streak >= GLOSS_FADE_STREAK,
   };
 }
 
@@ -586,7 +726,9 @@ export function makeLearnCard(word: ClientWord, pool: ItemPool): LearnCardItem {
     word: word.word,
     prompt: "New word",
     feedback: "",
-    explanation: meaningOf(word) || "A new word for today.",
+    // The card teaches and asks nothing, so the AI explanation may lead here
+    // even when it reuses the word.
+    explanation: (word.explanation || word.clue || "").trim() || "A new word for today.",
     examples: word.examples.slice(0, 3),
     family: word.family.slice(0, 4),
   };
@@ -672,7 +814,7 @@ export function makeWrite(word: ClientWord, pool: ItemPool): WriteItem {
 }
 
 export function makeCloze(word: ClientWord, pool: ItemPool, rng: Rng): ClozeItem | null {
-  const examples = usableExamples(word);
+  const examples = usableExamples(word).filter((s) => holdsOnce(s, word.word));
   if (examples.length === 0) return null;
   const sentence = pick(rng, examples);
   return {
@@ -696,17 +838,35 @@ export function makePickSentence(
   const mine = usableExamples(word);
   if (mine.length === 0) return null;
   // A wrong use = another word's sentence with our word dropped into its slot.
-  const wrong: string[] = [];
+  // On a topic list that was usually still a right sentence: "Dad put compost
+  // on the garden" was the wrong use of compost, taken from fertilizer. So a
+  // close word never lends its sentence (see tooClose), and the place it lends
+  // must take a different kind of word from ours, judged by the word before
+  // it: a verb's place for a noun ("The bean will compost in a week"), a
+  // noun's place for a verb ("The observe is dark and wet"). Short of three of
+  // those there is no item, and the chain moves on to another use question.
   const isNumber = numeralOf(word.word) !== null;
+  // A number fills neither a noun's place nor a verb's.
+  const ours = isNumber ? new Set<Slot>(["number"]) : slotsOf(word);
+  // An -ed or -ing form in the family means the word is also a verb.
+  if (word.family.some((f) => /(ed|ing)$/i.test(f) && sameWordInflected(f, word.word))) ours.add("verb");
+  if (ours.size === 0) return null;
+  const wrong: string[] = [];
   for (const other of shuffle(rng, otherWords(word.word, pool.words))) {
     if (wrong.length >= 3) break;
     // Another number's sentence with this number dropped in is still a right
     // sentence ("I have seventy cats"), so it cannot be the wrong one.
     if (isNumber && numeralOf(other.word) !== null) continue;
-    const theirs = usableExamples(other);
-    if (theirs.length === 0) continue;
-    const swapped = theirs[0].replace(wordRegex(other.word), word.word);
-    if (swapped !== theirs[0] && !wrong.includes(swapped)) wrong.push(swapped);
+    if (tooClose(word, other)) continue;
+    // A word whose own sentences disagree about its kind is no sure guide.
+    const theirs = slotsOf(other);
+    if (theirs.size !== 1) continue;
+    const [slot] = theirs;
+    if (ours.has(slot)) continue;
+    const sentence = usableExamples(other).find((s) => slotOf(s, other.word) === slot);
+    if (!sentence) continue;
+    const swapped = sentence.replace(wordRegex(other.word), word.word);
+    if (swapped !== sentence && !wrong.includes(swapped) && !mine.includes(swapped)) wrong.push(swapped);
   }
   if (wrong.length < 3) return null;
   const answer = pick(rng, mine);
@@ -734,22 +894,27 @@ export function makeWordForm(
   // (helps, helped, helpful), so when the base was always the answer, "pick
   // the shortest" won without reading the sentence. The sentences are written
   // with a mix of forms, so each form that has one gets an equal chance.
-  const all = [word.word, ...forms];
+  const all = [...new Set([word.word.toLowerCase(), ...forms])];
+  // Another tense of the answer often fits too: "She ____ her brother" takes
+  // helps as well as helped. So the answer's own tenses stay out and the
+  // other kinds of form (helpful, helper) are the wrong ones. A form that is
+  // left with fewer than three of those is not asked.
   const usable = all
     .map((form) => ({
       form,
-      sentences: word.examples.map((s) => s.trim()).filter((s) => s && wordRegex(form).test(s)),
+      sentences: word.examples.map((s) => s.trim()).filter((s) => s && holdsOnce(s, form)),
+      others: all.filter((f) => f !== form && !sameWordInflected(f, form)),
     }))
-    .filter((u) => u.sentences.length > 0);
+    .filter((u) => u.sentences.length > 0 && u.others.length >= 3);
   if (usable.length === 0) return null;
-  const { form, sentences } = pick(rng, usable);
+  const { form, sentences, others } = pick(rng, usable);
   const sentence = pick(rng, sentences);
   return {
     ...baseFor(word, pool, "use", "use-word-form"),
     kind: "use-word-form",
     prompt: "Pick the right form of the word.",
     sentence: blankOut(sentence, form),
-    options: fourOptions(form, shuffle(rng, all.filter((f) => f !== form)), rng),
+    options: fourOptions(form, shuffle(rng, others), rng),
     answer: form,
     feedback: sentence,
   };
@@ -784,14 +949,20 @@ export function makeWordPartMeaning(
 ): WordPartMeaningItem | null {
   const fromWord = preferWord ? partEntryFor(preferWord.word) : null;
   const entry = fromWord ?? pick(rng, LATIN_PARTS);
-  const wrong = shuffle(rng, LATIN_PARTS.filter((p) => p.meaning !== entry.meaning))
+  // Several parts mean the same thing (un-, dis-, non- and in- are all "not";
+  // -able and -ible are both "can be done"), so a part whose meaning starts
+  // the same way would be a second right answer.
+  const core = coreMeaning(entry.meaning);
+  const wrong = shuffle(rng, LATIN_PARTS.filter((p) => coreMeaning(p.meaning) !== core))
     .slice(0, 3)
     .map((p) => p.meaning);
   if (wrong.length < 3) return null;
   return {
     id: itemId("word-part-meaning", entry.part),
     listId: pool.listId,
-    word: fromWord && preferWord ? preferWord.word : undefined,
+    // No `word`, even when the part came from a list word: the answer is about
+    // trans-, not about transfer, and a word on the item would post it as
+    // transfer's recognize result.
     skill: "recognize",
     kind: "word-part-meaning",
     prompt: "What does this word part mean?",
@@ -802,6 +973,20 @@ export function makeWordPartMeaning(
     answer: entry.meaning,
     feedback: `${entry.part} means ${entry.meaning}. Like ${entry.examples[0]}.`,
   };
+}
+
+/** Meanings that are one idea for a nine-year-old: to see is to look. */
+const SAME_IDEA: Record<string, string> = { see: "look" };
+
+/**
+ * The idea a part's meaning opens with, in its first two words and before
+ * any comma or bracket: "not, or away" and "not (im- before m, b or p)" are
+ * both "not"; "makes a noun: the act of" and "makes a noun after d or s
+ * sounds" are both "makes a".
+ */
+function coreMeaning(meaning: string): string {
+  const core = meaning.toLowerCase().split(/[,(:]/)[0].trim().split(/\s+/).slice(0, 2).join(" ");
+  return SAME_IDEA[core] ?? core;
 }
 
 function partEntryFor(word: string): (typeof LATIN_PARTS)[number] | null {
@@ -1311,4 +1496,34 @@ export function schoolItem(pool: ItemPool, rng: Rng, word?: ClientWord): LessonI
     if (item) return item;
   }
   return makeSentenceCombine(pool, rng);
+}
+
+/* ------------------------------------------------------------------ *
+ * One entry per word
+ * ------------------------------------------------------------------ */
+
+/**
+ * A word once per list, whatever its case. "brave" typed twice, or "Brave"
+ * and "brave", was saved twice: taught twice, its results landed on one copy
+ * and the other stayed new forever. The first copy keeps its place; a later
+ * one takes it only when `prefer(later, kept)` says so (the copy with
+ * progress, when the list already holds both).
+ */
+export function oneEntryPerWord<T extends { word: string }>(
+  entries: readonly T[],
+  prefer: (later: T, kept: T) => boolean = () => false
+): T[] {
+  const at = new Map<string, number>();
+  const out: T[] = [];
+  for (const entry of entries) {
+    const key = entry.word.trim().toLowerCase();
+    const i = at.get(key);
+    if (i === undefined) {
+      at.set(key, out.length);
+      out.push(entry);
+    } else if (prefer(entry, out[i])) {
+      out[i] = entry;
+    }
+  }
+  return out;
 }

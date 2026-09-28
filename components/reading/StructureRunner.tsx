@@ -9,6 +9,7 @@ import LessonComplete from "@/components/ui/LessonComplete";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { mulberry32 } from "@/lib/math/rng";
 import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
+import type { Gained } from "@/lib/rewards";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import type { PlanProgress } from "@/lib/daily-plan";
@@ -174,6 +175,9 @@ function StructureRunnerInner({
   const [saving, setSaving] = useState(false);
   const [gainedXp, setGainedXp] = useState(0);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
+  // What the server said beyond XP: a level or a badge earned here used to
+  // go unannounced.
+  const [gained, setGained] = useState<Gained | null>(null);
 
   const firstTry = missed.filter((m) => !m).length;
   const perfect = firstTry === rounds.length;
@@ -231,6 +235,7 @@ function StructureRunnerInner({
         const posted = await postSession(result);
         setGainedXp(shownXp(posted, result));
         setQueuedNote(saveNote(posted));
+        if (posted.saved) setGained(posted.gained);
       } finally {
         setSaving(false);
       }
@@ -248,6 +253,8 @@ function StructureRunnerInner({
         ms={elapsedMs}
         accuracy={rounds.length ? firstTry / rounds.length : 0}
         perfect={perfect}
+        leveledUp={gained?.leveledUp ?? false}
+        newBadges={gained?.newBadges}
         note={saving ? "Saving…" : queuedNote}
         plan={dayPlan}
         primary={{ label: "Back to Learn", href: "/" }}

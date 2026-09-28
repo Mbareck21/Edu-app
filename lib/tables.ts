@@ -32,6 +32,11 @@ export const TABLE_UP_TO = 12;
 export const ROUND_SIZE = 10;
 /** A right answer this quick is recall, not working out. Matches XP.fast. */
 export const FAST_MS = 3000;
+/**
+ * The longest answer time kept. A question left open over a snack is still
+ * an answer: capped here, not refused, or the grid never moved for it.
+ */
+export const MAX_ANSWER_MS = 10 * 60 * 1000;
 
 /** "7x8" for 7x8 and for 8x7. The smaller factor first, always. */
 export function factKey(a: number, b: number): string {
@@ -120,18 +125,24 @@ export function isDue(f: FactState, nowIso: string): boolean {
  * before the fact is due is practice, not progress; the streak holds and the
  * due date stays. A miss zeroes the streak and makes it due now; a miss before
  * the fact was due only halves it.
+ *
+ * `retry` is the same fact asked again later in the round, after a miss
+ * showed him the answer. Right then is copying, not recall: it counts as
+ * right and nothing else moves. It used to light the cell, gold, a day out.
  */
 export function applyFactAnswer(
   f: FactState,
   correct: boolean,
   ms: number,
-  nowIso: string
+  nowIso: string,
+  retry = false
 ): FactState {
   const early = !isDue(f, nowIso);
   if (!correct) {
     const streak = early ? Math.floor(f.streak / 2) : 0;
     return { ...f, streak, wrong: f.wrong + 1, lastFast: false, dueAt: nowIso, lastAt: nowIso };
   }
+  if (retry) return { ...f, correct: f.correct + 1, lastAt: nowIso };
   const fast = ms >= 0 && ms < FAST_MS;
   const streak = early ? f.streak : f.streak + 1;
   const days = skillGapDays(Math.max(1, streak));

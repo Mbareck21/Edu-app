@@ -42,7 +42,7 @@ import {
   type EchoProgress,
   type ReadingMode,
 } from "@/lib/reading-resume";
-import { readingProgress } from "@/lib/rewards";
+import { readingProgress, type Gained } from "@/lib/rewards";
 import type { PlanProgress } from "@/lib/daily-plan";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
@@ -290,6 +290,8 @@ function ReadingRunnerInner({
   const startedAtRef = useRef(0);
   const savedRef = useRef(false);
   const [gainedXp, setGainedXp] = useState(0);
+  /** What the saved session earned beyond XP: a level-up, badges. */
+  const [gained, setGained] = useState<Gained | null>(null);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
   /** Where this reading left him on the ladder, for the finish screen. */
   const [ladderNote, setLadderNote] = useState<string | undefined>(undefined);
@@ -317,6 +319,7 @@ function ReadingRunnerInner({
     setQStates(freshQ(next?.questions.length ?? 0));
     setQIdx(0);
     setTried([]);
+    setGained(null);
     savedRef.current = false;
     // The clock starts when he does, not while a passage is being written —
     // generation runs 30s and up, and it used to land on his time on task.
@@ -335,10 +338,13 @@ function ReadingRunnerInner({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // The wait can be most of an hour, and "a minute" had him tapping for
+        // nothing, so it says how long the route says.
+        const minutes = Math.max(1, Math.ceil((Number(data.retryAfterSec) || 60) / 60));
         // The route's own words are written for him; a status code is not.
         setError(
           res.status === 429
-            ? "The story writer needs a short rest. Try again in a minute."
+            ? `The story writer needs a rest. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`
             : typeof data.error === "string" && res.status !== 500
               ? data.error
               : "The story did not come. Try again."
@@ -485,14 +491,25 @@ function ReadingRunnerInner({
         const posted = await postSession(result);
         setGainedXp(shownXp(posted, result));
         if (posted.saved) {
-          const after = readingProgress(posted.profile.reading);
-          setLadderNote(
-            after.level > level
+          setGained(posted.gained);
+          const ladder = posted.profile.reading;
+          const after = readingProgress(ladder);
+          // Up on THIS reading: the level's start is this reading's own time.
+          // Comparing the profile's level with the passage's said "Level up!"
+          // for a 50% on a leftover passage from below his level.
+          const movedNow =
+            ladder.since !== undefined &&
+            ladder.recent[0] !== undefined &&
+            new Date(ladder.since).getTime() === new Date(ladder.recent[0].at).getTime();
+          const ladderLine =
+            movedNow && after.level > level
               ? `Level up! You are on reading level ${after.level} now.`
               : after.toNext > 0
                 ? `${after.toNext} more good ${after.toNext === 1 ? "reading" : "readings"} to level ${after.level + 1}.`
-                : undefined
-          );
+                : undefined;
+          // The fair-play tip ("2nd time today: half XP") only ever showed when
+          // the save failed; a saved reading hid why it paid less.
+          setLadderNote([saveNote(posted), ladderLine].filter(Boolean).join(" ") || undefined);
         } else setQueuedNote(saveNote(posted));
 
         // Then the passage's stats and glossed words. A repeat is harmless (the
@@ -532,6 +549,8 @@ function ReadingRunnerInner({
         ms={elapsedMs}
         accuracy={questions.length ? firstTry / questions.length : 0}
         perfect={perfect}
+        leveledUp={gained?.leveledUp ?? false}
+        newBadges={gained?.newBadges ?? []}
         note={busy === "saving" ? "Saving…" : (error ?? queuedNote ?? ladderNote)}
         plan={dayPlan}
         primary={
@@ -817,7 +836,26 @@ function ReadingRunnerInner({
   // (c) Questions. Part by part, the passage grows one part at a time, and
   // each question comes when the part with its answer is on screen.
   const q = questions[qIdx];
-  if (!q) return null;
+  if (!q) {
+    // A passage can reach him with no questions left to ask. This used to be
+    // an empty screen with no way on; now he can get another story.
+    return (
+      <div className="space-y-5 px-4 py-8">
+        <h1 className="font-display text-2xl font-bold">{reading.title}</h1>
+        <p className="text-base" style={{ color: "var(--color-muted)" }}>
+          This story came without questions. Get a new one to answer.
+        </p>
+        {error ? (
+          <p className="text-sm" style={{ color: "var(--color-coral-dark)" }}>
+            {error}
+          </p>
+        ) : null}
+        <Button fullWidth size="lg" disabled={busy !== null} onClick={() => void generate()}>
+          {busy === "generating" ? "Writing it…" : "Write a new story"}
+        </Button>
+      </div>
+    );
+  }
   const byPart = mode === "alone" && parts.length > 1;
   const needPart = partOfQ[qIdx] ?? parts.length - 1;
   // "What does the word X mean?" must not be answered by tapping X.
@@ -831,7 +869,7 @@ function ReadingRunnerInner({
 
   if (byPart && seenPart < needPart) {
     return (
-      <div className="px-4 pb-40 pt-4">
+      <div className="px-4 pb-[calc(16rem+env(safe-area-inset-bottom))] pt-4">
         <ProgressBar
           value={(seenPart + 1) / parts.length}
           color="green"
@@ -879,7 +917,7 @@ function ReadingRunnerInner({
   const hintsShown = Math.max(state.hints, helped && scaffold === "full" ? 1 : 0);
 
   return (
-    <div className="px-4 pb-40 pt-4">
+    <div className="px-4 pb-[calc(16rem+env(safe-area-inset-bottom))] pt-4">
       <ProgressBar
         value={(qIdx + (state.done ? 1 : 0)) / questions.length}
         color="green"
@@ -1009,6 +1047,7 @@ function ReadingRunnerInner({
               className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
               style={{ borderColor: "var(--color-line)", background: "#fff" }}
               placeholder="Type your answer"
+              aria-label="Your answer"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               disabled={state.done}

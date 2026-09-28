@@ -20,7 +20,7 @@ export default function ItemFrame({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <h2 className="font-display text-xl font-bold leading-snug">{prompt}</h2>
-        <ArabicChip arabic={arabic} faded={glossFaded} className="mt-0.5 shrink-0" />
+        <ArabicChip arabic={arabic} faded={glossFaded} className="mt-0.5 max-w-[50%] shrink-0" />
       </div>
       {children}
     </div>

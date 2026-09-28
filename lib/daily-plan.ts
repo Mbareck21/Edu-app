@@ -12,6 +12,7 @@
 
 import type { IconName } from "@/components/ui/Icon";
 import { todayKey } from "@/lib/day";
+import { learnerFromCookie } from "@/lib/learners";
 import { isMathLesson } from "@/lib/math";
 import type { ActivityEntry } from "@/lib/types";
 
@@ -99,14 +100,17 @@ export function planCheer(done: number, total: number): string {
 const CHEER_KEY = "quest:plan-cheered";
 
 /**
- * True the first time it is asked on `day`, on this device: the big
- * all-done celebration is once a day, not every visit to Home.
+ * True the first time it is asked on `day`, on this device, for this child:
+ * the big all-done celebration is once a day, not every visit to Home. Keyed
+ * by child, or the first boy to finish on a shared phone took the second's.
  */
 export function claimCheer(day: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    if (window.localStorage.getItem(CHEER_KEY) === day) return false;
-    window.localStorage.setItem(CHEER_KEY, day);
+    const who = typeof document === "undefined" ? null : learnerFromCookie(document.cookie);
+    const key = who ? `${CHEER_KEY}:${who}` : CHEER_KEY;
+    if (window.localStorage.getItem(key) === day) return false;
+    window.localStorage.setItem(key, day);
     return true;
   } catch {
     // Blocked storage: no stamp to keep, and no cheer to repeat either.

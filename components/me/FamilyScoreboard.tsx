@@ -62,10 +62,11 @@ export default function FamilyScoreboard({
           ? "Race closed for tonight. A new race starts at midnight."
           : `Today, until 9:30 pm. To be in the race: the whole quest and ${MIN_WIN_PTS.toLocaleString("en-US")} pts. Mix it up: a repeat counts less.`}
       </p>
-      <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
+      <p className="mt-1 flex items-center gap-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
+        <Icon name="trophy" size={14} />
         {holder
-          ? `🏆 ${holder.name} is ${rivalry.points} ${rivalry.points === 1 ? "day" : "days"} ahead. ${closed ? "Tonight's result is in." : `Win tonight to ${holder.isMe ? "add one" : "take one back"}!`}`
-          : closed ? "🏆 Level on days." : "🏆 Level on days. Win tonight to go ahead!"}
+          ? `${holder.name} is ${rivalry.points} ${rivalry.points === 1 ? "day" : "days"} ahead. ${closed ? "Tonight's result is in." : `Win tonight to ${holder.isMe ? "add one" : "take one back"}!`}`
+          : closed ? "Level on days." : "Level on days. Win tonight to go ahead!"}
       </p>
       <ul className="mt-3 space-y-3">
         {ranked.map((r) => {
@@ -99,14 +100,15 @@ export default function FamilyScoreboard({
                 {/* Days ahead, and the quest that has to be done to win tonight. */}
                 <div className="mt-0.5 flex flex-wrap gap-1 text-xs font-bold">
                   <span
-                    className="whitespace-nowrap rounded-full px-2 py-0.5"
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5"
                     style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
                     title="Days ahead"
                   >
-                    🏆 {pointsOf(rivalry, r.learner)}
+                    <Icon name="trophy" size={14} />
+                    {pointsOf(rivalry, r.learner)}
                   </span>
                   <span
-                    className="whitespace-nowrap rounded-full px-2 py-0.5"
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5"
                     style={
                       r.questLeft === 0
                         ? { background: "var(--color-green-soft)", color: "var(--color-green-dark)" }
@@ -114,12 +116,19 @@ export default function FamilyScoreboard({
                     }
                     title="Today's quest"
                   >
-                    {r.questLeft === 0 ? "✓ quest done" : `quest ${PLAN_ORDER.length - r.questLeft}/${PLAN_ORDER.length}`}
+                    {r.questLeft === 0 ? (
+                      <>
+                        <Icon name="check" size={14} />
+                        quest done
+                      </>
+                    ) : (
+                      `quest ${PLAN_ORDER.length - r.questLeft}/${PLAN_ORDER.length}`
+                    )}
                   </span>
                 </div>
                 <ProgressBar value={r.xp / top} color={color} height={10} className="mt-1.5" />
                 <p className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>
-                  {nudge(r, rows)}
+                  {nudge(r, rows, closed)}
                 </p>
               </div>
             </li>

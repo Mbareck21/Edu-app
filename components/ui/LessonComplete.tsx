@@ -17,6 +17,8 @@ export type CompleteAction =
   | { label: string; href: string }
   | { label: string; onClick: () => void; disabled?: boolean };
 
+export type NewBadge = { id?: string; name: string; blurb: string; icon: IconName };
+
 export type LessonCompleteProps = {
   title?: string;
   subtitle?: string;
@@ -28,8 +30,10 @@ export type LessonCompleteProps = {
   accuracy: number | null;
   perfect?: boolean;
   leveledUp?: boolean;
-  /** Shown as a callout under the tiles. */
-  newBadge?: { id?: string; name: string; blurb: string; icon: IconName } | null;
+  /** Every badge this session earned, each a callout under the tiles. */
+  newBadges?: readonly NewBadge[];
+  /** One badge: the older prop, used when `newBadges` is not given. */
+  newBadge?: NewBadge | null;
   primary: CompleteAction;
   secondary?: CompleteAction;
   /** "Saved later" note when the post was queued offline. */
@@ -67,7 +71,7 @@ function Tile({ label, value }: { label: string; value: string }) {
       style={{ borderColor: "var(--color-line)", background: "#fff" }}
     >
       <p className="font-display text-xl font-bold leading-none">{value}</p>
-      <p className="mt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+      <p className="mt-1 text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
         {label}
       </p>
     </div>
@@ -75,6 +79,10 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 function Action({ action, variant }: { action: CompleteAction; variant: "primary" | "secondary" }) {
+  // Once tapped it stays down: "Next drill" waits on a server redirect that
+  // reads the database, the screen did not change, so it looked dead and got
+  // tapped again and again. Every action here leaves this screen.
+  const [pending, setPending] = useState(false);
   const opts = { variant, color: "green" as const, size: "lg" as const, fullWidth: true };
   if ("href" in action) {
     return (
@@ -84,7 +92,15 @@ function Action({ action, variant }: { action: CompleteAction; variant: "primary
     );
   }
   return (
-    <Button {...opts} onClick={action.onClick} disabled={action.disabled}>
+    <Button
+      {...opts}
+      onClick={() => {
+        setPending(true);
+        action.onClick();
+      }}
+      disabled={action.disabled || pending}
+      aria-busy={pending || undefined}
+    >
       {action.label}
     </Button>
   );
@@ -98,6 +114,7 @@ export default function LessonComplete({
   accuracy,
   perfect = false,
   leveledUp = false,
+  newBadges,
   newBadge = null,
   primary,
   secondary,
@@ -123,6 +140,9 @@ export default function LessonComplete({
     else sfx.correct();
   }, [inPlan, planDone, perfect, leveledUp]);
 
+  // All of them: a first session can earn First Win and All Right at once,
+  // and only the first used to be shown.
+  const badges = newBadges ?? (newBadge ? [newBadge] : []);
   const xpShown = useCountUp(xp);
   const pctShown = useCountUp(Math.round(Math.max(0, Math.min(1, accuracy ?? 0)) * 100));
 
@@ -157,31 +177,32 @@ export default function LessonComplete({
           </p>
         ) : null}
 
-        {newBadge ? (
+        {badges.map((badge) => (
           <div
+            key={badge.id ?? badge.name}
             className="q-pop mt-4 flex w-full items-center gap-3 rounded-card px-4 py-3 text-left"
             style={{ background: "var(--color-gold-soft)" }}
           >
-            {newBadge.id ? (
+            {badge.id ? (
               <span className="q-bounce-in shrink-0">
-                <Creature badgeId={newBadge.id} size={64} />
+                <Creature badgeId={badge.id} size={64} />
               </span>
             ) : (
               <span style={{ color: "var(--color-gold-ink)" }}>
-                <Icon name={newBadge.icon} size={30} />
+                <Icon name={badge.icon} size={30} />
               </span>
             )}
             <div className="min-w-0">
               <p className="font-display text-base font-bold" style={{ color: "var(--color-gold-ink)" }}>
-                {newBadge.id ? `You found ${creatureFor(newBadge.id).name}!` : `New badge: ${newBadge.name}`}
+                {badge.id ? `You found ${creatureFor(badge.id).name}!` : `New badge: ${badge.name}`}
               </p>
               <p className="text-sm">
-                {newBadge.blurb}
-                {newBadge.id ? " See it on Me." : ""}
+                {badge.blurb}
+                {badge.id ? " See it on Me." : ""}
               </p>
             </div>
           </div>
-        ) : null}
+        ))}
 
         {plan ? (
           <div className="mt-5 w-full">

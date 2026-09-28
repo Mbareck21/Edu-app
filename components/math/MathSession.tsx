@@ -92,8 +92,12 @@ function MathSessionInner({
   const skill = getSkill(skillId);
   const router = useRouter();
 
+  // Only places in this lesson, as the drill runner does: a saved index past
+  // the end left him on a question that never came.
   const [run, setRun] = useState<Run>(() =>
-    initial ? { seed: initial.seed, queue: initial.queue } : freshRun(seed)
+    initial
+      ? { seed: initial.seed, queue: initial.queue.filter((i) => i >= 0 && i < COUNT) }
+      : freshRun(seed)
   );
   const [input, setInput] = useState("");
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
@@ -212,10 +216,11 @@ function MathSessionInner({
     setHinted(false);
     setFlash("wrong");
     setShakeKey((k) => k + 1);
+    // Encouragement first, the answer and the steps under it.
     setFeedback({
       state: "wrong",
-      title: `The answer is ${question.answer.toLocaleString("en-US")}`,
-      line: question.how,
+      title: "Good try!",
+      line: `The answer is ${question.answer.toLocaleString("en-US")}. ${question.how}`,
     });
   }, [advance, feedback, flash, hinted, input, queue, question]);
 
@@ -282,7 +287,7 @@ function MathSessionInner({
         accuracy={total > 0 ? outcome.correct / total : 0}
         perfect={outcome.correct === total}
         leveledUp={outcome.gained?.leveledUp ?? false}
-        newBadge={outcome.gained?.newBadges[0] ?? null}
+        newBadges={outcome.gained?.newBadges ?? []}
         primary={{ label: "All skills", href: "/math" }}
         secondary={{ label: "Play again", onClick: playAgain }}
         note={outcome.note}

@@ -82,9 +82,12 @@ export async function recordAudio(): Promise<Recording> {
 
 /**
  * How a playback finished. "failed" means the sound never reached the child —
- * the TTS call errored, the session had expired, or the browser refused to
- * play. Callers must not treat it as "the audio is over", or they will race
- * on in silence.
+ * the TTS call errored, the session had expired, or the file would not play.
+ * Callers must not treat it as "the audio is over", or they will race on in
+ * silence.
+ *
+ * A browser blocking autoplay (no tap yet on this page) ends quietly as
+ * "ended": nothing is broken, and his next tap on the speaker plays it.
  */
 export type PlaybackEnd = "ended" | "failed";
 
@@ -141,9 +144,12 @@ export function playTextThroughTTS(text: string): Playback {
         if (cancelled) audio.pause();
       },
       // Our own pause()/cancel() abort the pending play. That is not a failure
-      // — only a genuine playback error is.
-      () => {
-        if (!pausing && !cancelled) done("failed");
+      // — only a genuine playback error is. Neither is autoplay being blocked:
+      // iPhone does that on the first item, and a retry then a red speaker
+      // told him the sound was broken when one tap would have played it.
+      (err: unknown) => {
+        if (pausing || cancelled) return;
+        done((err as { name?: unknown } | null)?.name === "NotAllowedError" ? "ended" : "failed");
       }
     );
   };

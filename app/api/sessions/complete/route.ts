@@ -9,6 +9,7 @@ import { LEARNER_IDS } from "@/lib/learners";
 import { isStuckMiss, scheduleSkill, skillsKnowledge } from "@/lib/mastery";
 import { loadMasterySnapshot } from "@/lib/mastery-snapshot";
 import { addPoolWords, getPool } from "@/lib/word-source";
+import { isMathSkillId } from "@/lib/math/skills";
 import { applyRound } from "@/lib/models/MathProgress";
 import { sessionPct } from "@/lib/session-score";
 import {
@@ -79,10 +80,30 @@ type WordResultIn = NonNullable<ParsedBody["wordResults"]>[number];
  */
 type Writes = {
   started: boolean;
-  /** Words that crossed into known / mastered in this session, once each. */
-  knownUp: Set<string>;
-  masteredUp: Set<string>;
+  /**
+   * Words that crossed into known / mastered in this session, once each, with
+   * the lists whose copy of the word crossed.
+   */
+  knownUp: Map<string, Set<string>>;
+  masteredUp: Map<string, Set<string>>;
 };
+
+/**
+ * Another save got to the same document first: a second session posting at
+ * the same moment (two tabs, a queue flush beside a live post). VersionError
+ * is a versioned save that found the document moved on; E11000 is two first
+ * rounds of a skill both inserting its one MathProgress document.
+ */
+function lostRace(err: unknown): boolean {
+  return (
+    err instanceof mongoose.Error.VersionError ||
+    (typeof err === "object" && err !== null && (err as { code?: unknown }).code === 11000)
+  );
+}
+
+function addCrossing(map: Map<string, Set<string>>, word: string, listId: string): void {
+  map.set(word, (map.get(word) ?? new Set()).add(listId));
+}
 
 /** Each step carries its own mark; unscored ones complete just for showing up. */
 function stepCompleted(step: StepId, pct: number): boolean {
@@ -130,6 +151,12 @@ function wordLevel(skills: unknown, now: Date): number {
 /**
  * Per-word, per-skill answers for one list, in one read-modify-write. Words
  * he is stuck on (see isStuckMiss) are collected into `stuck`.
+ *
+ * The save writes the whole words array, so it is versioned (__v selected):
+ * without it, two sessions posting together each wrote the list as they had
+ * read it, the second erased the first's spaced-review updates, and a word
+ * could pay its known bonus twice. The one that loses reads the list again
+ * and applies its answers once more, on top of the other's.
  */
 async function applyWordResults(
   listId: string,
@@ -141,42 +168,83 @@ async function applyWordResults(
   if (results.length === 0) return;
   if (!mongoose.isValidObjectId(listId)) return;
   const { WordList } = await db();
-  const doc = await WordList.findById(listId).select("words kind");
-  if (!doc) return;
+  for (let attempt = 0; ; attempt++) {
+    const doc = await WordList.findById(listId).select("words kind __v");
+    if (!doc) return;
 
-  const byWord = new Map<string, number>();
-  doc.words.forEach((w, i) => byWord.set(String(w.word).toLowerCase(), i));
-  let touched = false;
-  for (const r of results) {
-    const index = byWord.get(r.word.toLowerCase());
-    if (index === undefined) continue;
-    const skill = r.skill;
-    const before = doc.kind === "pool" ? null : wordLevel(doc.words[index].skills, now);
-    const prev = toSkillState(doc.words[index].skills?.[skill], now);
-    const next = scheduleSkill(prev, r.correct, now);
-    if (doc.kind !== "pool" && isStuckMiss(prev, r.correct, now)) {
-      const w = doc.words[index];
-      stuck.set(String(w.word), { word: String(w.word), clue: w.clue ?? "", arabic: w.arabic ?? "" });
+    // Kept apart until the save lands: a lost race recomputes them from the
+    // list as the other session left it.
+    const known = new Set<string>();
+    const mastered = new Set<string>();
+    const stuckHere = new Map<string, PoolWord>();
+    const byWord = new Map<string, number>();
+    doc.words.forEach((w, i) => byWord.set(String(w.word).toLowerCase(), i));
+    let touched = false;
+    for (const r of results) {
+      const index = byWord.get(r.word.toLowerCase());
+      if (index === undefined) continue;
+      const skill = r.skill;
+      const before = doc.kind === "pool" ? null : wordLevel(doc.words[index].skills, now);
+      const prev = toSkillState(doc.words[index].skills?.[skill], now);
+      const next = scheduleSkill(prev, r.correct, now);
+      if (doc.kind !== "pool" && isStuckMiss(prev, r.correct, now)) {
+        const w = doc.words[index];
+        stuckHere.set(String(w.word), { word: String(w.word), clue: w.clue ?? "", arabic: w.arabic ?? "" });
+      }
+      doc.set(`words.${index}.skills.${skill}`, {
+        correct: next.correct,
+        wrong: next.wrong,
+        streak: next.streak,
+        lastAt: next.lastAt ? new Date(next.lastAt) : null,
+        dueAt: new Date(next.dueAt),
+      });
+      if (before !== null) {
+        const after = wordLevel(doc.words[index].skills, now);
+        const word = String(doc.words[index].word).toLowerCase();
+        if (before < 1 && after >= 1) known.add(word);
+        if (before < 2 && after >= 2) mastered.add(word);
+      }
+      touched = true;
     }
-    doc.set(`words.${index}.skills.${skill}`, {
-      correct: next.correct,
-      wrong: next.wrong,
-      streak: next.streak,
-      lastAt: next.lastAt ? new Date(next.lastAt) : null,
-      dueAt: new Date(next.dueAt),
-    });
-    if (before !== null) {
-      const after = wordLevel(doc.words[index].skills, now);
-      const word = String(doc.words[index].word).toLowerCase();
-      if (before < 1 && after >= 1) writes.knownUp.add(word);
-      if (before < 2 && after >= 2) writes.masteredUp.add(word);
+    if (!touched) return;
+    doc.markModified("words");
+    writes.started = true;
+    try {
+      await doc.save();
+    } catch (err) {
+      if (attempt === 0 && lostRace(err)) continue;
+      throw err;
     }
-    touched = true;
+    for (const word of known) addCrossing(writes.knownUp, word, listId);
+    for (const word of mastered) addCrossing(writes.masteredUp, word, listId);
+    for (const [word, w] of stuckHere) stuck.set(word, w);
+    return;
   }
-  if (!touched) return;
-  doc.markModified("words");
-  writes.started = true;
-  await doc.save();
+}
+
+/**
+ * The known and mastered bonuses are for the word, not a list's copy of it.
+ * The same word on two units keeps its own progress on each, and "words
+ * known" counts the copy he knows best (uniqueWords), so a copy crossing on
+ * one list pays nothing when another list already had the word there. Only
+ * read when something crossed, which is rare.
+ */
+async function dropKnownElsewhere(writes: Writes, now: Date): Promise<void> {
+  const words = [...new Set([...writes.knownUp.keys(), ...writes.masteredUp.keys()])];
+  if (words.length === 0) return;
+  const { WordList } = await db();
+  const lists = await WordList.find({ kind: { $ne: "pool" }, "words.word": { $in: words } })
+    .select("words.word words.skills")
+    .lean();
+  for (const list of lists) {
+    const id = String(list._id);
+    for (const w of list.words) {
+      const word = String(w.word).toLowerCase();
+      const level = wordLevel(w.skills, now);
+      if (level >= 1 && writes.knownUp.get(word)?.has(id) === false) writes.knownUp.delete(word);
+      if (level >= 2 && writes.masteredUp.get(word)?.has(id) === false) writes.masteredUp.delete(word);
+    }
+  }
 }
 
 /** Route each word result to its list; the session's own list also gets pathProgress. */
@@ -196,6 +264,7 @@ async function updateList(body: ParsedBody, now: Date, writes: Writes): Promise<
   await Promise.all(
     [...groups].map(([listId, results]) => applyWordResults(listId, results, now, writes, stuck))
   );
+  await dropKnownElsewhere(writes, now);
   // Missed twice running: into Words to fix, once, unless it is there already.
   if (stuck.size > 0) {
     const pool = await getPool();
@@ -205,27 +274,42 @@ async function updateList(body: ParsedBody, now: Date, writes: Writes): Promise<
 }
 
 async function updateMath(body: ParsedBody, now: Date, writes: Writes): Promise<void> {
-  if (!body.mathSkill) return;
+  // Only a real skill: any string used to make a stray MathProgress document.
+  // Ignored rather than refused, so a session queued under an old id still
+  // pays. A round with no answers (a timed drill left to run out) played
+  // nothing, and must not stamp the skill as practised today.
+  if (!body.mathSkill || !isMathSkillId(body.mathSkill) || body.answered === 0) return;
+  const skill = body.mathSkill;
   const { MathProgress } = await db();
-  const doc =
-    (await MathProgress.findOne({ skill: body.mathSkill })) ??
-    new MathProgress({ skill: body.mathSkill });
+  // The save is versioned and the skill's document is unique, so a second
+  // session on the same skill at the same moment fails here AFTER the session
+  // id is claimed; its retry would then report "already applied" and the
+  // whole session was lost. The one that loses reads again and applies once.
+  for (let attempt = 0; ; attempt++) {
+    const doc = (await MathProgress.findOne({ skill })) ?? new MathProgress({ skill });
 
-  doc.attempts = (doc.attempts ?? 0) + body.answered;
-  doc.correct = (doc.correct ?? 0) + body.correct;
-  if (body.ms > 0 && (!doc.bestMs || body.ms < doc.bestMs)) doc.bestMs = body.ms;
-  // Only a round played at the stored level moves it, with the Grade 5 floor
-  // and short timed runs left out; see applyRound.
-  const scored = applyRound(
-    { level: doc.level ?? 1, recentPcts: doc.recentPcts ?? [], lastAt: doc.lastAt },
-    { answered: body.answered, correct: body.correct, timed: body.timed, playedLevel: body.mathLevel },
-    todayKey(now)
-  );
-  doc.recentPcts = scored.recentPcts;
-  doc.level = scored.level;
-  doc.lastAt = now;
-  writes.started = true;
-  await doc.save();
+    doc.attempts = (doc.attempts ?? 0) + body.answered;
+    doc.correct = (doc.correct ?? 0) + body.correct;
+    if (body.ms > 0 && (!doc.bestMs || body.ms < doc.bestMs)) doc.bestMs = body.ms;
+    // Only a round played at the stored level moves it, with the Grade 5 floor
+    // and short timed runs left out; see applyRound.
+    const scored = applyRound(
+      { level: doc.level ?? 1, recentPcts: doc.recentPcts ?? [], lastAt: doc.lastAt },
+      { answered: body.answered, correct: body.correct, timed: body.timed, playedLevel: body.mathLevel },
+      todayKey(now)
+    );
+    doc.recentPcts = scored.recentPcts;
+    doc.level = scored.level;
+    doc.lastAt = now;
+    writes.started = true;
+    try {
+      await doc.save();
+      return;
+    } catch (err) {
+      if (attempt === 0 && lostRace(err)) continue;
+      throw err;
+    }
+  }
 }
 
 /**
@@ -307,7 +391,7 @@ export async function POST(req: Request) {
   }
 
   const result: SessionResult = body;
-  const writes: Writes = { started: false, knownUp: new Set(), masteredUp: new Set() };
+  const writes: Writes = { started: false, knownUp: new Map(), masteredUp: new Map() };
   try {
     // Progress first, profile last: a half-written session is better than XP
     // for work the list never recorded. Only the profile step re-runs when

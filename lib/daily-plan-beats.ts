@@ -12,12 +12,13 @@ import type { ClientWord } from "@/lib/models/WordList";
 import type { ActivityEntry } from "@/lib/types";
 
 /**
- * A summary carries a word's skills but not its SRS state. The whole-word
- * helpers used here read only the skills plus reviewCount, and a word with no
- * skill answered has no review either, so 0 stands in for it.
+ * A summary carries a word's skills and its review count, which is all the
+ * whole-word helpers used here read. The count matters: a word flipped on the
+ * flashcards page is met there with no skill answered, and without it Home
+ * called the word new while the beat page did not.
  */
 export function asWord(w: SummaryWord): ClientWord {
-  return { ...w, srs: { reviewCount: 0 } } as unknown as ClientWord;
+  return { ...w, srs: { reviewCount: w.reviewCount ?? 0 } } as unknown as ClientWord;
 }
 
 /**

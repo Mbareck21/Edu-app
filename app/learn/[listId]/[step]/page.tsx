@@ -9,12 +9,10 @@ import { requestSeed } from "@/components/ui/time";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
 import { loadPlanProgress } from "@/lib/daily-plan-data";
-import { buildLesson } from "@/lib/lesson-builder";
+import { buildLesson, writeItWords } from "@/lib/lesson-builder";
 import { mulberry32 } from "@/lib/math/rng";
-import { orderByNeed } from "@/lib/practice-order";
 import { resumeKey } from "@/lib/resume";
-import { skillDue } from "@/lib/mastery";
-import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
+import { fromRow, type ChainState } from "@/lib/spell-chain";
 import { getProfile } from "@/lib/profile";
 import { scaffoldFor } from "@/lib/reading";
 import { toClient } from "@/lib/models/WordList";
@@ -53,17 +51,7 @@ export default async function StepPage({
     // finished and queued offline sessions still parse — see lib/types.ts.
     // What it does is now writing, because flipping a card and telling
     // yourself you knew it is not evidence of anything.
-    const chosen = orderByNeed(
-      list.words,
-      mulberry32(seed % 2147483647),
-      // Due first, then weakest: the words he most needs to write.
-      (w) => ({
-        due: skillDue(w.skills.spell, new Date(seed)),
-        streak: w.skills.spell.streak,
-      })
-    )
-      .slice(0, ROTATE_WIDTH)
-      .map((w) => w.word);
+
     // Senses and chains for the whole list, not just the chosen few: a sitting
     // that resumes after a reload keeps the words it started with, and those
     // may not be the ones this visit would have picked.
@@ -76,6 +64,9 @@ export default async function StepPage({
       const row = rows.find((r) => r.word === w.word);
       chains[w.word] = fromRow(w.word, row);
     }
+    // Due first, then weakest: the words he most needs to write. A finished
+    // chain that is not due a re-check waits behind the rest.
+    const chosen = writeItWords(list.words, chains, new Date(seed), mulberry32(seed % 2147483647));
     return (
       <>
         <ExitBar href={pathHref} label="Back to path" />

@@ -12,7 +12,7 @@ export type SessionOptions = {
   seed: number;
   /** 1..40. Defaults to 10. */
   count?: number;
-  /** Prompts already asked in this run (an earlier timed batch). None comes back. */
+  /** Prompts (or keys) already asked in this run (an earlier timed batch). None comes back. */
   avoid?: readonly string[];
 };
 
@@ -21,7 +21,7 @@ export type MixedSessionOptions = {
   seed: number;
   /** 1..40. Defaults to 10. */
   count?: number;
-  /** Prompts already asked in this run (an earlier timed batch). None comes back. */
+  /** Prompts (or keys) already asked in this run (an earlier timed batch). None comes back. */
   avoid?: readonly string[];
 };
 
@@ -31,9 +31,10 @@ function clampCount(count: number): number {
 }
 
 /**
- * Draws up to `count` questions, never the same prompt twice. A skill and level
- * with fewer questions than that gives a shorter list: padding it out with
- * repeats let him answer from memory, not by working it out.
+ * Draws up to `count` questions, never the same prompt twice, nor the same
+ * key (6 × 11 after 11 × 6). A skill and level with fewer questions than that
+ * gives a shorter list: padding it out with repeats let him answer from
+ * memory, not by working it out.
  */
 function draw(
   count: number,
@@ -48,8 +49,9 @@ function draw(
     const skill = skillAt(i);
     for (let tries = 0; tries < 100; tries++) {
       const q = skill.generate(level, rng);
-      if (!seen.has(q.prompt)) {
+      if (!seen.has(q.prompt) && !(q.key && seen.has(q.key))) {
         seen.add(q.prompt);
+        if (q.key) seen.add(q.key);
         out.push(q);
         break;
       }

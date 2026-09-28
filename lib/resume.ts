@@ -17,32 +17,46 @@
  */
 
 import { todayKey } from "@/lib/day";
+import { learnerFromCookie } from "@/lib/learners";
 
 const PREFIX = "quest:resume:";
 
-/** What is stored: the value and the day it was saved on. */
-type Stamped = { day: string; value: unknown };
+/** What is stored: the value, the day it was saved on and whose run it is. */
+type Stamped = { day: string; value: unknown; who?: string };
 
 /** One key per run. The seed makes "Again" a different run from the last. */
 export function resumeKey(kind: string, id: string, seed: string | number): string {
   return `${PREFIX}${kind}:${id}:${seed}`;
 }
 
-/** The stored form of `value`, saved on `day`. */
-export function stamp(value: unknown, day: string): string {
-  return JSON.stringify({ day, value } satisfies Stamped);
+/** The stored form of `value`, saved on `day` (by `who`, when known). */
+export function stamp(value: unknown, day: string, who?: string): string {
+  return JSON.stringify({ day, value, who } satisfies Stamped);
 }
 
 /**
  * The value saved on `day`, or undefined when the stored text is from another
- * day, unstamped (an older build) or not parseable.
+ * day, unstamped (an older build), not parseable, or saved by the other child.
  */
-export function unstamp(raw: string, day: string): unknown {
+export function unstamp(raw: string, day: string, who?: string): unknown {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const o = parsed as Partial<Stamped>;
+    // Both boys can share one phone. Sign-out clears every run, but a sign-in
+    // after an expired cookie does not, so each run also names its child.
+    if (who && o.who && o.who !== who) return undefined;
     return o.day === day && "value" in o ? o.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Who is signed in on this phone, from the readable label cookie. */
+function signedIn(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  try {
+    return learnerFromCookie(document.cookie) ?? undefined;
   } catch {
     return undefined;
   }
@@ -85,9 +99,9 @@ export function loadProgress<T>(key: string, isValid: (v: unknown) => v is T): T
     sweep(ls, day);
     const raw = ls.getItem(key);
     if (!raw) return null;
-    const value = unstamp(raw, day);
+    const value = unstamp(raw, day, signedIn());
     if (value === undefined) {
-      // Yesterday's lesson is not today's: start fresh.
+      // Yesterday's lesson is not today's, and his brother's is not his: start fresh.
       ls.removeItem(key);
       return null;
     }
@@ -101,7 +115,7 @@ export function saveProgress<T>(key: string, value: T): void {
   const ls = storage();
   if (!ls) return;
   try {
-    ls.setItem(key, stamp(value, todayKey()));
+    ls.setItem(key, stamp(value, todayKey(), signedIn()));
   } catch {
     // Full or blocked: he just does not get a resume this time.
   }

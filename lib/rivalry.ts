@@ -45,7 +45,9 @@ export function settleThrough(
   xpOn: (day: string) => Record<string, number>
 ): Rivalry {
   let out = r;
-  for (let day = addDays(r.through, 1); day <= yesterday; day = addDays(day, 1)) {
+  // addDays gives "" for a key that is not a date, and "" <= yesterday is
+  // always true: without the check a bad stored day hangs every render.
+  for (let day = addDays(r.through, 1); day && day <= yesterday; day = addDays(day, 1)) {
     out = settleDay(out, day, xpOn(day));
   }
   return out;

@@ -42,6 +42,8 @@ export default function DeleteListButton({
             router.replace(leaveTo);
           }
           router.refresh();
+        } catch {
+          alert("No internet. Try again.");
         } finally {
           setBusy(false);
         }

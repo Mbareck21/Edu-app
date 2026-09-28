@@ -53,7 +53,7 @@ function AdultForm() {
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="••••"
-        className="w-full rounded-card border-2 bg-white py-4 text-center font-display text-3xl tracking-[0.4em] outline-none"
+        className="w-full rounded-card border-2 bg-white py-4 text-center font-display text-3xl tracking-[0.4em] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue"
         style={{
           borderColor: error ? "var(--color-coral)" : "var(--color-line)",
           color: "var(--color-ink)",

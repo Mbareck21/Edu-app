@@ -140,11 +140,19 @@ function inRace(r: { xp: number; questLeft?: number }): boolean {
  * A short cheer for one child, given everyone's race points today and how
  * much of the quest each has left: until his quest is done and he has
  * MIN_WIN_PTS he is not in the race, and only rivals who are in it count.
+ * After RACE_CLOSES (`closed`) nothing he plays moves tonight's race, so it
+ * no longer sends him to finish the quest or catch up.
  */
 export function nudge(
   me: { xp: number; questLeft?: number },
-  rows: readonly { name: string; xp: number; questLeft?: number }[]
+  rows: readonly { name: string; xp: number; questLeft?: number }[],
+  closed = false
 ): string {
+  if (closed) {
+    return inRace(me)
+      ? "You were in tonight's race! A new one starts at midnight."
+      : "Tonight's race is closed. A new one starts at midnight.";
+  }
   const left = me.questLeft ?? 0;
   if (left > 0) return `Finish today's quest to be in the race: ${left} to go!`;
   if (!inRace(me)) return `Quest done! ${(MIN_WIN_PTS - me.xp).toLocaleString("en-US")} more pts to be in the race: try a drill!`;

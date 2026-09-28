@@ -1,4 +1,5 @@
 import Card from "@/components/ui/Card";
+import Icon from "@/components/ui/Icon";
 import { todayKey } from "@/lib/day";
 import { gradeOn } from "@/lib/grade";
 import { maxReadingLevel } from "@/lib/reading";
@@ -14,10 +15,10 @@ export function readingStars(pct: number): number {
 
 function Stars({ n }: { n: number }) {
   return (
-    <span className="whitespace-nowrap text-sm leading-none" aria-label={`${n} of 3 stars`}>
+    <span className="inline-flex items-center gap-0.5" aria-label={`${n} of 3 stars`}>
       {[0, 1, 2].map((i) => (
-        <span key={i} style={{ opacity: i < n ? 1 : 0.2 }}>
-          ⭐
+        <span key={i} style={{ color: i < n ? "var(--color-gold)" : "var(--color-line)" }}>
+          <Icon name="star" size={16} filled={i < n} />
         </span>
       ))}
     </span>
@@ -34,9 +35,14 @@ export default function ReadingProgressCard({ progress }: { progress: ReadingPro
   const recent = scores.slice(-6).reverse(); // newest first
   return (
     <Card className="mt-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-lg font-bold">
-          📖 Reading level {level} <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>of {top}</span>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="inline-flex items-center gap-1 font-display text-lg font-bold">
+          <span style={{ color: "var(--color-green-dark)" }}>
+            <Icon name="book" size={20} />
+          </span>
+          <span>
+            Reading level {level} <span className="text-sm font-normal" style={{ color: "var(--color-muted)" }}>of {top}</span>
+          </span>
         </h2>
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           {thisWeek} this week
@@ -44,8 +50,9 @@ export default function ReadingProgressCard({ progress }: { progress: ReadingPro
       </div>
 
       {toNext === 0 ? (
-        <p className="mt-3 font-display font-bold" style={{ color: "var(--color-green-dark)" }}>
-          🏆 Top level! Keep reading.
+        <p className="mt-3 inline-flex items-center gap-1 font-display font-bold" style={{ color: "var(--color-green-dark)" }}>
+          <Icon name="trophy" size={20} />
+          Top level! Keep reading.
         </p>
       ) : (
         <>
@@ -60,11 +67,11 @@ export default function ReadingProgressCard({ progress }: { progress: ReadingPro
                     : { borderColor: "var(--color-line)", color: "var(--color-faint)" }
                 }
               >
-                {i < goodInARow ? "✓" : i + 1}
+                {i < goodInARow ? <Icon name="check" size={18} strokeWidth={3} /> : i + 1}
               </span>
             ))}
-            <span className="ml-1 text-2xl" aria-hidden>
-              →
+            <span className="ml-1">
+              <Icon name="arrowRight" size={24} />
             </span>
             <span className="font-display font-bold">Level {level + 1}</span>
           </div>
@@ -72,7 +79,7 @@ export default function ReadingProgressCard({ progress }: { progress: ReadingPro
             <strong>
               {toNext} more good {toNext === 1 ? "reading" : "readings"} in a row!
             </strong>{" "}
-            <span style={{ color: "var(--color-muted)" }}>A good reading is 3 of 4 right.</span>
+            <span style={{ color: "var(--color-muted)" }}>A good reading is 3 of every 4 right.</span>
           </p>
         </>
       )}

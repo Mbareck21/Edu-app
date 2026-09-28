@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import Button from "@/components/ui/Button";
+import { learnerFromCookie } from "@/lib/learners";
 import { flushQueue, queueSize } from "@/lib/offline-queue";
 import { clearAllProgress } from "@/lib/resume";
 
@@ -53,7 +54,9 @@ export default function SignOutButton({ name }: { name: string }) {
           setBusy(true);
           try {
             await flushQueue();
-            if (queueSize() > 0) {
+            // Only this child's: the other child's games wait for their own
+            // PIN and cannot be sent from here.
+            if (queueSize(learnerFromCookie(document.cookie)) > 0) {
               setError("Some games are not saved yet. Connect to the internet, then try again.");
               return;
             }

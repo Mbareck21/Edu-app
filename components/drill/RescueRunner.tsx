@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AudioButton from "@/components/items/AudioButton";
+import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { fireConfetti } from "@/components/ui/Confetti";
 import LessonComplete from "@/components/ui/LessonComplete";
@@ -168,6 +170,13 @@ export default function RescueRunner({
           <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
             Pick other words on the Drill tab.
           </p>
+          <Link
+            href="/drill"
+            className={buttonClass({ color: "blue", fullWidth: true, className: "mt-4" })}
+            style={buttonStyle({ color: "blue" })}
+          >
+            Back to drills
+          </Link>
         </Card>
       </div>
     );
@@ -190,11 +199,7 @@ export default function RescueRunner({
         accuracy={saved / puzzles.length}
         perfect={clean === puzzles.length}
         leveledUp={outcome.gained?.leveledUp}
-        newBadge={
-          outcome.gained?.newBadges[0]
-            ? { ...outcome.gained.newBadges[0] }
-            : null
-        }
+        newBadges={outcome.gained?.newBadges ?? []}
         primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
         secondary={{ label: "All drills", href: "/drill" }}
         note={outcome.note}
@@ -206,11 +211,25 @@ export default function RescueRunner({
   // Long words get narrower tiles so "adaptation" still fits a phone.
   const letterCount = puzzle.word.length;
   const tileSize =
-    letterCount > 11 ? "h-9 w-5 text-lg" : letterCount > 7 ? "h-10 w-[26px] text-xl" : "h-11 w-8 text-2xl";
+    letterCount > 14
+      ? "h-8 w-4 text-base"
+      : letterCount > 11
+        ? "h-9 w-5 text-lg"
+        : letterCount > 7
+          ? "h-10 w-[26px] text-xl"
+          : "h-11 w-8 text-2xl";
   const activeBlank = puzzle.blanks[filled];
+  // One tile group per word, so a two-word term wraps between its words and
+  // never inside one. `start` is the word's index in puzzle.word.
+  const wordGroups: { start: number; text: string }[] = [];
+  let at = 0;
+  for (const part of puzzle.word.split(" ")) {
+    wordGroups.push({ start: at, text: part });
+    at += part.length + 1;
+  }
 
   return (
-    <div className="safe-top min-h-dvh pb-8">
+    <div className="safe-top min-h-dvh pb-[calc(2rem+env(safe-area-inset-bottom))]">
       <RunnerHeader
         href="/drill"
         value={idx / puzzles.length}
@@ -262,29 +281,33 @@ export default function RescueRunner({
               <path d="M30 56 v14" stroke="var(--color-ink)" strokeWidth="1.5" />
             </svg>
             <div
-              className={`flex rounded-tile bg-white py-2 shadow-lift ${letterCount > 7 ? "gap-0.5 px-1.5" : "gap-1 px-2"} ${status === "splash" ? "opacity-70" : ""}`}
+              className={`flex max-w-full flex-wrap justify-center gap-x-3 gap-y-1 rounded-tile bg-white py-2 shadow-lift ${letterCount > 7 ? "px-1.5" : "px-2"} ${status === "splash" ? "opacity-70" : ""}`}
             >
-              {[...puzzle.word].map((ch, i) => {
-                const blankAt = puzzle.blanks.indexOf(i);
-                const isBlank = blankAt >= 0;
-                const shown = !isBlank || blankAt < filled || shownWhole;
-                if (ch === " ") return <span key={i} className="w-3" />;
-                return (
-                  <span
-                    key={i}
-                    className={`flex ${tileSize} items-center justify-center rounded-lg font-display font-bold lowercase ${
-                      isBlank && blankAt < filled ? "q-pop" : ""
-                    }`}
-                    style={{
-                      background: isBlank ? (shown ? "var(--color-green-soft)" : "var(--color-blue-soft)") : "transparent",
-                      border: isBlank && !shown ? `2px dashed ${i === activeBlank ? "var(--color-blue)" : "var(--color-line)"}` : "2px solid transparent",
-                      color: isBlank && status === "splash" && blankAt >= filled ? "var(--color-coral-dark)" : "var(--color-ink)",
-                    }}
-                  >
-                    {shown ? ch : ""}
-                  </span>
-                );
-              })}
+              {wordGroups.map(({ start, text }) => (
+                <span key={start} className={`flex ${letterCount > 7 ? "gap-0.5" : "gap-1"}`}>
+                  {[...text].map((ch, k) => {
+                    const i = start + k;
+                    const blankAt = puzzle.blanks.indexOf(i);
+                    const isBlank = blankAt >= 0;
+                    const shown = !isBlank || blankAt < filled || shownWhole;
+                    return (
+                      <span
+                        key={i}
+                        className={`flex ${tileSize} items-center justify-center rounded-lg font-display font-bold lowercase ${
+                          isBlank && blankAt < filled ? "q-pop" : ""
+                        }`}
+                        style={{
+                          background: isBlank ? (shown ? "var(--color-green-soft)" : "var(--color-blue-soft)") : "transparent",
+                          border: isBlank && !shown ? `2px dashed ${i === activeBlank ? "var(--color-blue)" : "var(--color-line)"}` : "2px solid transparent",
+                          color: isBlank && status === "splash" && blankAt >= filled ? "var(--color-coral-dark)" : "var(--color-ink)",
+                        }}
+                      >
+                        {shown ? ch : ""}
+                      </span>
+                    );
+                  })}
+                </span>
+              ))}
             </div>
           </div>
 

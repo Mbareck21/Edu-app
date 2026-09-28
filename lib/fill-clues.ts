@@ -6,6 +6,13 @@ import {
 } from "@/lib/groq";
 
 /**
+ * Words per AI call. A long paste used to go out whole: the answer ran past
+ * max_tokens, the cut-off JSON did not parse, and not one word got a clue.
+ * Callers put the words that matter most first.
+ */
+const MAX_BATCH = 30;
+
+/**
  * One Groq call writes a clue for each word.
  *
  * Shared by the school-list seeder and the stuck-word pool, because a word
@@ -16,8 +23,11 @@ import {
  * Failure is fine and silent by design — the word is still added, and the
  * parent can fill clues from the editor later. Losing the word because the AI
  * was down would be the worse outcome.
+ *
+ * Only the first MAX_BATCH words are asked about; the rest come back empty.
  */
-export async function fillClues(words: string[]): Promise<Record<string, string>> {
+export async function fillClues(all: string[]): Promise<Record<string, string>> {
+  const words = all.slice(0, MAX_BATCH);
   if (words.length === 0) return {};
   try {
     const completion = await groq().chat.completions.create({
@@ -59,9 +69,10 @@ export async function fillClues(words: string[]): Promise<Record<string, string>
  * what he is writing.
  *
  * Same contract as fillClues: best effort, silent failure, the word is added
- * either way.
+ * either way, and at most MAX_BATCH words per call.
  */
-export async function fillArabic(words: string[]): Promise<Record<string, string>> {
+export async function fillArabic(all: string[]): Promise<Record<string, string>> {
+  const words = all.slice(0, MAX_BATCH);
   if (words.length === 0) return {};
   try {
     const completion = await groq().chat.completions.create({

@@ -8,12 +8,50 @@ export const maxDuration = 30;
 // Same Arabic Unicode range used for client-side chunking before.
 const ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
 
+/** A lone letter of the other language is not worth a voice call of its own. */
+const MIN_RUN_LETTERS = 2;
+/**
+ * Voice calls per request. Each chunk is one call to the voice service, made
+ * one after another, so text that switched language on every letter made
+ * 2000 of them.
+ */
+const MAX_CHUNKS = 20;
+
+type Chunk = { voice: string; text: string };
+
+const letterCount = (s: string) => (s.match(/\p{L}/gu) ?? []).length;
+
+/**
+ * Fold one-letter runs into their neighbour, then everything past the cap
+ * into the last chunk: from there one voice reads the rest, mixed or not.
+ */
+function mergeRuns(runs: Chunk[]): Chunk[] {
+  const out: Chunk[] = [];
+  for (const run of runs) {
+    const prev = out[out.length - 1];
+    if (!prev) {
+      out.push({ ...run });
+    } else if (prev.voice === run.voice || letterCount(run.text) < MIN_RUN_LETTERS) {
+      prev.text += run.text;
+    } else if (letterCount(prev.text) < MIN_RUN_LETTERS) {
+      out[out.length - 1] = { voice: run.voice, text: prev.text + run.text };
+    } else {
+      out.push({ ...run });
+    }
+  }
+  if (out.length > MAX_CHUNKS) {
+    const tail = out.splice(MAX_CHUNKS - 1);
+    out.push({ voice: tail[0].voice, text: tail.map((c) => c.text).join("") });
+  }
+  return out;
+}
+
 // Split text into runs of one language each so each TTS call uses the
 // matching neural voice. Whitespace and punctuation attach to the surrounding
 // chunk to avoid micro-gaps between adjacent same-language words.
-function chunkByLanguage(text: string): Array<{ voice: string; text: string }> {
+function chunkByLanguage(text: string): Chunk[] {
   if (!text.trim()) return [];
-  const out: Array<{ voice: string; text: string }> = [];
+  const out: Chunk[] = [];
   let buf = "";
   let bufVoice: string | null = null;
   const isLetter = (ch: string) => /\p{L}/u.test(ch);
@@ -33,7 +71,7 @@ function chunkByLanguage(text: string): Array<{ voice: string; text: string }> {
     }
   }
   if (buf.trim()) out.push({ voice: bufVoice ?? AI_ENGLISH_VOICE, text: buf });
-  return out;
+  return mergeRuns(out);
 }
 
 async function synthesizeChunk(text: string, voice: string): Promise<Buffer> {

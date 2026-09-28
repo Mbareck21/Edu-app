@@ -40,6 +40,18 @@ test("Write and use works on the unit, never the Stuck-words pool that leads the
   assert.equal(productionList([pool]), undefined);
 });
 
+test("Write and use stays on words he has met when Home moves to a fresh unit", () => {
+  // The day unit 1's last new words are taught, Home points at unit 2, where
+  // he has met nothing. Production then spelled and used words never taught.
+  const taught = { name: "unit 1", kind: "unit", words: [word(true), word(true), word(true)] };
+  const fresh = { name: "unit 2", kind: "unit", words: [word(false), word(false), word(false)] };
+  const later = { name: "unit 3", kind: "unit", words: [word(false), word(false)] };
+  assert.equal(newWordsList([taught, fresh, later])?.name, "unit 2");
+  assert.equal(productionList([taught, fresh, later])?.name, "unit 1");
+  // Nothing met anywhere yet: the Home unit, as before.
+  assert.equal(productionList([fresh, later])?.name, "unit 2");
+});
+
 test("Review and New words leave the Stuck-words pool out", () => {
   const pool = { name: "Stuck words", kind: "pool", words: [word(false)] };
   const unit = { name: "unit 1", kind: "unit", words: [word(false)] };

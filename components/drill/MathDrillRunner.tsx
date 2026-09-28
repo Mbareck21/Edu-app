@@ -214,7 +214,8 @@ function MathDrillRunnerInner({
     setReveal(null);
     askedAt.current = Date.now();
     if (at + 1 >= questions.length) {
-      setAsked((a) => [...a, ...questions.map((q) => q.prompt)]);
+      // The key too: without it a later batch asked 7 × 6 after 6 × 7.
+      setAsked((a) => [...a, ...questions.flatMap((q) => (q.key ? [q.prompt, q.key] : [q.prompt]))]);
       setBatch((b) => b + 1);
       setAt(0);
       return;
@@ -264,7 +265,13 @@ function MathDrillRunnerInner({
     }
     setFlash("wrong");
     setShakeKey((k) => k + 1);
-    setFeedback({ state: "wrong", title: `The answer is ${question.answer.toLocaleString("en-US")}`, line: question.how });
+    // Encouragement first, as every other miss sheet does: a bare correction
+    // beside the red X and the wrong sound read as a telling-off.
+    setFeedback({
+      state: "wrong",
+      title: "Good try!",
+      line: `The answer is ${question.answer.toLocaleString("en-US")}. ${question.how}`.trim(),
+    });
   }, [feedback, flash, input, nextTimed, queue, question, saveKey, timed]);
 
   const afterWrong = useCallback(() => {
@@ -307,7 +314,7 @@ function MathDrillRunnerInner({
           accuracy={timed ? null : outcome.answered === 0 ? 0 : outcome.correct / outcome.answered}
           perfect={sessionPerfect({ answered: outcome.answered, correct: outcome.correct, timed })}
           leveledUp={outcome.gained?.leveledUp ?? false}
-          newBadge={outcome.gained?.newBadges[0] ?? null}
+          newBadges={outcome.gained?.newBadges}
           primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
           secondary={{ label: "All drills", href: "/drill" }}
           note={outcome.note}

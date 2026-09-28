@@ -28,16 +28,19 @@ export async function currentRivalry(
   const m = await connectDB();
   const col = m.connection.db!.collection<Doc>("family");
   const stored = await col.findOne({ _id: ID });
-  const before: Rivalry = stored
-    ? { through: stored.through, holder: stored.holder, points: stored.points }
-    : freshRivalry();
+  // A stored day that is not a date cannot be settled from; count again from
+  // the start (the activity log still holds every day).
+  const before: Rivalry =
+    stored && /^\d{4}-\d{2}-\d{2}$/.test(String(stored.through))
+      ? { through: stored.through, holder: stored.holder, points: stored.points }
+      : freshRivalry();
   const { store, shown } = rivalryView(before, todayKey(now), (day) =>
     Object.fromEntries(family.map(({ learner, state }) => [learner, winXp(state.activity, day)]))
   );
   if (!store) return shown;
   // Only lands on the count it read: two pages settling at once write once.
   if (stored) {
-    await col.updateOne({ _id: ID, through: before.through }, { $set: store });
+    await col.updateOne({ _id: ID, through: stored.through }, { $set: store });
   } else {
     await col.insertOne({ _id: ID, ...store }).catch(() => undefined);
   }

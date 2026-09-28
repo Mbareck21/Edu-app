@@ -3,13 +3,23 @@
 // the first send and leaves only once the server has answered for it, so the
 // app can be swiped away mid-save; the next load flushes whatever is left.
 
-import { learnerFromCookie } from "@/lib/learners";
+import { learnerFromCookie, type LearnerId } from "@/lib/learners";
 import type { ClientProfile, SessionResult } from "@/lib/types";
 import { estimateXp, type Gained } from "@/lib/rewards";
 
 export const QUEUE_KEY = "quest:queue";
 const ENDPOINT = "/api/sessions/complete";
-const MAX_QUEUE = 50;
+/**
+ * Past this the oldest item goes. At 50 a week offline could reach it and
+ * drop a lesson without a word; 500 is far beyond any real stretch and still
+ * a small share of the phone's storage for this site.
+ */
+const MAX_QUEUE = 500;
+/**
+ * 4xx answers that mean "not now" rather than "never": timed out, too early,
+ * too many requests. The session is fine and waits for the next flush.
+ */
+const RETRY_LATER = new Set([408, 425, 429]);
 /**
  * How long "Saving your work…" may wait. On one bar of signal a POST can hang
  * for minutes, and the session is already on the phone, so stop and say so.
@@ -55,8 +65,16 @@ function writeQueue(items: SessionResult[]): void {
   }
 }
 
-export function queueSize(): number {
-  return readQueue().length;
+/**
+ * Sessions still on the phone. Given a child, only the ones that can go under
+ * that child's sign-in: the other child's wait (409) for their own PIN, so
+ * counting them kept sign-out refused with nothing this child could send.
+ * An unstamped session goes to whoever is signed in, so it counts.
+ */
+export function queueSize(learner?: LearnerId | null): number {
+  const items = readQueue();
+  if (!learner) return items.length;
+  return items.filter((i) => !i.learner || i.learner === learner).length;
 }
 
 function enqueue(result: SessionResult): void {
@@ -92,6 +110,7 @@ async function send(result: SessionResult, signal: AbortSignal): Promise<SendOut
     if (res.status === 401) return SIGNED_OUT;
     // Played by the other child: keep it until they sign in again.
     if (res.status === 409) return OTHER_LEARNER;
+    if (RETRY_LATER.has(res.status)) return TRANSIENT;
     // Any other 4xx is the server refusing this payload — it will refuse it again.
     if (res.status >= 400 && res.status < 500) return INVALID;
     if (!res.ok) return TRANSIENT;
@@ -260,7 +279,7 @@ async function sendReadingDone(item: ReadingDone): Promise<boolean> {
       body: JSON.stringify(item),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
-    if (res.status === 401 || res.status === 409) return false;
+    if (res.status === 401 || res.status === 409 || RETRY_LATER.has(res.status)) return false;
     return res.ok || (res.status >= 400 && res.status < 500);
   } catch {
     return false;

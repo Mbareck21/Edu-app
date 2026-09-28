@@ -138,7 +138,7 @@ function PlaceValue({ value, place }: { value: number; place: PlaceName }) {
         return (
           <div key={i} className="text-center">
             <div
-              className="flex h-11 w-9 items-center justify-center rounded-tile border-2 font-display text-xl font-bold"
+              className="mx-auto flex h-11 w-9 items-center justify-center rounded-tile border-2 font-display text-xl font-bold"
               style={{
                 borderColor: on ? PURPLE : LINE,
                 background: on ? PURPLE_SOFT : "#fff",
@@ -147,7 +147,7 @@ function PlaceValue({ value, place }: { value: number; place: PlaceName }) {
             >
               {d}
             </div>
-            <p className="mt-1 text-[10px] font-bold" style={{ color: on ? PURPLE : MUTED }}>
+            <p className="mt-1 text-xs font-bold" style={{ color: on ? PURPLE : MUTED }}>
               {PLACE_LABELS[fromRight] ?? ""}
             </p>
           </div>
@@ -253,7 +253,7 @@ function BarChart({ bars, scale }: { bars: readonly DataRow[]; scale: number }) 
     <div className="w-full max-w-[300px]">
       {bars.map((b) => (
         <div key={b.label} className="mb-1.5 flex items-center gap-2">
-          <span className="w-12 shrink-0 text-right text-xs font-bold" style={{ color: MUTED }}>
+          <span className="w-14 shrink-0 text-right text-sm font-bold" style={{ color: MUTED }}>
             {b.label}
           </span>
           <div className="relative h-6 flex-1" style={{ borderLeft: `2px solid ${LINE}` }}>
@@ -271,7 +271,7 @@ function BarChart({ bars, scale }: { bars: readonly DataRow[]; scale: number }) 
           </div>
         </div>
       ))}
-      <div className="ml-14 flex justify-between text-[10px] font-bold" style={{ color: MUTED }}>
+      <div className="ml-16 flex justify-between text-xs font-bold" style={{ color: MUTED }}>
         {ticks.map((t) => (
           <span key={t}>{t}</span>
         ))}

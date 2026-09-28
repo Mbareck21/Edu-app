@@ -39,7 +39,7 @@ import { allFactKeys } from "@/lib/tables";
 //     again today ........................ 6 x 15 + 30              = 120
 //   Vocab lesson, 10 items, all fast ..... 10 x 15 + 25 + 50        = 225
 //   A word reaching known +50, mastered +100, in the session that does it.
-// Under 3 answers pays no lesson or perfect bonus; 0 answers not the day either.
+// Under 3 answers pays no lesson or perfect bonus; 0 answers changes nothing.
 export const XP = {
   /** Per right word answer (vocab: lessons, review, word drills). */
   correct: 15,
@@ -504,12 +504,15 @@ function wholeGrid(r: SessionResult, count: "factsLit" | "factsKnown" | "factsGo
 /**
  * Badges are checked before the API folds this session's reading in (see
  * app/api/sessions/complete/route.ts), so a reading badge looks one reading
- * ahead. Only the level is read; the timestamp is a throwaway.
+ * ahead. Only the level is read.
  */
 function readingLevelAfter(p: ProfileState, r: SessionResult): number {
   if (!r.reading) return p.reading.level;
-  // Logged as now: a time before the level last changed would not count.
-  return applyReading(p, r.reading, { at: new Date(), today: "" }).reading.level;
+  // At the time the API stores it (applySession sets playedAt): logged as now,
+  // a reading sent late counted here though the stored one did not, and a
+  // badge could land for a level he never reached.
+  const at = r.playedAt !== undefined ? new Date(r.playedAt) : new Date();
+  return applyReading(p, r.reading, { at, today: "" }).reading.level;
 }
 
 // ── Applying a session ────────────────────────────────────────────────────
@@ -528,7 +531,11 @@ export type Gained = {
   tip?: string;
 };
 
-const ORDINAL = ["", "1st", "2nd", "3rd"];
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st, 22nd: a long day of drills reaches the twenties. */
+function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${(!teen && ["th", "st", "nd", "rd"][n % 10]) || "th"}`;
+}
 
 /**
  * One line for the finish screen when a fair-play rule cut the XP, so he
@@ -536,7 +543,7 @@ const ORDINAL = ["", "1st", "2nd", "3rd"];
  */
 export function fairPlayTip(s: { factor: number; nth: number; rushed: boolean; tried: boolean }): string | undefined {
   if (s.factor < 1) {
-    const nth = ORDINAL[s.nth] ?? `${s.nth}th`;
+    const nth = ordinal(s.nth);
     return `${nth} time today: ${s.factor === 0.5 ? "half" : "a quarter of the"} XP. Switch to something new for full XP!`;
   }
   if (s.rushed) return "Take your time: rushing earns less XP.";
@@ -653,7 +660,12 @@ export function applyReading(
       ? { wpm: Math.max(0, Math.round(reading.wpm) || 0) }
       : {}),
   };
-  const recent = [entry, ...profile.reading.recent].slice(0, READING_CAP);
+  // In the order they were read, not sent: one sent late from the phone's
+  // queue went on top, and readingsAtLevel, which stops at the first reading
+  // from before the last level change, then saw none at his new level.
+  const recent = [entry, ...profile.reading.recent]
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    .slice(0, READING_CAP);
   const { level, since } = profile.reading;
   const next = nextReadingLevel(level, recent, since, gradeOn(todayKey(now.at)));
   return {
@@ -703,16 +715,36 @@ export function applySession(
   // the floor before it is perfect — see lib/session-score.ts.
   const perfect = result.perfect && sessionPerfect({ answered, correct, timed: result.timed });
 
+  // A session with no answers at all is not work: a timed drill left to run
+  // out, an empty list. It changes nothing. Logged, fifty idle 60 s drills
+  // earned Math Star and Math Wizard at 0 XP, two used up a drill's full-pay
+  // slots for the day, and one marked the day played.
+  if (answered === 0) {
+    return {
+      profile,
+      gained: {
+        xp: 0,
+        newBadges: [],
+        streakExtended: false,
+        leveledUp: false,
+        level: levelFor(profile.xp).level,
+        goalMet: false,
+      },
+    };
+  }
+
   // Streak: a new day extends it, a gap resets it to 1. A session played on
   // an earlier day than the last one (sent late from the phone's queue) leaves
   // the streak and today's count alone: they have already moved past it.
-  // A session with no answers at all is not a day played: it leaves the streak
-  // alone. One or two answers still count for the day.
-  const idle = answered === 0;
+  // One or two answers still count for the day.
   const last = profile.streak.lastActiveDay;
   const late = Boolean(last) && now.today < last;
   const sameDay = last === now.today || late;
-  const streakExtended = !sameDay && !idle;
+  const streakExtended = !sameDay;
+  // Sent late, it may still be the only session of its day: that pays the
+  // day's bonus it would have paid in order (Tuesday offline, Wednesday sent
+  // first). The streak flame stays today's.
+  const lateNewDay = late && !profile.activity.some((a) => todayKey(new Date(a.at)) === now.today);
   const current = sameDay
     ? profile.streak.current
     : last && previousDay(now.today) === last
@@ -723,15 +755,13 @@ export function applySession(
   const mended = late
     ? Math.max(profile.streak.current, runEndingOn(last, [{ at: now.at.toISOString() }, ...profile.activity]))
     : current;
-  const streak = idle
-    ? profile.streak
-    : late
-      ? { ...profile.streak, current: mended, best: Math.max(profile.streak.best, mended) }
-      : {
-          current,
-          best: Math.max(profile.streak.best, current),
-          lastActiveDay: now.today,
-        };
+  const streak = late
+    ? { ...profile.streak, current: mended, best: Math.max(profile.streak.best, mended) }
+    : {
+        current,
+        best: Math.max(profile.streak.best, current),
+        lastActiveDay: now.today,
+      };
 
   // The same run again today earns its answers, not the lesson bonus again.
   const firstToday = !profile.activity.some(
@@ -757,7 +787,7 @@ export function applySession(
   const tip = fairPlayTip({ factor, nth: sameKindToday + 1, rushed: work < earned, tried: tried || !bonuses });
   const xpGained =
     Math.round(work * factor) +
-    (streakExtended ? XP.streakDay : 0) +
+    (streakExtended || lateNewDay ? XP.streakDay : 0) +
     Math.max(0, Math.floor(result.wordsKnownUp ?? 0)) * XP.wordKnown +
     Math.max(0, Math.floor(result.wordsMasteredUp ?? 0)) * XP.wordMastered;
 
@@ -785,8 +815,10 @@ export function applySession(
       correct: profile.stats.correct + correct,
       answered: profile.stats.answered + answered,
       fastAnswers: profile.stats.fastAnswers + fast,
-      mathSessions: profile.stats.mathSessions + (result.kind === "math" ? 1 : 0),
-      perfectSessions: profile.stats.perfectSessions + (perfect ? 1 : 0),
+      // Counted on the same terms as the bonuses: fifty one-answer rescues
+      // in twelve minutes were Perfect 50, and a two-answer drill a math game.
+      mathSessions: profile.stats.mathSessions + (result.kind === "math" && bonuses ? 1 : 0),
+      perfectSessions: profile.stats.perfectSessions + (bonuses && perfect ? 1 : 0),
       drillXp: profile.stats.drillXp + (isDrillRef(result.ref) ? xpGained : 0),
     },
     activity: [entry, ...profile.activity].slice(0, ACTIVITY_CAP),
@@ -794,7 +826,7 @@ export function applySession(
 
   const owned = new Set(next.badges.map((b) => b.id));
   const newBadges: GainedBadge[] = [];
-  const checked: SessionResult = { ...result, answered, correct, perfect };
+  const checked: SessionResult = { ...result, answered, correct, perfect, playedAt: now.at.getTime() };
   for (const badge of BADGES) {
     if (owned.has(badge.id)) continue;
     if (!badge.check(next, checked)) continue;

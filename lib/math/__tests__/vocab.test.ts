@@ -44,3 +44,47 @@ test("the hint only points at a picture when there is one", () => {
   const shown = { ...q, visual: { kind: "placevalue" as const, value: 6000, place: "thousands" as const } };
   assert.ok(mathHint(shown, 9).includes("picture"));
 });
+
+test("the voice reads a mixed number with its \"and\"", () => {
+  // "2 3/8" was read "2 3 over 8": two numbers, not two and three eighths.
+  assert.equal(speakable("How many 1/8 make 2 3/8?"), "How many 1 over 8 make 2 and 3 over 8?");
+  assert.equal(
+    speakable("1 2/5 + 2 3/5 = ?/5. Type the top number."),
+    "1 and 2 over 5 plus 2 and 3 over 5 equals what over 5. Type the top number."
+  );
+});
+
+test("the voice says the blank in a list of factors", () => {
+  // "1, 2, ?, 6" read "1, 2, , 6": the missing one was never said.
+  assert.equal(
+    speakable("The factors of 12 are 1, 2, ?, 4, 6, 12. What is missing?"),
+    "The factors of 12 are 1, 2, what, 4, 6, 12. What is missing?"
+  );
+});
+
+test("a division with something left over gets its own hint", () => {
+  // "Which number times the one you know makes it?" has no answer when
+  // something is left over; it sent him looking for one.
+  const q = (prompt: string, answer: number) => ({
+    prompt,
+    answer,
+    visual: { kind: "none" as const },
+    how: "",
+    op: "÷" as const,
+  });
+  for (const [prompt, answer] of [
+    ["72 ÷ 7. How many are left over?", 2],
+    ["72 ÷ 7. How many whole groups?", 10],
+    ["Each box holds 9 marbles. There are 70. How many boxes are needed?", 8],
+    ["Each box holds 14 cars. There are 150. How many full boxes?", 10],
+  ] as const) {
+    const hint = mathHint(q(prompt, answer), answer + 1);
+    assert.ok(!hint.includes("times the one you know"), `${prompt}: ${hint}`);
+    assert.ok(!hint.includes(String(answer)), `the hint gives ${answer} away: ${hint}`);
+  }
+  // The boxes question asks about the leftovers; the full-boxes one does not.
+  assert.notEqual(
+    mathHint(q("Each box holds 9 marbles. There are 70. How many boxes are needed?", 8), 7),
+    mathHint(q("Each box holds 14 cars. There are 150. How many full boxes?", 10), 9)
+  );
+});

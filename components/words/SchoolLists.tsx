@@ -42,6 +42,8 @@ export default function SchoolLists({ options }: { options: SeedOption[] }) {
       }
       const list = (await res.json()) as { _id: string };
       router.push(`/me/lists/${list._id}`);
+    } catch {
+      setError("No internet. Try again.");
     } finally {
       setBusyId(null);
     }

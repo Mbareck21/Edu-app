@@ -63,11 +63,12 @@ export default function FeedbackSheet({
           <Icon name={good ? "check" : "x"} size={24} strokeWidth={3} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-bold" style={{ color: t.onSoft }}>
+          {/* text-xl bold counts as large text, which dark coral on pale coral passes. */}
+          <p className="font-display text-xl font-bold" style={{ color: t.onSoft }}>
             {title}
           </p>
           {line ? (
-            <p className="text-sm" style={{ color: "var(--color-ink)" }}>
+            <p className="text-base leading-snug" style={{ color: "var(--color-ink)" }}>
               {line}
             </p>
           ) : null}
@@ -87,6 +88,15 @@ export default function FeedbackSheet({
         fullWidth
         autoFocus
         onClick={onContinue}
+        // White on the plain coral is too faint to read; the dark coral is not.
+        style={
+          good
+            ? undefined
+            : {
+                background: "var(--color-coral-dark)",
+                ["--btn-shade" as string]: "color-mix(in srgb, var(--color-coral-dark) 75%, var(--color-ink))",
+              }
+        }
       >
         {continueLabel}
       </Button>

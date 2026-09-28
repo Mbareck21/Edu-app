@@ -5,12 +5,12 @@ import { CLUE_MODEL, CLUE_SYSTEM_PROMPT, friendlyAiError, getClientIp, groq, rat
 export const runtime = "nodejs";
 
 const Body = z.object({
-  words: z.array(z.string().min(1).max(40).regex(/^[a-zA-Z][a-zA-Z\s-]*$/)).min(1).max(30),
+  words: z.array(z.string().min(1).max(40).regex(/^[a-zA-Z][a-zA-Z\s-]*$/)).min(1).max(500),
 });
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const rl = rateLimit(ip);
+  const rl = rateLimit(ip, "clues");
   if (!rl.ok) {
     return NextResponse.json(
       { error: "rate limit", retryAfterSec: rl.retryAfterSec },
@@ -28,7 +28,10 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const words = parsed.data.words.map((w) => w.trim().toLowerCase());
+  // One call writes at most 30: a bigger answer runs past max_tokens and the
+  // cut-off JSON fills nothing. A longer list (the Stuck-words pool) used to
+  // be refused whole; now the first 30 get clues and another tap does the rest.
+  const words = parsed.data.words.slice(0, 30).map((w) => w.trim().toLowerCase());
 
   try {
     const completion = await groq().chat.completions.create({

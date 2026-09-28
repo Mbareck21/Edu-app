@@ -60,7 +60,7 @@ export default function ProfileSettings({ name, dailyGoal }: ProfileSettingsProp
             value={draftName}
             maxLength={24}
             onChange={(e) => setDraftName(e.target.value)}
-            className="min-w-0 flex-1 rounded-tile border-2 bg-white px-3 py-3 font-display text-lg outline-none"
+            className="min-w-0 flex-1 rounded-tile border-2 bg-white px-3 py-3 font-display text-lg focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue"
             style={{ borderColor: "var(--color-line)" }}
           />
           <Button
@@ -92,6 +92,9 @@ export default function ProfileSettings({ name, dailyGoal }: ProfileSettingsProp
               <button
                 key={n}
                 type="button"
+                // One save at a time: fast taps sent a save each, and the
+                // last to land won, not the last tapped.
+                disabled={save.state === "saving"}
                 onClick={() => {
                   sfx.tap();
                   setGoal(n);

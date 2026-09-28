@@ -74,6 +74,11 @@ export type MathQuestion = {
   op: MathOp;
   a?: number;
   b?: number;
+  /**
+   * One key for the same question however it is written: 6 × 11 and 11 × 6.
+   * A lesson asks each key once. Left out, the prompt is the only key.
+   */
+  key?: string;
 };
 
 export type MathSkill = {

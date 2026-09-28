@@ -16,11 +16,23 @@ export function newWordsList<L extends { words: readonly ClientWord[] }>(lists: 
  * lists, and those put the pool first — so from his first stuck word on, every
  * production round spelled and used the pool's own copies, which the Me page
  * rightly leaves out, and the unit's words got none of it.
+ *
+ * The day a unit's last new words are taught, Home moves on to the next unit,
+ * where he has met nothing, and production spelled and used words he had never
+ * been taught. So it stays on the nearest earlier unit with words he has met.
  */
 export function productionList<L extends { words: readonly ClientWord[]; kind: string }>(
   lists: readonly L[]
 ): L | undefined {
-  return newWordsList(unitLists(lists));
+  const units = unitLists(lists);
+  const home = newWordsList(units);
+  const met = (l: L) => l.words.filter((w) => !isNewWord(w)).length;
+  // Production itself needs two met words before it leaves out the new ones.
+  if (!home || met(home) >= 2) return home;
+  for (let i = units.indexOf(home) - 1; i >= 0; i--) {
+    if (met(units[i]) >= 2) return units[i];
+  }
+  return units.find((l) => met(l) >= 2) ?? home;
 }
 
 /**

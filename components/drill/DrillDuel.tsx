@@ -1,4 +1,5 @@
 import Card from "@/components/ui/Card";
+import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
 
@@ -13,7 +14,7 @@ export type DuelRow = {
 const COLORS: AccentColor[] = ["blue", "purple"];
 
 /**
- * The brothers' drill duel: drill points since Monday, and a crown for last
+ * The brothers' drill duel: drill points since Monday, and a trophy for last
  * week's winner. The rows keep the same order every week, like the scoreboard.
  */
 export default function DrillDuel({ rows, lastWinner }: { rows: DuelRow[]; lastWinner: string | null }) {
@@ -25,14 +26,27 @@ export default function DrillDuel({ rows, lastWinner }: { rows: DuelRow[]; lastW
     <Card className="mt-3">
       <h2 className="font-display text-lg font-bold">Drill duel</h2>
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-        This week{lastWinner ? ` · last week 👑 ${lastWinner}` : ""}
+        This week
+        {lastWinner ? (
+          <>
+            {" · last week "}
+            <span className="inline-flex items-center gap-1">
+              <Icon name="trophy" size={14} />
+              {lastWinner}
+            </span>
+          </>
+        ) : null}
       </p>
       <ul className="mt-3 space-y-3">
         {rows.map((r, i) => (
           <li key={r.learner}>
             <div className="flex items-baseline justify-between gap-2">
               <p className="font-display font-bold">
-                {leader.length === 1 && leader[0] === r ? "👑 " : ""}
+                {leader.length === 1 && leader[0] === r ? (
+                  <span className="mr-1 inline-flex items-center" style={{ color: "var(--color-gold-ink)" }}>
+                    <Icon name="trophy" size={14} />
+                  </span>
+                ) : null}
                 {r.name}
                 {r.isMe ? (
                   <span className="ml-1 text-xs" style={{ color: "var(--color-muted)" }}>

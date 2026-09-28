@@ -83,7 +83,7 @@ function joinTens(words: string[]): string[] {
 
 /** Contractions whose first half is not the verb as written. */
 const NOT_BASE: Record<string, string> = { ca: "can", wo: "will", sha: "shall" };
-const PLAIN_NOT = /^(do|does|did|is|was|are|were|has|have|had|could|would|should|can)nt$/;
+const PLAIN_NOT = /^(do|does|did|is|was|are|were|has|have|had|could|would|should|can|ca|wo)nt$/;
 
 /**
  * "didn't", "didnt" and "cannot" → the verb and "not", so "he didn't" and "he
@@ -98,7 +98,10 @@ function splitNot(w: string): string[] {
 }
 
 /** Lower-case, punctuation-free words with articles dropped and number words
-    unified with digits, so "The Five rocks!" and "5 rocks" tokenise alike. */
+    unified with digits, so "The Five rocks!" and "5 rocks" tokenise alike.
+    A trailing 's goes too: "Omar" answers "whose hat?" as well as "Omar's",
+    and "it's" and "that's" come down to "it" and "that", whose "is" was
+    never scored anyway. */
 function tokens(text: string): string[] {
   const words = text
     .toLowerCase()
@@ -106,7 +109,7 @@ function tokens(text: string): string[] {
     .replace(/[^a-z0-9'\s]/g, " ")
     .split(/\s+/)
     .filter(Boolean)
-    .map((w) => w.replace(/^'+|'+$/g, ""))
+    .map((w) => w.replace(/^'+|'+$/g, "").replace(/'s$/, ""))
     .filter(Boolean)
     .flatMap(splitNot)
     .map((w) => NUMBER_WORDS[w] ?? w);
@@ -216,19 +219,58 @@ function hasNegation(words: string[]): boolean {
   return words.some((w) => NEGATIONS.has(w) || CONTRACTED_NOT.test(w));
 }
 
+/** Where a "not" stops reaching: a comma or stop, or a word that starts a new part. */
+const CLAUSE_BREAK = /[,.;:!?]|\b(?:and|but|or|so|because|although|while|when|since|if|then)\b/i;
+
+const LEADING_POLARITY = /^\W*(?:yes|yeah|yep|yup|no|nope|nah)\b/i;
+
+/**
+ * The content words a no reaches, and the ones said plainly. In "the dog was
+ * hungry, not sleepy" the not reaches sleepy and nothing else.
+ */
+function negationScope(text: string): { negated: string[]; plain: string[] } {
+  const negated: string[] = [];
+  const plain: string[] = [];
+  for (const clause of text.split(CLAUSE_BREAK)) {
+    let after = false;
+    for (const w of tokens(clause ?? "")) {
+      if (NEGATIONS.has(w) || CONTRACTED_NOT.test(w)) after = true;
+      else if (!STOPWORDS.has(w)) (after ? negated : plain).push(w);
+    }
+  }
+  return { negated, plain };
+}
+
 /**
  * Whether his answer and an accepted one disagree about whether it is so.
+ *
+ * Only a no that reaches a word the other side says plainly counts: "not
+ * hungry" against "hungry", or "water" against "no water". Any "not" at all
+ * used to count, so "the dog was hungry, not sleepy" was marked wrong against
+ * "The dog was hungry".
  *
  * The accepted answer's leading yes or no is set aside: it answers a yes/no
  * question, which the polarity rule above has already dealt with, so "no, it
  * was dry" and "it was dry" say the same thing. His own leading "no" or "nope"
- * counts as saying no on any other kind of question.
+ * counts as saying no to all of it on any other kind of question.
  */
-function contradicts(answer: string[], expected: string[], yesNo: boolean): boolean {
+function contradicts(
+  answerText: string,
+  answer: string[],
+  acceptedText: string,
+  accepted: string[],
+  yesNo: boolean
+): boolean {
   const said = POLARITY[answer[0] ?? ""];
-  const mine = hasNegation(said ? answer.slice(1) : answer) || (said === "no" && !yesNo);
-  const theirs = hasNegation(yesNo && POLARITY[expected[0] ?? ""] ? expected.slice(1) : expected);
-  return mine !== theirs;
+  const theirsLead = yesNo && POLARITY[accepted[0] ?? ""];
+  if (said === "no" && !yesNo) return !hasNegation(accepted);
+  const mine = negationScope(said ? answerText.replace(LEADING_POLARITY, "") : answerText);
+  const theirs = negationScope(theirsLead ? acceptedText.replace(LEADING_POLARITY, "") : acceptedText);
+  const same = (a: string, b: string) => stem(a) === stem(b) || fuzzyEqual(a, b);
+  return (
+    mine.negated.some((w) => theirs.plain.some((t) => same(w, t))) ||
+    theirs.negated.some((w) => mine.plain.some((t) => same(w, t)))
+  );
 }
 
 const VERDICT_RANK: Record<AnswerVerdict, number> = { wrong: 0, close: 1, correct: 2 };
@@ -257,6 +299,7 @@ function restatedPolarity(words: string[], question: readonly string[]): "yes" |
 }
 
 function judgeAgainst(
+  answer: string,
   answerWords: string[],
   acceptable: string,
   question: string,
@@ -287,7 +330,7 @@ function judgeAgainst(
   // doesn't match" names "match" and would pass against "it matches", and
   // "not happy" would pass against "happy". An answer that says no where the
   // accepted one says yes, or the other way round, means the opposite.
-  if (contradicts(answerWords, accepted, yesNo)) {
+  if (contradicts(answer, answerWords, acceptable, accepted, yesNo)) {
     return { verdict: "wrong", coverage: 0 };
   }
 
@@ -359,7 +402,7 @@ export function judgeAnswer(
 
   let best: AnswerJudgement = { verdict: "wrong", matched: "", coverage: 0 };
   for (const acc of acceptable) {
-    const c = judgeAgainst(answerWords, acc, question, passageWords);
+    const c = judgeAgainst(answer, answerWords, acc, question, passageWords);
     const better =
       VERDICT_RANK[c.verdict] > VERDICT_RANK[best.verdict] ||
       (VERDICT_RANK[c.verdict] === VERDICT_RANK[best.verdict] && c.coverage > best.coverage);

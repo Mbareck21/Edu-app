@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   FAST_MS,
+  MAX_ANSWER_MS,
   ROUND_SIZE,
   TABLES,
   TABLE_UP_TO,
@@ -182,4 +183,37 @@ test("a spoken round is ten different facts from any table, never times one", as
   assert.equal(round.length, 10);
   assert.equal(new Set(round.map((f) => f.key)).size, 10);
   assert.ok(round.every((f) => f.a > 1 && f.b > 1));
+});
+
+test("the retry just after seeing the answer is copying, not recall", () => {
+  // Missed, shown 7 × 8 = 56, asked again two questions later: a right answer
+  // then lit the cell, gold, and booked the fact a day out as if he knew it.
+  let f = newFact(7, 8);
+  f = applyFactAnswer(f, false, 4000, NOW);
+  const missed = f;
+  f = applyFactAnswer(f, true, 1200, at(0.0003), true);
+  assert.equal(f.streak, 0, "the streak does not move");
+  assert.ok(!isLit(f), "the cell stays dark");
+  assert.equal(f.lastFast, false, "no gold");
+  assert.equal(f.fast, missed.fast);
+  assert.equal(f.dueAt, missed.dueAt, "still due now, not in a day");
+  assert.equal(f.correct, missed.correct + 1, "it was right, so it counts as right");
+
+  // A known fact slipped once: the retry does not win back what the miss took.
+  let k: ReturnType<typeof newFact> = { ...newFact(6, 7), streak: 3, correct: 3, dueAt: at(10) };
+  k = applyFactAnswer(k, false, 4000, NOW);
+  const halved = k.streak;
+  k = applyFactAnswer(k, true, 1500, at(0.0003), true);
+  assert.equal(k.streak, halved);
+  assert.ok(!isKnown(k));
+
+  // A first try is still a first try.
+  assert.ok(isLit(applyFactAnswer(newFact(7, 8), true, 1200, NOW, false)));
+});
+
+test("a question left open a long time is still an answer, just not a fast one", () => {
+  assert.equal(MAX_ANSWER_MS, 10 * 60 * 1000);
+  const f = applyFactAnswer(newFact(7, 8), true, MAX_ANSWER_MS, NOW);
+  assert.ok(isLit(f));
+  assert.equal(f.lastFast, false);
 });

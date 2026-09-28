@@ -53,10 +53,10 @@ export default function BottomNav() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className="flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-tile py-2"
-                style={{ color: active ? "var(--color-green)" : "var(--color-muted)" }}
+                style={{ color: active ? "var(--color-green-dark)" : "var(--color-muted)" }}
               >
                 <Icon name={tab.icon} size={24} strokeWidth={active ? 2.6 : 2.2} />
-                <span className="font-display text-[11px] font-bold">{tab.label}</span>
+                <span className="font-display text-xs font-bold">{tab.label}</span>
               </Link>
             </li>
           );

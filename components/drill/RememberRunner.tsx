@@ -142,7 +142,7 @@ export default function RememberRunner({
           <p className="font-body text-sm" style={{ color: "var(--color-muted)" }}>
             {words.length} words on this list.
           </p>
-          <Button color="blue" size="lg" fullWidth onClick={start}>
+          <Button color="blue" size="lg" fullWidth disabled={words.length === 0} onClick={start}>
             Start
           </Button>
         </Card>
@@ -160,7 +160,6 @@ export default function RememberRunner({
         </div>
       );
     }
-    const badge = outcome.gained?.newBadges[0];
     return (
       <div className="safe-top safe-bottom min-h-dvh px-4">
         <Card className="mt-4">
@@ -173,7 +172,7 @@ export default function RememberRunner({
                 {found.map((w) => (
                   <li
                     key={w}
-                    className="rounded-tile px-2 py-1 font-display text-[15px] font-bold lowercase"
+                    className="rounded-tile px-2 py-1 font-display text-[15px] font-bold break-words lowercase"
                     style={{ background: "var(--color-green-soft)", color: "var(--color-green-dark)" }}
                   >
                     {w}
@@ -189,7 +188,7 @@ export default function RememberRunner({
                 {missed.map((w) => (
                   <li
                     key={w}
-                    className="rounded-tile px-2 py-1 font-display text-[15px] font-bold lowercase"
+                    className="rounded-tile px-2 py-1 font-display text-[15px] font-bold break-words lowercase"
                     style={{ background: "var(--color-sand)" }}
                   >
                     {w}
@@ -207,7 +206,7 @@ export default function RememberRunner({
           accuracy={words.length === 0 ? 0 : found.length / words.length}
           perfect={words.length > 0 && found.length === words.length}
           leveledUp={outcome.gained?.leveledUp}
-          newBadge={badge ? { id: badge.id, name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
+          newBadges={(outcome.gained?.newBadges ?? []).map((b) => ({ id: b.id, name: b.name, blurb: b.blurb, icon: b.icon }))}
           primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
           secondary={{ label: "All drills", href: "/drill" }}
           note={outcome.note}
@@ -256,7 +255,7 @@ export default function RememberRunner({
           enterKeyHint="done"
           aria-label="Type a word you remember"
           placeholder="type a word"
-          className="w-full rounded-card border-2 bg-white px-4 py-4 text-center font-display text-2xl font-bold lowercase outline-none"
+          className="w-full rounded-card border-2 bg-white px-4 py-4 text-center font-display text-2xl font-bold lowercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue"
           style={{ borderColor: "var(--color-blue)", minHeight: 64 }}
         />
         {float > 0 ? (

@@ -174,3 +174,15 @@ test("New words does not promise new words once every word is met", () => {
   assert.equal(blurb([metUnit]), "Three new words");
   assert.equal(blurb([allMet]), "Practise your words");
 });
+
+test("Home and the beat pages agree on which words are new", async () => {
+  // Summaries used to drop srs, so a word flipped on the flashcards page was
+  // new on Home but met on the beat page: Home pointed New words at one unit
+  // and the beat taught another.
+  const { asWord } = await import("@/lib/daily-plan-beats");
+  const { isNewWord } = await import("@/lib/lesson-builder");
+  const blank = { correct: 0, wrong: 0, streak: 0, lastAt: null, dueAt: "" };
+  const skills = { recognize: blank, listen: blank, spell: blank, use: blank };
+  assert.equal(isNewWord(asWord({ word: "flipped", skills, reviewCount: 2 })), false);
+  assert.equal(isNewWord(asWord({ word: "fresh", skills })), true);
+});

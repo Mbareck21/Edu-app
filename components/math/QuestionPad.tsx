@@ -145,7 +145,9 @@ function Prompt({ prompt }: { prompt: string }) {
                 key={i}
                 type="button"
                 onClick={() => setOpen((t) => (t === s.term ? null : (s.term ?? null)))}
-                className="rounded font-display font-bold underline decoration-dotted decoration-2 underline-offset-4"
+                // One text line is too small to tap; the ::after pad makes the
+                // target bigger without moving the words around it.
+                className="relative rounded font-display font-bold underline decoration-dotted decoration-2 underline-offset-4 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
                 style={{
                   color: "var(--color-purple-dark)",
                   background: open === s.term ? "var(--color-purple-soft)" : "transparent",

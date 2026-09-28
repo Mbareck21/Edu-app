@@ -236,7 +236,7 @@ function StuckBoardInner({
 
       {waiting.length > 0 ? (
         <details>
-          <summary className="cursor-pointer text-sm font-bold" style={{ color: "var(--color-muted)" }}>
+          <summary className="cursor-pointer py-3 text-sm font-bold" style={{ color: "var(--color-muted)" }}>
             {waiting.length} waiting — they come in as you finish these
           </summary>
           <div className="mt-2 flex flex-wrap gap-2">

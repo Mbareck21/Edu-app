@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Take the page again when the phone shows an old copy of it.
@@ -15,37 +15,61 @@ import { useEffect } from "react";
  * means this is a replay, so ask the server for the page again. No clock is
  * compared, so a phone set to the wrong time cannot trigger it. Coming back
  * after a minute or more in the background refreshes too.
+ *
+ * Offline it waits. The service worker answers with the copy it saved, which
+ * carries the same stamp every time: the refresh fails, Next falls back to
+ * loading the page, the worker serves that copy again, and the page reloaded
+ * forever. So nothing is asked while the phone is offline, one refresh goes
+ * out when the network comes back, and a stamp is asked about once, which
+ * also stops the loop on wifi that is connected but has no internet.
  */
 export default function RefreshWhenStale({ renderedAt }: { renderedAt: number }) {
   const router = useRouter();
   const pathname = usePathname();
+  const waiting = useRef(false);
+
+  const refresh = useCallback(() => {
+    if (navigator.onLine) router.refresh();
+    else waiting.current = true;
+  }, [router]);
 
   useEffect(() => {
     const key = `quest:rendered:${pathname}`;
     try {
-      if (window.sessionStorage.getItem(key) === String(renderedAt)) router.refresh();
-      else window.sessionStorage.setItem(key, String(renderedAt));
+      if (window.sessionStorage.getItem(key) === String(renderedAt)) {
+        window.sessionStorage.setItem(key, `${renderedAt}:asked`);
+        refresh();
+      } else {
+        window.sessionStorage.setItem(key, String(renderedAt));
+      }
     } catch {
       // No storage: the page still works, it just will not self-refresh.
     }
-  }, [pathname, renderedAt, router]);
+  }, [pathname, renderedAt, refresh]);
 
   useEffect(() => {
     let hiddenAt = 0;
     const onVisibility = () => {
       if (document.hidden) hiddenAt = Date.now();
-      else if (hiddenAt > 0 && Date.now() - hiddenAt > 60_000) router.refresh();
+      else if (hiddenAt > 0 && Date.now() - hiddenAt > 60_000) refresh();
     };
     const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) router.refresh();
+      if (e.persisted) refresh();
+    };
+    const onOnline = () => {
+      if (!waiting.current) return;
+      waiting.current = false;
+      router.refresh();
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("online", onOnline);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("online", onOnline);
     };
-  }, [router]);
+  }, [refresh, router]);
 
   return null;
 }

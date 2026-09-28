@@ -62,6 +62,8 @@ export default function VoiceTablesRunner({
   /** Three tries heard no number: show the buttons instead of asking again. */
   const [stuck, setStuck] = useState(false);
   const firstTry = useRef<Record<number, boolean>>({});
+  /** Facts already graded this round. A skip is not graded: he never saw the answer. */
+  const graded = useRef(new Set<number>());
   const answerMs = useRef(0);
   const unclear = useRef(0);
   const alive = useRef(true);
@@ -184,11 +186,14 @@ export default function VoiceTablesRunner({
       if (firstTry.current[index] === undefined) firstTry.current[index] = correct && !repeat;
       answerMs.current += got.ms;
 
-      // The server grades it and moves the grid, as for a typed answer.
+      // The server grades it and moves the grid, as for a typed answer. Graded
+      // before means a miss said the answer out loud, so this is a retry.
+      const retry = graded.current.has(index);
+      graded.current.add(index);
       void fetch("/api/tables/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ a: fact.a, b: fact.b, typed: String(number ?? ""), ms: Math.round(got.ms) }),
+        body: JSON.stringify({ a: fact.a, b: fact.b, typed: String(number ?? ""), ms: Math.round(got.ms), retry }),
       }).catch(() => null);
 
       if (correct) {
@@ -262,7 +267,7 @@ export default function VoiceTablesRunner({
           accuracy={facts.length === 0 ? 0 : outcome.correct / facts.length}
           perfect={outcome.stars > 0}
           leveledUp={outcome.gained?.leveledUp ?? false}
-          newBadge={outcome.gained?.newBadges[0] ?? null}
+          newBadges={outcome.gained?.newBadges ?? []}
           primary={{ label: "Back to the grid", onClick: onDone }}
           note={outcome.note}
         />
@@ -323,8 +328,12 @@ export default function VoiceTablesRunner({
                 </div>
               ) : phase === "right" ? (
                 <div className="q-bounce-in">
-                  <p className="font-display text-5xl font-bold" style={{ color: "var(--color-green-dark)" }}>
-                    {fact.a * fact.b} ✓
+                  <p
+                    className="inline-flex items-center gap-2 font-display text-5xl font-bold"
+                    style={{ color: "var(--color-green-dark)" }}
+                  >
+                    {fact.a * fact.b}
+                    <Icon name="check" size={44} strokeWidth={3} />
                   </p>
                   {fast ? (
                     <p className="mt-1 font-display text-lg font-bold" style={{ color: "var(--color-gold-ink)" }}>

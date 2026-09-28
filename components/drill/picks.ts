@@ -62,13 +62,16 @@ export function weakSkills(word: SkillsOnly, now: Date): SkillId[] {
  * The suggested word-drill types that can fix these weak skills. A word weak
  * on spelling is only fixed by a drill that asks for spelling: Match and
  * Listen on it answered other skills, so it stayed weak drill after drill.
- * Writing counts as spelling practice. None of them left: every type.
+ * Not Write it (flashcards): it copies the word with the model on screen and
+ * keeps its own ten-in-a-row count, so it grades no skill and a weak
+ * spelling never moved. Spell and the spelling test do. None of them left:
+ * every type.
  */
 export function modesFor(skills: readonly SkillId[]): VocabMode[] {
   const helps = SUGGESTED_WORD_MODES.filter((mode) => {
     // Mixed asks each word's weakest skill first, so it always helps.
     if (mode === "mixed") return skills.length > 0;
-    const skill = mode === "flashcards" ? "spell" : modeSkill(mode);
+    const skill = modeSkill(mode);
     return skill !== null && skills.includes(skill);
   });
   return helps.length > 0 ? helps : [...SUGGESTED_WORD_MODES];

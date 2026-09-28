@@ -13,7 +13,11 @@ const CreateBody = z.object({
 
 export async function GET() {
   const { WordList } = await db();
-  const lists = await WordList.find({ kind: { $ne: "pool" } }).sort({ updatedAt: -1 }).lean();
+  // The passage archive and reading history are server-only; toClient drops them.
+  const lists = await WordList.find({ kind: { $ne: "pool" } })
+    .select("-readingArchive -readingHistory")
+    .sort({ updatedAt: -1 })
+    .lean();
   return NextResponse.json(lists.map(toClient));
 }
 

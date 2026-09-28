@@ -109,6 +109,10 @@ export default function EchoReader({
   // Read whichever sentence is up out loud the moment it appears.
   useEffect(() => {
     if (!sentence) return;
+    // A replay he started with the speaker button is not this effect's own
+    // playback, so its cleanup never stopped it: the old line and the new one
+    // played over each other.
+    playbackRef.current?.cancel();
     const pb = playTextThroughTTS(sentence);
     playbackRef.current = pb;
     void pb.promise.then((end) => {
@@ -117,14 +121,17 @@ export default function EchoReader({
     return () => pb.cancel();
   }, [sentence]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    doneRef.current = false;
+    return () => {
+      // Left mid-turn: the recording still went up to be transcribed and the
+      // right/wrong sound played on whatever screen he had gone to.
+      doneRef.current = true;
       stopAll();
       closeMicStream(streamRef.current);
       streamRef.current = null;
-    },
-    [stopAll]
-  );
+    };
+  }, [stopAll]);
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
@@ -172,14 +179,28 @@ export default function EchoReader({
     setScore(null);
 
     let stream = streamRef.current;
-    if (!stream) {
+    // iOS ends the mic's tracks when the app goes to the background. The
+    // stream object survives, records silence, and every turn after it came
+    // back "I heard nothing". Only a stream whose tracks are all live is kept.
+    const live =
+      stream !== null &&
+      stream.getTracks().length > 0 &&
+      stream.getTracks().every((t) => t.readyState === "live");
+    if (!stream || !live) {
+      closeMicStream(stream);
+      streamRef.current = null;
       try {
         stream = await openMicStream();
-        streamRef.current = stream;
       } catch {
         setError("I can't reach the microphone. You can still tap “I read it”.");
         return;
       }
+      // Gone while the mic was opening: nothing would ever close it.
+      if (doneRef.current) {
+        closeMicStream(stream);
+        return;
+      }
+      streamRef.current = stream;
     }
 
     setStage("recording");
@@ -213,6 +234,7 @@ export default function EchoReader({
       form.append("language", "en");
       const res = await fetch("/api/transcribe", { method: "POST", body: form });
       const data: unknown = await res.json().catch(() => ({}));
+      if (doneRef.current) return;
       const heard =
         typeof data === "object" && data !== null && "text" in data
           ? String((data as { text?: unknown }).text ?? "")
@@ -270,7 +292,7 @@ export default function EchoReader({
             type="button"
             aria-label="Play the sentence again"
             onClick={() => speak(sentence)}
-            className="press-3d rounded-full p-1"
+            className="press-3d flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
             style={{ color: "var(--color-green-dark)" }}
           >
             <Icon name="volume" size={24} strokeWidth={2.6} />
