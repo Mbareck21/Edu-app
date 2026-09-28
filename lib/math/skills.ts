@@ -410,6 +410,11 @@ function genDivideBy2Digit(level: Level, rng: Rng): MathQuestion {
 type FactorKind = "multiple" | "count" | "missing";
 const FACTOR_KINDS: readonly FactorKind[] = ["multiple", "count", "missing"];
 
+/** Level 1 factor lists: 12 to 30, leaving out primes, which have no factor to hide. */
+const FACTOR_LIST_NUMBERS: readonly number[] = Array.from({ length: 19 }, (_, i) => i + 12).filter(
+  (n) => factorsOf(n).length > 2,
+);
+
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
 }
@@ -481,9 +486,11 @@ function genFactors(level: Level, rng: Rng): MathQuestion {
   if (level === 5) return rng() < 0.5 ? commonFactor(rng) : commonMultiple(rng);
   const kind = pick(rng, FACTOR_KINDS);
 
+  // Level 1 runs to 9 here and in "missing" (it stopped at 6): back-to-back
+  // lessons shared 11.5% of their questions, and "4" was right one time in five.
   if (kind === "multiple") {
-    const base = level === 1 ? randInt(rng, 2, 6) : level === 2 ? randInt(rng, 2, 12) : randInt(rng, 6, 12);
-    const nth = level === 1 ? randInt(rng, 2, 6) : level === 2 ? randInt(rng, 2, 12) : randInt(rng, 6, 12);
+    const base = level === 1 ? randInt(rng, 2, 9) : level === 2 ? randInt(rng, 2, 12) : randInt(rng, 6, 12);
+    const nth = level === 1 ? randInt(rng, 2, 9) : level === 2 ? randInt(rng, 2, 12) : randInt(rng, 6, 12);
     return {
       prompt: `What is the ${ordinal(nth)} multiple of ${base}?`,
       answer: base * nth,
@@ -496,6 +503,21 @@ function genFactors(level: Level, rng: Rng): MathQuestion {
   }
 
   if (kind === "count") {
+    // Most small numbers have 2 or 4 factors, so at level 1 half of these hide
+    // one factor in the list instead of asking for the count.
+    if (level === 1 && rng() < 0.5) {
+      const n = pick(rng, FACTOR_LIST_NUMBERS);
+      const list = factorsOf(n);
+      const f = list[randInt(rng, 1, list.length - 2)];
+      return {
+        prompt: `The factors of ${n} are ${list.map((v) => (v === f ? "?" : v)).join(", ")}. What is missing?`,
+        answer: f,
+        visual: NONE,
+        how: `${f} × ${n / f} = ${n}, so ${f} is a factor of ${n}.`,
+        op: "?",
+        a: n,
+      };
+    }
     const n = level === 1 ? randInt(rng, 6, 24) : level === 2 ? randInt(rng, 12, 48) : randInt(rng, 24, 72);
     const list = factorsOf(n);
     const pairs: string[] = [];
@@ -513,7 +535,7 @@ function genFactors(level: Level, rng: Rng): MathQuestion {
     };
   }
 
-  const x = level === 1 ? randInt(rng, 2, 6) : level === 2 ? randInt(rng, 3, 10) : randInt(rng, 6, 12);
+  const x = level === 1 ? randInt(rng, 2, 9) : level === 2 ? randInt(rng, 3, 10) : randInt(rng, 6, 12);
   const y = level === 1 ? randInt(rng, 2, 9) : level === 2 ? randInt(rng, 3, 12) : randInt(rng, 6, 12);
   const product = x * y;
   if (rng() < 0.5) {
@@ -759,9 +781,31 @@ function genFractions(level: Level, rng: Rng): MathQuestion {
 
 // ----------------------------------------------------------------------- data
 
-const DATA_LABELS: readonly string[] = ["Red", "Blue", "Green", "Gold"];
+const DATA_LABELS: readonly string[] = ["Red", "Blue", "Green", "Gold", "Pink", "Gray", "Orange", "Purple"];
+/** Level 1 table: kids per colour, read straight off. */
+const TABLE_COUNTS: readonly number[] = Array.from({ length: 19 }, (_, i) => i + 2);
+/** Levels 2-3 bar graph: bar lengths in grid steps of 2 or 5. */
+const BAR_STEPS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-const PLOT_NOUNS: readonly string[] = ["snails", "bugs", "leaves", "shells", "worms"];
+/** Small things a ruler in eighths can measure. */
+const PLOT_NOUNS: readonly string[] = [
+  "snails",
+  "bugs",
+  "leaves",
+  "shells",
+  "worms",
+  "beans",
+  "seeds",
+  "beads",
+  "buttons",
+  "pebbles",
+  "ants",
+  "ladybugs",
+  "acorns",
+  "petals",
+  "twigs",
+  "nails",
+];
 
 /** Grade 5 line plot: how many things were each length, in fourths or eighths of an inch. */
 function genLinePlot(level: Level, rng: Rng): MathQuestion {
@@ -772,7 +816,10 @@ function genLinePlot(level: Level, rng: Rng): MathQuestion {
   const sizes = shuffle(rng, [1, 2, 3, 4, 5, 6, 7, 8]).slice(0, tops.length);
   const rows = tops.map((top, i) => ({ label: `${top}/${d}`, value: sizes[i] }));
   const visual: Visual = { kind: "bars", bars: rows, scale: 1 };
-  const roll = randInt(rng, 1, 3);
+  // With 5 nouns and 3 questions there were 25-30 prompts, so a 40-question
+  // drill ran out. Two sizes at once, and comparing two sizes, add more.
+  const roll = randInt(rng, 1, 5);
+  const [one, two] = shuffle(rng, [0, 1, 2, 3].slice(0, tops.length));
 
   if (roll === 1) {
     const total = rows.reduce((sum, r) => sum + r.value, 0);
@@ -786,16 +833,40 @@ function genLinePlot(level: Level, rng: Rng): MathQuestion {
     };
   }
   if (roll === 2) {
-    const i = randInt(rng, 0, rows.length - 1);
-    const row = rows[i];
+    const row = rows[one];
     return {
       prompt: `Line up the ${row.label} inch ${noun} end to end. How many ${unitName} long?`,
-      answer: tops[i] * row.value,
+      answer: tops[one] * row.value,
       visual,
-      how: `${row.value} ${noun} × ${tops[i]} ${tops[i] === 1 ? unitName.slice(0, -1) : unitName} = ${tops[i] * row.value} ${unitName}`,
+      how: `${row.value} ${noun} × ${tops[one]} ${tops[one] === 1 ? unitName.slice(0, -1) : unitName} = ${tops[one] * row.value} ${unitName}`,
       op: "×",
       a: row.value,
-      b: tops[i],
+      b: tops[one],
+    };
+  }
+  if (roll === 3) {
+    const first = tops[one] * rows[one].value;
+    const second = tops[two] * rows[two].value;
+    return {
+      prompt: `Line up the ${rows[one].label} and ${rows[two].label} inch ${noun} end to end. How many ${unitName} long?`,
+      answer: first + second,
+      visual,
+      how: `${tops[one]}×${rows[one].value} + ${tops[two]}×${rows[two].value} = ${first} + ${second} = ${first + second} ${unitName}`,
+      op: "+",
+      a: first,
+      b: second,
+    };
+  }
+  if (roll === 4) {
+    const [big, small] = rows[one].value > rows[two].value ? [rows[one], rows[two]] : [rows[two], rows[one]];
+    return {
+      prompt: `How many more ${noun} were ${big.label} inch long than ${small.label} inch?`,
+      answer: big.value - small.value,
+      visual,
+      how: `${big.label} has ${big.value}, ${small.label} has ${small.value}. ${big.value} - ${small.value} = ${big.value - small.value}`,
+      op: "-",
+      a: big.value,
+      b: small.value,
     };
   }
   const total = rows.reduce((sum, r, i) => sum + tops[i] * r.value, 0);
@@ -809,27 +880,30 @@ function genLinePlot(level: Level, rng: Rng): MathQuestion {
   };
 }
 
+/** "Red, Blue or Gold" */
+function orList(labels: readonly string[]): string {
+  return `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`;
+}
+
 function genData(level: Level, rng: Rng): MathQuestion {
   if (level >= 4) return genLinePlot(level, rng);
   const count = level === 1 ? 3 : 4;
   const labels = shuffle(rng, DATA_LABELS).slice(0, count);
   const scale = level === 1 ? 1 : pick(rng, [2, 5]);
   // Distinct sizes keep "how many more" answers away from zero.
-  const sizes = shuffle(rng, [1, 2, 3, 4, 5, 6, 7, 8]).slice(0, count);
-  const rows = labels.map((label, i) => ({
-    label,
-    value: level === 1 ? sizes[i] + 2 : sizes[i] * scale,
-  }));
+  const sizes = shuffle(rng, level === 1 ? TABLE_COUNTS : BAR_STEPS).slice(0, count);
+  const rows = labels.map((label, i) => ({ label, value: sizes[i] * scale }));
   const visual: Visual = level === 1 ? { kind: "table", rows } : { kind: "bars", bars: rows, scale };
-  const sorted = rows.slice().sort((x, y) => y.value - x.value);
-  const hi = sorted[0];
-  const lo = sorted[sorted.length - 1];
+  // Any two rows, not always the biggest and smallest: with 4 colours and
+  // "How many kids in all?" there were 25 prompts, and a 40-question drill ran out.
+  const [x, y] = shuffle(rng, rows);
+  const [big, small] = x.value > y.value ? [x, y] : [y, x];
   const total = rows.reduce((sum, r) => sum + r.value, 0);
   const roll = randInt(rng, 1, level === 3 ? 4 : 3);
 
   if (roll === 1) {
     return {
-      prompt: `How many kids in all?`,
+      prompt: `How many kids in all picked ${orList(labels)}?`,
       answer: total,
       visual,
       how: `${rows.map((r) => r.value).join(" + ")} = ${total}`,
@@ -839,36 +913,34 @@ function genData(level: Level, rng: Rng): MathQuestion {
   }
   if (roll === 2) {
     return {
-      prompt: `How many more kids picked ${hi.label} than ${lo.label}?`,
-      answer: hi.value - lo.value,
+      prompt: `How many more kids picked ${big.label} than ${small.label}?`,
+      answer: big.value - small.value,
       visual,
-      how: `${hi.label} is ${hi.value}, ${lo.label} is ${lo.value}. ${hi.value} - ${lo.value} = ${hi.value - lo.value}`,
+      how: `${big.label} is ${big.value}, ${small.label} is ${small.value}. ${big.value} - ${small.value} = ${big.value - small.value}`,
       op: "-",
-      a: hi.value,
-      b: lo.value,
+      a: big.value,
+      b: small.value,
     };
   }
   if (roll === 3) {
-    const second = sorted[1];
     return {
-      prompt: `How many fewer kids picked ${second.label} than ${hi.label}?`,
-      answer: hi.value - second.value,
+      prompt: `How many fewer kids picked ${small.label} than ${big.label}?`,
+      answer: big.value - small.value,
       visual,
-      how: `${hi.value} - ${second.value} = ${hi.value - second.value}`,
+      how: `${big.value} - ${small.value} = ${big.value - small.value}`,
       op: "-",
-      a: hi.value,
-      b: second.value,
+      a: big.value,
+      b: small.value,
     };
   }
-  const second = sorted[1];
   return {
-    prompt: `${hi.label} and ${second.label} together. How many kids?`,
-    answer: hi.value + second.value,
+    prompt: `${x.label} and ${y.label} together. How many kids?`,
+    answer: x.value + y.value,
     visual,
-    how: `${hi.value} + ${second.value} = ${hi.value + second.value}`,
+    how: `${x.value} + ${y.value} = ${x.value + y.value}`,
     op: "+",
-    a: hi.value,
-    b: second.value,
+    a: x.value,
+    b: y.value,
   };
 }
 
@@ -1111,32 +1183,14 @@ function pvExpanded(rng: Rng, size: number): MathQuestion {
   };
 }
 
-function pvTenTimes(rng: Rng, times: number): MathQuestion {
-  const digit = randInt(rng, 2, 9);
-  const maxPlace = times === 10 ? 10000 : 1000;
-  const places: number[] = [];
-  for (let p = 10; p <= maxPlace; p *= 10) places.push(p);
-  const low = digit * pick(rng, places);
-  const high = low * times;
-  return {
-    prompt: `The ${digit} in ${group(high)} is how many times the ${digit} in ${group(low)}?`,
-    answer: times,
-    visual: NONE,
-    how: `Each place to the left is 10 times bigger. ${group(high)} ÷ ${group(low)} = ${times}`,
-    op: "?",
-    a: high,
-    b: low,
-  };
-}
-
 /**
- * Level 1's "10 times" question. Asked only as "how many times", the answer was
- * always 10, and typing 10 was right a third of the time. Now it is 10 or 100,
- * asked two ways, and half the time it asks for the value instead.
+ * The "10 times" question. Asked only as "how many times", the answer was
+ * always 10 at level 1 (right a third of the time) and 10 or 100 at level 2.
+ * Now it is asked two ways, and half the time it asks for the value instead.
  */
-function pvTimesAsMuch(rng: Rng): MathQuestion {
+function pvTimesAsMuch(rng: Rng, multipliers: readonly number[]): MathQuestion {
   const digit = randInt(rng, 2, 9);
-  const times = pick(rng, [10, 100]);
+  const times = pick(rng, multipliers);
   const places: number[] = [];
   for (let p = 10; p * times <= 100000; p *= 10) places.push(p);
   const low = digit * pick(rng, places);
@@ -1314,12 +1368,12 @@ function genPlaceValue(level: Level, rng: Rng): MathQuestion {
   if (level === 1) {
     if (roll === 1) return pvDigitValue(rng, 4);
     if (roll === 2) return pvExpanded(rng, 4);
-    return pvTimesAsMuch(rng);
+    return pvTimesAsMuch(rng, [10, 100]);
   }
   if (level === 2) {
     if (roll === 1) return pvRound(rng, pick(rng, [10, 100, 1000]));
     if (roll === 2) return pvDigitValue(rng, randInt(rng, 5, 6));
-    return pvTenTimes(rng, pick(rng, [10, 100]));
+    return pvTimesAsMuch(rng, [10, 100, 1000]);
   }
   if (roll === 1) return pvExpanded(rng, randInt(rng, 5, 6));
   if (roll === 2) return pvCompare(rng);

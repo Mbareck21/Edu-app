@@ -320,19 +320,22 @@ test("a later timed batch skips every prompt already asked", () => {
   for (const q of second) assert.ok(!avoid.includes(q.prompt), `asked again: "${q.prompt}"`);
 
   // Once a level has nothing new, the batch ends short instead of repeating.
+  // Times facts are a fixed set (72 at level 2), so 300 batches ask them all.
   const all = new Set<string>();
   for (let seed = 1; seed <= 300; seed++) {
-    for (const q of buildSession({ skillId: "data", level: 1, seed, count: 40 })) all.add(q.prompt);
+    for (const q of buildSession({ skillId: "mul-facts", level: 2, seed, count: 40 })) all.add(q.prompt);
   }
-  const more = buildSession({ skillId: "data", level: 1, seed: 999, count: 40, avoid: [...all] });
+  const more = buildSession({ skillId: "mul-facts", level: 2, seed: 999, count: 40, avoid: [...all] });
+  assert.ok(more.length < 40, "a level with nothing new ends the batch short");
   for (const q of more) assert.ok(!all.has(q.prompt), `asked again: "${q.prompt}"`);
   assert.equal(mixedSession({ level: 1, seed: 4, count: 40, avoid }).filter((q) => avoid.includes(q.prompt)).length, 0);
 });
 
 /**
  * Levels that were a short list he could learn by heart: shapes 1-4 (12-14
- * facts, "4" right three times in four), place value 1 (a third of it
- * answered "10"), angles 1-2 and the smallest-common-multiple pairs.
+ * facts, "4" right three times in four), place value 1-2 (a third of level 1
+ * answered "10"), angles 1-2, the smallest-common-multiple pairs, charts
+ * (25-37 prompts, so a 40-question drill ran short) and factors 1 ("4").
  */
 const WIDENED: readonly [MathSkillId, Level][] = [
   ["shapes", 1],
@@ -340,9 +343,16 @@ const WIDENED: readonly [MathSkillId, Level][] = [
   ["shapes", 3],
   ["shapes", 4],
   ["place-value", 1],
+  ["place-value", 2],
   ["angles", 1],
   ["angles", 2],
+  ["factors-multiples", 1],
   ["factors-multiples", 4],
+  ["data", 1],
+  ["data", 2],
+  ["data", 3],
+  ["data", 4],
+  ["data", 5],
 ];
 
 for (const [id, level] of WIDENED) {
