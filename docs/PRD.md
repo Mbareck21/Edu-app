@@ -4,6 +4,17 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## Quest: full-app review, 137 fixes — 2026-09-28
+
+- **Status:** Merged to `main` via PR from `claude/full-review-2026-09-28` (Vercel preview green before merge).
+- **How it was done:** seven parallel reviewers (vocab, math, reading/voice/chat, rewards/drills, platform/security/perf, UI/UX, daily plan/SRS plumbing) found 137 defects with proof scripts (the live probes found 5 more); every one was checked before fixing; six implementers with disjoint files fixed them, each pure-logic fix with a test that failed first. Decision trail: `docs/run-trail-2026-09-28.tsv`.
+- **Biggest fixes:** badges farmable with 0-answer drills and 1-answer "perfect" sessions; two sessions posting together erased each other's word progress; pick-the-sentence and word-form items with two right answers (70% of word-form items on the real lists); one AI limit per home IP let echo reading lock chat and stories for both boys; chat dead after 20 turns; an open redirect after the PIN; "is equal to fifty six" heard as 58; 6×7 and 7×6 in one lesson; offline pages reloading in a loop; a bad stored rivalry day hanging every scoreboard render; no error or not-found page.
+- **New probes:** `docs/probes/ux-audit.mjs` (every page, both children, 360 and 1280px: overflow, <44px targets, console errors, failed requests) and `docs/probes/api-audit.mjs` (401 without a session, never a 5xx on bad input, ownership, grown-ups lock, PIN throttle).
+- **Verified:** 712 tests (was 620), tsc and eslint clean, `next build` green, api-audit 96/96, ux-audit 134 page visits x 2 widths for both children, 0 issues (baseline 53).
+- **Left for the parent:** short lists (1-4 words) repeating a word within a lesson; filled button contrast (brand colours, 3.3:1 white on green); the soft flame streak pill (3.9:1); synonym distractors with no shared word ("gentle" for calm); the pet formula at the 2027-05-21 grade switch.
+
+---
+
 ## Quest: review fixes, cleanup sweep, word-game redesign — 2026-08-19 (later)
 
 - **Status:** Shipped (pushed to `main` → Vercel; verified live).
