@@ -375,7 +375,7 @@ function ItemRunnerInner({
       const short = current.answer.length <= 22;
       setFeedback({
         state: "wrong",
-        title: short ? `It is "${current.answer}"` : "Not this time",
+        title: short ? `It is "${current.answer}"` : "Good try!",
         answer: current.answer,
         line: current.feedback,
       });

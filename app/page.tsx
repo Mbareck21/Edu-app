@@ -60,7 +60,7 @@ export default async function LearnPage() {
         name={profile.name}
         xp={profile.xp}
         streak={shownStreak(profile.streak, today)}
-        subtitle="Time to learn some words."
+        subtitle={beats.every((b) => b.done) ? "All done today. Great work!" : "Time to learn some words."}
         className="pt-3 pb-3"
       />
 

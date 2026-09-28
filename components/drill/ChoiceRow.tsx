@@ -66,7 +66,7 @@ export default function ChoiceRow({
               className={
                 list
                   ? "press-3d flex min-h-[48px] w-full items-center justify-between gap-3 rounded-tile border-2 px-4 py-2 text-left font-display text-[15px] font-bold leading-tight disabled:opacity-40"
-                  : "press-3d flex min-h-[48px] items-center gap-1.5 rounded-full border-2 px-4 font-display text-[15px] font-bold disabled:opacity-40"
+                  : "press-3d flex min-h-[48px] min-w-[48px] items-center justify-center gap-1.5 rounded-full border-2 px-4 font-display text-[15px] font-bold disabled:opacity-40"
               }
               style={{
                 background: on ? t.soft : "#fff",

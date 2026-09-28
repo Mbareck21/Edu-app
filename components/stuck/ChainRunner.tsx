@@ -470,7 +470,7 @@ function ChainRunnerInner({
         {missed ? (
           <div className="mt-4 rounded-tile px-3 py-3" style={{ background: "var(--color-coral-soft)" }}>
             <p className="text-sm font-bold" style={{ color: "var(--color-coral-dark)" }}>
-              You wrote {missed}. Back to zero — write it again.
+              You wrote {missed}. Good try! Start a new row, you can do it.
             </p>
             {hintFor(missed, word) ? (
               <p className="mt-1 text-sm">{hintFor(missed, word)}</p>

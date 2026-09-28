@@ -43,8 +43,8 @@ export default async function WordsPage() {
 
         <StuckBoard list={pool} chains={chains} />
 
-        <p className="mt-10 text-center text-sm" style={{ color: "var(--color-muted)" }}>
-          <Link href="/me/lists" className="font-bold underline underline-offset-4">
+        <p className="mt-7 text-center text-sm" style={{ color: "var(--color-muted)" }}>
+          <Link href="/me/lists" className="inline-block py-3 font-bold underline underline-offset-4">
             Manage word lists
           </Link>
         </p>

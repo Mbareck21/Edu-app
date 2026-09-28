@@ -39,7 +39,7 @@ export default function ArabicChip({ arabic, faded = false, className = "" }: Ar
   if (shown) {
     return (
       <span
-        className={`inline-flex min-h-[36px] items-center rounded-full px-3 py-1 font-body text-base ${className}`}
+        className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1 font-body text-base ${className}`}
         style={{ background: "var(--color-sand)", color: "var(--color-ink)" }}
         dir="rtl"
         lang="ar"
@@ -53,7 +53,7 @@ export default function ArabicChip({ arabic, faded = false, className = "" }: Ar
     // Not offered — but a long press still gets there.
     return (
       <span
-        className={`inline-block h-[36px] w-14 ${className}`}
+        className={`inline-block h-[44px] w-14 ${className}`}
         onPointerDown={startPress}
         onPointerUp={clear}
         onPointerLeave={clear}
@@ -66,7 +66,7 @@ export default function ArabicChip({ arabic, faded = false, className = "" }: Ar
     <button
       type="button"
       onClick={() => setShown(true)}
-      className={`press-3d inline-flex min-h-[36px] items-center rounded-full border-2 px-3 font-display text-xs font-bold uppercase tracking-wide ${className}`}
+      className={`press-3d inline-flex min-h-[44px] items-center rounded-full border-2 px-3 font-display text-xs font-bold uppercase tracking-wide ${className}`}
       style={{
         borderColor: "var(--color-line)",
         background: "#fff",

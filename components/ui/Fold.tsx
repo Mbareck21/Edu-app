@@ -20,7 +20,7 @@ export default function Fold({
       className={`group rounded-card border p-4 shadow-card ${className}`}
       style={{ background: "#fff", borderColor: "var(--color-line)" }}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-display text-lg font-bold [&::-webkit-details-marker]:hidden">
+      <summary className="-my-2 flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 font-display text-lg font-bold [&::-webkit-details-marker]:hidden">
         {title}
         <span
           className="shrink-0 transition-transform group-open:rotate-45"

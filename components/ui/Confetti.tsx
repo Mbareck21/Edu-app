@@ -9,12 +9,19 @@ function reducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
+/** A runner and its finish screen can both cheer the same moment; one burst is enough. */
+const GAP_MS = 1500;
+let lastFired = 0;
+
 /**
  * Fire canvas-confetti. Loaded on demand so it never lands in the server
  * bundle and never runs for a kid who asked for less motion.
  */
 export async function fireConfetti(kind: ConfettiKind = "small"): Promise<void> {
   if (typeof window === "undefined" || reducedMotion()) return;
+  const now = Date.now();
+  if (now - lastFired < GAP_MS) return;
+  lastFired = now;
   try {
     const { default: confetti } = await import("canvas-confetti");
     if (kind === "small") {

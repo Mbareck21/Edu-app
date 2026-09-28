@@ -254,7 +254,7 @@ function MathDrillRunnerInner({
     }
     setFlash("wrong");
     setShakeKey((k) => k + 1);
-    setFeedback({ state: "wrong", title: `The answer is ${question.answer}`, line: question.how });
+    setFeedback({ state: "wrong", title: `The answer is ${question.answer.toLocaleString("en-US")}`, line: question.how });
   }, [feedback, flash, input, nextTimed, queue, question, saveKey, timed]);
 
   const afterWrong = useCallback(() => {

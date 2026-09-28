@@ -26,5 +26,10 @@ export function mathHint(question: MathQuestion, given: number): string {
     : given > answer
       ? "Too big."
       : "Too small.";
-  return `${size} ${BY_OP[question.op]}`;
+  // "Use the picture" sent him looking for one on a question that has none.
+  const how =
+    question.op === "?" && question.visual.kind === "none"
+      ? "Read it again slowly, one part at a time."
+      : BY_OP[question.op];
+  return `${size} ${how}`;
 }

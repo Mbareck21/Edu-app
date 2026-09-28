@@ -37,3 +37,10 @@ test("the hint says too big or too small, and so close when nearly right", () =>
   // The hint never gives the answer away.
   assert.ok(!mathHint(q, 40).includes("100"));
 });
+
+test("the hint only points at a picture when there is one", () => {
+  const q = { prompt: "", answer: 6000, visual: { kind: "none" as const }, how: "", op: "?" as const };
+  assert.ok(!mathHint(q, 9).includes("picture"));
+  const shown = { ...q, visual: { kind: "placevalue" as const, value: 6000, place: "thousands" as const } };
+  assert.ok(mathHint(shown, 9).includes("picture"));
+});

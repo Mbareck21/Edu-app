@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-dvh antialiased">
         {/* Phone-first: the app stays a phone-width column on a laptop, with
             the warm sand background around it. */}
-        <div className="app-shell mx-auto min-h-dvh w-full max-w-app bg-bg shadow-lift">
+        <div className="app-shell mx-auto min-h-dvh w-full max-w-app overflow-x-clip bg-bg shadow-lift">
           {children}
         </div>
         <RegisterSW />

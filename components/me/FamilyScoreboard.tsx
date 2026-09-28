@@ -39,7 +39,7 @@ export default function FamilyScoreboard({
 
   return (
     <Card className="mt-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg font-bold">Family scoreboard</h2>
         <span
           className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold"
