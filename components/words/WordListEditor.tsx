@@ -109,8 +109,9 @@ export default function WordListEditor({
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      // The server says why when it can; the letters rule is only a guess.
       setError(
-        res.status === 403 && typeof data?.error === "string"
+        typeof data?.error === "string" && data.error.trim()
           ? data.error
           : "Could not save. Words take letters, spaces and hyphens only."
       );
@@ -130,6 +131,8 @@ export default function WordListEditor({
         setNote("Saved.");
         router.refresh();
       }
+    } catch {
+      setError("No internet. Try again.");
     } finally {
       setBusy(null);
     }
@@ -164,6 +167,8 @@ export default function WordListEditor({
         })
       );
       setNote("Clues written. Save to keep them.");
+    } catch {
+      setError("No internet. Try again.");
     } finally {
       setBusy(null);
     }
@@ -189,6 +194,8 @@ export default function WordListEditor({
       setRows(toRows(fresh.words, states));
       setNote(kind === "arabic" ? "Arabic filled in." : "Meanings written.");
       router.refresh();
+    } catch {
+      setError("No internet. Try again.");
     } finally {
       setBusy(null);
     }

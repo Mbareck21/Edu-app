@@ -35,17 +35,23 @@ export const metadata = { title: "Me" };
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 export default async function MePage() {
-  const state = await getProfile();
-  const profile = toClientProfile(state);
-
   const { WordList, SpellChain, TimesFact } = await db();
-  const docs = await WordList.find({ kind: { $ne: "pool" } }).lean();
+  // One round trip instead of five in a row. The lists only lend their words:
+  // loaded whole, each carried every saved passage and its history.
+  const [state, docs, factRows, chainRows, me, family] = await Promise.all([
+    getProfile(),
+    WordList.find({ kind: { $ne: "pool" } }).select("name words createdAt updatedAt").lean(),
+    TimesFact.find().lean(),
+    SpellChain.find().lean(),
+    currentLearner(),
+    getFamilyProfiles(),
+  ]);
+  const profile = toClientProfile(state);
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
   const counts = countKnowledge(uniqueWords(words));
   const wordsKnown = counts.known + counts.mastered;
 
   const now = new Date();
-  const [factRows, chainRows] = await Promise.all([TimesFact.find().lean(), SpellChain.find().lean()]);
   const digest = buildDigest({
     activity: profile.activity,
     words: uniqueWords(words),
@@ -62,7 +68,6 @@ export default async function MePage() {
   const activeDays = new Set(profile.activity.map((a) => todayKey(new Date(a.at))));
   const streak = shownStreak(profile.streak, today);
 
-  const [me, family] = await Promise.all([currentLearner(), getFamilyProfiles()]);
   const scoreRows = family.map(({ learner, state: s }) => ({
     learner,
     name: s.name || LEARNER_NAMES[learner],
@@ -117,7 +122,7 @@ export default async function MePage() {
             <Pill color="flame" icon="flame" variant="solid" size="sm">
               {streak} day
             </Pill>
-            <Pill color="green" icon="book" variant="solid" size="sm">
+            <Pill color="green" icon="book" variant="soft" size="sm">
               {wordsKnown} words
             </Pill>
           </div>
@@ -136,13 +141,14 @@ export default async function MePage() {
           {(
             [
               { label: "New", n: counts.new, color: "var(--color-muted)" },
-              { label: "Learning", n: counts.learning, color: "var(--color-gold-dark)" },
-              { label: "Known", n: counts.known, color: "var(--color-blue)" },
-              { label: "Mastered", n: counts.mastered, color: "var(--color-green)" },
+              // gold-ink, not gold-dark: gold-dark is too faint on sand even as large text.
+              { label: "Learning", n: counts.learning, color: "var(--color-gold-ink)" },
+              { label: "Known", n: counts.known, color: "var(--color-blue-dark)" },
+              { label: "Mastered", n: counts.mastered, color: "var(--color-green-dark)" },
             ] as const
           ).map((b) => (
             <div key={b.label} className="rounded-tile py-2" style={{ background: "var(--color-sand)" }}>
-              <p className="font-display text-lg font-bold leading-none" style={{ color: b.color }}>
+              <p className="font-display text-xl font-bold leading-none" style={{ color: b.color }}>
                 {b.n}
               </p>
               <p className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>

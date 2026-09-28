@@ -13,8 +13,12 @@ export default function SuggestedDrill({ suggestion }: { suggestion: Suggestion 
       className="mt-3 rounded-card border-2 p-4 shadow-card"
       style={{ background: `var(--color-${color}-soft)`, borderColor: `var(--color-${color})` }}
     >
-      <p className="text-xs font-bold uppercase tracking-wide" style={{ color: `var(--color-${color}-dark)` }}>
-        ✨ Suggested for you
+      <p
+        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide"
+        style={{ color: `var(--color-${color}-dark)` }}
+      >
+        <Icon name="sparkles" size={14} />
+        Suggested for you
       </p>
       <div className="mt-2 flex items-center gap-3">
         <span

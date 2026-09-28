@@ -80,6 +80,9 @@ function play(tones: Tone[]): void {
  */
 function buzz(pattern: number | number[]): void {
   if (isMuted() || typeof navigator === "undefined") return;
+  // Chrome refuses a buzz before the first tap and logs an error for it (the
+  // home page cheers on load when the whole quest is done).
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
   try {
     navigator.vibrate?.(pattern);
   } catch {

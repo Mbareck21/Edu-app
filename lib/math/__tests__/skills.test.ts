@@ -353,6 +353,10 @@ const WIDENED: readonly [MathSkillId, Level][] = [
   ["data", 3],
   ["data", 4],
   ["data", 5],
+  // Back-to-back lessons shared 15.8%, 14.0% and 13.5% of their questions.
+  ["fractions", 1],
+  ["angles", 5],
+  ["shapes", 5],
 ];
 
 for (const [id, level] of WIDENED) {
@@ -472,4 +476,105 @@ test("rng helpers are seeded and in range", () => {
     mixed.slice().sort((x, y) => x - y),
     source,
   );
+});
+
+test("a lesson never asks one times fact both ways", () => {
+  // 6 × 11 and 11 × 6 in one lesson: the second is a copy of the first.
+  // Before, 44-50% of level 1-3 times-fact lessons did this.
+  const times = /^([\d.,]+) × ([\d.,]+) = \?/;
+  for (const skill of MATH_SKILLS) {
+    for (const level of ALL_LEVELS) {
+      for (let seed = 1; seed <= 300; seed++) {
+        const facts = new Map<string, string>();
+        for (const q of buildSession({ skillId: skill.id, level, seed })) {
+          const m = times.exec(q.prompt);
+          if (!m) continue;
+          const fact = [m[1], m[2]].map((s) => s.replace(/,/g, "")).sort().join("×");
+          assert.ok(
+            !facts.has(fact),
+            `${skill.id} L${level} seed ${seed}: "${facts.get(fact)}" and "${q.prompt}"`,
+          );
+          facts.set(fact, q.prompt);
+        }
+      }
+    }
+  }
+});
+
+test("a sharing picture does not draw the answer", () => {
+  // "Share 64 into 8 groups" drew 8 groups of 8 dots: count one group, done.
+  for (const skill of MATH_SKILLS) {
+    for (const level of ALL_LEVELS) {
+      const rng = mulberry32(4242 + level);
+      for (let i = 0; i < 2000; i++) {
+        const q = skill.generate(level, rng);
+        if (q.op !== "÷" || q.visual.kind !== "groups") continue;
+        assert.notEqual(q.visual.per, q.answer, `${skill.id} L${level}: "${q.prompt}" draws the answer`);
+      }
+    }
+  }
+});
+
+test("place value never asks the value of a 0", () => {
+  for (const level of LEVELS) {
+    const rng = mulberry32(900 + level);
+    for (let i = 0; i < 5000; i++) {
+      const q = getSkill("place-value").generate(level, rng);
+      assert.ok(!/value of the 0 /.test(q.prompt), `L${level}: "${q.prompt}"`);
+    }
+  }
+});
+
+test("an expanded form always has parts to add", () => {
+  // "900 = ?" is the answer already.
+  const expanded = /^[\d,]+( \+ [\d,]+)* = \?$/;
+  for (const id of ["number-forms", "place-value"] as const) {
+    for (const level of ALL_LEVELS) {
+      const rng = mulberry32(31337 + level);
+      for (let i = 0; i < 20000; i++) {
+        const q = getSkill(id).generate(level, rng);
+        if (expanded.test(q.prompt)) assert.ok(q.prompt.includes(" + "), `${id} L${level}: "${q.prompt}"`);
+      }
+    }
+  }
+});
+
+test("a two-part angle picture shows only what the question gives", () => {
+  // "Parts are 20° and 30°" drew one 50° wedge: the adding was done for him.
+  for (const level of ALL_LEVELS) {
+    const rng = mulberry32(606 + level);
+    for (let i = 0; i < 2000; i++) {
+      const q = getSkill("angles").generate(level, rng);
+      if (q.visual.kind !== "angle") continue;
+      assert.ok(q.prompt.includes(`${q.visual.known}°`), `L${level}: "${q.prompt}" draws ${q.visual.known}°`);
+    }
+  }
+});
+
+test("left-over boxes are asked for as boxes needed", () => {
+  // "There are 70. How many boxes?" read as 7 full boxes; the answer was 8.
+  const boxes = /^Each box holds (\d+) \w+\. There are (\d+)\. (.*)$/;
+  for (const level of ALL_LEVELS) {
+    const rng = mulberry32(777 + level);
+    for (let i = 0; i < 3000; i++) {
+      const q = getSkill("word-problems").generate(level, rng);
+      const m = boxes.exec(q.prompt);
+      if (!m || Number(m[2]) % Number(m[1]) === 0) continue;
+      assert.match(m[3], /^How many (boxes are needed|full boxes)\?$/, q.prompt);
+    }
+  }
+});
+
+test("Grade 5 giving-away answers are not always round tens", () => {
+  const rng = mulberry32(2093);
+  let asked = 0;
+  let tens = 0;
+  for (let i = 0; i < 5000; i++) {
+    const q = getSkill("word-problems").generate(4, rng);
+    if (!/gave \d+ friends/.test(q.prompt)) continue;
+    asked++;
+    if (q.answer % 10 === 0) tens++;
+  }
+  assert.ok(asked > 500);
+  assert.ok(tens / asked < 0.2, `${((tens / asked) * 100).toFixed(1)}% end in 0`);
 });

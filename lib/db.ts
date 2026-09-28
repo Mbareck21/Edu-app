@@ -11,7 +11,6 @@ import { WordList, WordListSchema, listContent } from "@/lib/models/WordList";
 const MONGODB_URI = process.env.MONGODB_URI;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __mongooseConn: Promise<typeof mongoose> | undefined;
   var __dbIdentityOk: boolean | undefined;
   var __wissamDbOk: boolean | undefined;
@@ -62,10 +61,18 @@ export async function connectDB(): Promise<typeof mongoose> {
     throw new Error("MONGODB_URI is not set. Add it to .env.local");
   }
   if (mongoose.connection.readyState !== 1 && !global.__mongooseConn) {
-    global.__mongooseConn = mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-      dbName: DB_NAME,
-    });
+    // A failed attempt is forgotten so the next request tries again. Kept,
+    // one network blip left a warm server instance handing every request the
+    // same old rejection until the instance was recycled.
+    global.__mongooseConn = mongoose
+      .connect(MONGODB_URI, {
+        bufferCommands: false,
+        dbName: DB_NAME,
+      })
+      .catch((err: unknown) => {
+        global.__mongooseConn = undefined;
+        throw err;
+      });
   }
   const m = mongoose.connection.readyState === 1 ? mongoose : await global.__mongooseConn;
   await checkIdentity(m ?? mongoose);

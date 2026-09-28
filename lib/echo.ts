@@ -51,6 +51,17 @@ const NUMBER_WORDS: Record<string, string> = {
 };
 
 /**
+ * A title is read out as a word: "Ms. Okafor" is said, and written down by
+ * Whisper, as "Miss Okafor". Each spoken form scores as its abbreviation, the
+ * same on both sides, so reading the name right is never marked wrong.
+ */
+const TITLE_WORDS: Record<string, string> = {
+  mister: "mr",
+  missus: "mrs",
+  miss: "ms",
+};
+
+/**
  * Lower-case, punctuation-free words, with every number broken into the words
  * it is spoken as and each of those written as a digit: "25", "twenty-five"
  * and "twenty five" all become ["20", "5"]. The screen shows "twenty five" as
@@ -71,7 +82,7 @@ export function echoTokens(text: string): string[] {
       .filter(Boolean)
       .map((w) => w.replace(/^'+|'+$/g, ""))
       .filter(Boolean)
-      .map((w) => NUMBER_WORDS[w] ?? w)
+      .map((w) => NUMBER_WORDS[w] ?? TITLE_WORDS[w] ?? w)
   );
 }
 

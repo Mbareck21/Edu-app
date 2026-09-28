@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { currentLearner } from "@/lib/auth";
@@ -8,10 +8,12 @@ import { toClient } from "@/lib/models/WordList";
 import { READING_THEMES, SCIENCE_UNITS } from "@/lib/curriculum";
 import { packById } from "@/lib/word-packs";
 import { fillArabic, fillClues } from "@/lib/fill-clues";
+import { fillExamples } from "@/lib/fill-examples";
 import { getClientIp, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+// 30s for the clues and Arabic, then room for the sentences written after.
+export const maxDuration = 60;
 
 const Body = z.object({
   kind: z.enum(["science", "theme", "pack"]),
@@ -24,14 +26,6 @@ function listName(title: string): string {
 }
 
 export async function POST(req: Request) {
-  const rl = rateLimit(getClientIp(req));
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
-    );
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -63,6 +57,16 @@ export async function POST(req: Request) {
   const existing = await WordList.findOne({ name }).select("-readingHistory").lean();
   if (existing) {
     return NextResponse.json(toClient(existing), { status: 200 });
+  }
+
+  // Only a list about to be written spends the allowance: opening one that
+  // already exists makes no model call. A pack still asks for its Arabic.
+  const rl = rateLimit(getClientIp(req), "seed");
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
   }
 
   // The word banks carry a few multi-word entries ("rock layer"); the word
@@ -103,6 +107,10 @@ export async function POST(req: Request) {
     })),
   });
   await syncList(learner, String(doc._id));
+  // Sentences for every word before the first lesson, not during it: a word is
+  // new only once, and its first learn card had none.
+  const ip = getClientIp(req);
+  after(() => fillExamples(String(doc._id), ip).then(() => undefined, () => undefined));
 
   return NextResponse.json(toClient(doc.toObject()), { status: 201 });
 }

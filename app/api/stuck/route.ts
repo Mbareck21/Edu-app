@@ -6,6 +6,7 @@ import { toClient } from "@/lib/models/WordList";
 import { addPoolWords, getPool } from "@/lib/word-source";
 import { parseWordEntry } from "@/lib/stuck-entry";
 import { fillArabic, fillClues } from "@/lib/fill-clues";
+import { getClientIp, rateLimit } from "@/lib/groq";
 
 export const runtime = "nodejs";
 
@@ -42,14 +43,18 @@ export async function POST(req: Request) {
   // that asks "which word means this?" needs a meaning to show, so it would
   // sit out the very tests it was added for. One call covers both, and the
   // old ones riding along heals anything that landed while the writer was
-  // rate-limited. Best effort throughout: a missing clue never blocks a word.
+  // rate-limited. A call takes 30 words at most (lib/fill-clues.ts), new ones
+  // first, so a long backlog heals a batch per add instead of all at once.
+  // Best effort throughout: a missing clue never blocks a word.
   const needClue = pool.words.filter((w) => !w.clue.trim()).map((w) => w.word);
   const needArabic = pool.words.filter((w) => !w.arabic.trim()).map((w) => w.word);
+  // The AI calls share the clue writer's hourly limit. Over it, the words
+  // still go in, without meanings, and a later add heals them.
+  const aiOk = rateLimit(getClientIp(req), "clues").ok;
   // Both in parallel: he is waiting with the worksheet in front of him.
-  const [clues, arabic] = await Promise.all([
-    fillClues([...fresh, ...needClue]),
-    fillArabic([...fresh, ...needArabic]),
-  ]);
+  const [clues, arabic] = aiOk
+    ? await Promise.all([fillClues([...fresh, ...needClue]), fillArabic([...fresh, ...needArabic])])
+    : [{} as Record<string, string>, {} as Record<string, string>];
 
   for (const word of new Set([...needClue, ...needArabic])) {
     const patch: Record<string, string> = {};

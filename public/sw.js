@@ -10,7 +10,7 @@
    Now a new version sits in "waiting" until the page asks for it, which the
    page does when he taps the update bar. See components/RegisterSW.tsx. */
 
-const VERSION = "quest-v4";
+const VERSION = "quest-v5";
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 // Where the running worker records which version is live, so a NEW worker can
@@ -22,6 +22,10 @@ const META = "quest-meta";
 const LIVE_KEY = "https://quest.local/live-version";
 
 const PRECACHE = ["/", "/math", "/drill", "/words", "/me", "/offline"];
+// Build files kept in RUNTIME. Every deploy brings new hashed files, and the
+// cache itself only changes with VERSION, so without a limit the files of
+// every past deploy stayed on the phone for good. Past this, the oldest go.
+const RUNTIME_MAX = 80;
 
 /** The /_next/static URLs a precached page needs, read out of its own HTML. */
 function buildAssets(html) {
@@ -107,6 +111,49 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/** The build files the saved shell pages name, as paths. */
+async function shellAssets() {
+  const shell = await caches.open(SHELL);
+  const needed = new Set();
+  for (const page of await shell.keys()) {
+    const res = await shell.match(page);
+    if (!res) continue;
+    for (const asset of buildAssets(await res.text())) {
+      needed.add(new URL(asset, self.location.origin).pathname);
+    }
+  }
+  return needed;
+}
+
+let trimming = null;
+
+/**
+ * Delete the oldest build files past RUNTIME_MAX. A file a saved page still
+ * names is never deleted, whatever its age: without it that page opens
+ * offline as a dead shell. One trim at a time; the next new file starts
+ * another.
+ */
+function trimRuntime() {
+  if (trimming) return trimming;
+  trimming = (async () => {
+    const runtime = await caches.open(RUNTIME);
+    const builds = (await runtime.keys()).filter(
+      (r) => new URL(r.url).pathname.startsWith("/_next/static/")
+    );
+    const extra = builds.length - RUNTIME_MAX;
+    if (extra <= 0) return;
+    const needed = await shellAssets();
+    // keys() lists entries in the order they were stored, oldest first.
+    const old = builds.filter((r) => !needed.has(new URL(r.url).pathname)).slice(0, extra);
+    await Promise.all(old.map((r) => runtime.delete(r)));
+  })()
+    .catch(() => {})
+    .finally(() => {
+      trimming = null;
+    });
+  return trimming;
+}
+
 function cacheFirst(request, cacheName) {
   return (async () => {
     const cached = await caches.match(request);
@@ -114,7 +161,7 @@ function cacheFirst(request, cacheName) {
     const response = await fetch(request);
     if (response && response.ok) {
       const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
+      cache.put(request, response.clone()).then(trimRuntime);
     }
     return response;
   })();

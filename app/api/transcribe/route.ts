@@ -6,7 +6,7 @@ export const maxDuration = 30;
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const rl = rateLimit(ip);
+  const rl = rateLimit(ip, "transcribe");
   if (!rl.ok) {
     return NextResponse.json(
       { error: "rate limit", retryAfterSec: rl.retryAfterSec },

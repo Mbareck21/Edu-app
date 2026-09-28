@@ -75,12 +75,15 @@ export function termSegments(prompt: string): Segment[] {
 export function speakable(prompt: string): string {
   return prompt
     .replace(/(\d),(?=\d{3})/g, "$1")
+    // "2 3/8" is two and three eighths, not "2 3 over 8".
+    .replace(/(\d+) (\d+)\s*\/\s*(\d+)/g, "$1 and $2 over $3")
     .replace(/(\d+)\s*\/\s*(\d+)/g, "$1 over $2")
     .replace(/\?\s*\/\s*(\d+)/g, "what over $1")
     .replace(/°/g, " degrees")
     .replace(/×/g, " times ")
     .replace(/÷/g, " divided by ")
-    .replace(/(^|[\s=×÷+-])\?(?=[\s.]|$)/g, "$1what ")
+    // A blank in a list ("1, 2, ?, 6") is followed by a comma.
+    .replace(/(^|[\s=×÷+-])\?(?=[\s.,]|$)/g, "$1what")
     .replace(/\+/g, " plus ")
     .replace(/(\d)\s*-\s*(?=\$?\d)/g, "$1 minus ")
     .replace(/=/g, " equals ")

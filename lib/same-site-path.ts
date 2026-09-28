@@ -6,12 +6,18 @@
  * site right after he typed the PIN — one free to show its own "Wrong PIN".
  * Resolving it is the check: a string test misses `/\t/evil.example`, which the
  * URL parser turns into `//evil.example`.
+ *
+ * The resolved path itself can still start with `//` (`/.//evil.example`
+ * resolves to the path `//evil.example`), and the router reads that as another
+ * site. So the leading slashes are folded into one.
  */
 export function sameSitePath(next: string | null): string {
   if (!next) return "/";
   try {
     const url = new URL(next, window.location.origin);
-    if (url.origin === window.location.origin) return `${url.pathname}${url.search}${url.hash}`;
+    if (url.origin === window.location.origin) {
+      return `${url.pathname.replace(/^\/+/, "/")}${url.search}${url.hash}`;
+    }
   } catch {
     // Not a URL at all.
   }

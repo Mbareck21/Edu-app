@@ -6,18 +6,21 @@ import TypeAnswer from "@/components/items/TypeAnswer";
 import Card from "@/components/ui/Card";
 import { spellingKey, type WriteItem as WriteItemType } from "@/lib/items";
 import { hintFor } from "@/lib/number-words";
+import { missedLetters } from "@/lib/spelling-marks";
 import type { ItemControlProps } from "@/components/items/props";
 
 /** Letters he missed come back red; the rest stay black. */
 function Spelled({ answer, typed }: { answer: string; typed: string }) {
-  const given = typed.trim().toLowerCase();
+  const missed = missedLetters(answer, typed);
   return (
-    <p className="text-center font-display text-3xl font-bold tracking-[0.18em] lowercase">
+    // Sized to the screen so a 15-letter word fits the card; break-words only
+    // splits a word that still would not.
+    <p className="text-center font-display text-[clamp(1.25rem,7vw,1.875rem)] font-bold tracking-[0.12em] break-words lowercase">
       {answer.split("").map((letter, i) => (
         <span
           key={i}
           style={{
-            color: given[i] === letter ? "var(--color-ink)" : "var(--color-coral-dark)",
+            color: missed[i] ? "var(--color-coral-dark)" : "var(--color-ink)",
           }}
         >
           {letter}

@@ -126,3 +126,21 @@ test("clearing everything empties both storages, and only resume keys", () => {
   assert.deepEqual([...f.store.keys()], ["quest:muted"]);
   assert.equal(s.store.size, 0);
 });
+
+test("on a shared phone, one child never resumes the other's run", () => {
+  // Sign-out clears every run, but a sign-in after an expired cookie does not,
+  // and the other boy landed six questions into his brother's lesson.
+  const f: Fake = { store: new Map() };
+  fakeWindow(f);
+  const doc = globalThis as { document?: { cookie: string } };
+  const key = resumeKey("items", "quest:review", "first");
+  try {
+    doc.document = { cookie: "eduapp_learner=nour" };
+    saveProgress(key, { queue: [7] });
+    assert.deepEqual(loadProgress(key, isQueue), { queue: [7] });
+    doc.document = { cookie: "eduapp_learner=wissam" };
+    assert.equal(loadProgress(key, isQueue), null);
+  } finally {
+    delete doc.document;
+  }
+});

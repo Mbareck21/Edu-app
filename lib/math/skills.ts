@@ -1,6 +1,6 @@
 import type { Level, MathQuestion, MathSkill, MathSkillId, PlaceName, Rng, ShapeName, Visual } from "./types";
 import { pick, randInt, shuffle } from "./rng";
-import { group as commas, toExpanded, toUnitForm, toWords } from "@/lib/number-words";
+import { group as commas, toExpanded, toExpandedParts, toUnitForm, toWords } from "@/lib/number-words";
 
 const NONE: Visual = { kind: "none" };
 
@@ -121,6 +121,12 @@ const EASY_TABLES: readonly number[] = [2, 3, 4, 5, 10];
 const HARD_TABLES: readonly number[] = [6, 7, 8, 9];
 const BIG_TABLES: readonly number[] = [11, 12];
 
+/** One key for a × b and b × a: asked both ways in one lesson, the second is a copy. */
+function timesKey(a: number | string, b: number | string): string {
+  const [x, y] = [String(a), String(b)].sort();
+  return `${x} × ${y}`;
+}
+
 function timesHow(a: number, b: number): string {
   if (a === 11 || a === 12) {
     return `${a} × ${b} = 10×${b} + ${a - 10}×${b} = ${10 * b} + ${(a - 10) * b} = ${a * b}`;
@@ -154,6 +160,7 @@ function genMulTens(level: Level, rng: Rng): MathQuestion {
     op: "×",
     a,
     b,
+    key: timesKey(a, b),
   };
 }
 
@@ -187,6 +194,7 @@ function genMulFacts(level: Level, rng: Rng): MathQuestion {
     op: "×",
     a,
     b,
+    key: timesKey(a, b),
   };
 }
 
@@ -270,6 +278,7 @@ function genMulMulti(level: Level, rng: Rng): MathQuestion {
     op: "×",
     a,
     b,
+    key: timesKey(a, b),
   };
 }
 
@@ -283,7 +292,8 @@ function genDivision(level: Level, rng: Rng): MathQuestion {
     return {
       prompt: `Share ${n} into ${d} groups. How many in each?`,
       answer: q,
-      visual: q <= 12 ? { kind: "groups", groups: d, per: q } : NONE,
+      // No picture: drawn as groups, every group showed the answer.
+      visual: NONE,
       how: `${n} ÷ ${d} = ${q}, because ${d} × ${q} = ${n}. No remainder.`,
       op: "÷",
       a: n,
@@ -572,6 +582,14 @@ const EQUIV_PAIRS: readonly { small: number; big: number }[] = FRACTION_DENS.fla
   FRACTION_DENS.filter((big) => big > small && big % small === 0).map((big) => ({ small, big })),
 );
 
+/**
+ * Every level 1 equivalence: a pair and a top number. Drawn from as one list,
+ * so halves (one fraction each: 1/2) come up no more often than tenths.
+ */
+const EQUIV_FRACTIONS: readonly { small: number; big: number; n: number }[] = EQUIV_PAIRS.flatMap((p) =>
+  Array.from({ length: p.small - 1 }, (_, i) => ({ ...p, n: i + 1 })),
+);
+
 /** Level 4: one denominator is a whole number of times the other. */
 const UNLIKE_EASY = EQUIV_PAIRS.filter((p) => p.big <= 12);
 /** Level 5: neither denominator fits into the other; the common one is 24 or less. */
@@ -678,9 +696,21 @@ function genFractions(level: Level, rng: Rng): MathQuestion {
   if (level >= 4) return genFractionsG5(level, rng);
   if (level === 1) {
     if (rng() < 0.65) {
-      const { small, big } = pick(rng, EQUIV_PAIRS);
+      const { small, big, n } = pick(rng, EQUIV_FRACTIONS);
       const times = big / small;
-      const n = randInt(rng, 1, small - 1);
+      // Both ways: 41 prompts one way only, and back-to-back lessons shared
+      // 15.8% of their questions. The way back is simplifying, 6/8 = 3/4.
+      if (rng() < 0.5) {
+        return {
+          prompt: `${n * times}/${big} = ?/${small}. Type the top number.`,
+          answer: n,
+          visual: NONE,
+          how: `${big} ÷ ${times} = ${small}, so ${n * times} ÷ ${times} = ${n}. Equivalent: ${n}/${small}`,
+          op: "?",
+          a: n * times,
+          b: big,
+        };
+      }
       return {
         prompt: `${n}/${small} = ?/${big}. Type the top number.`,
         answer: n * times,
@@ -1017,6 +1047,7 @@ function genDecimalsG5(level: Level, rng: Rng): MathQuestion {
       op: "×",
       a: x,
       b: y,
+      key: timesKey(`0.${x}`, `0.${y}`),
     };
   }
   const k = randInt(rng, 2, 9);
@@ -1148,7 +1179,9 @@ function fromDigits(digits: readonly number[]): number {
 function pvDigitValue(rng: Rng, size: number): MathQuestion {
   const digits = distinctDigits(rng, size);
   const n = fromDigits(digits);
-  const from = randInt(rng, 1, 3);
+  let from = randInt(rng, 1, 3);
+  // "The value of the 0" is 0 wherever it sits. Only one digit can be 0.
+  if (digits[size - 1 - from] === 0) from = from === 1 ? 2 : 1;
   const digit = digits[size - 1 - from];
   const unit = Math.pow(10, from);
   const worth = digit * unit;
@@ -1408,9 +1441,16 @@ function nfWordToStandard(level: Level, rng: Rng): MathQuestion {
   };
 }
 
+/** A number of at least two parts: "900 = ?" was its own answer. */
+function expandable(rng: Rng, lo: number, hi: number): number {
+  let n = randInt(rng, lo, hi);
+  while (toExpandedParts(n).length < 2) n = randInt(rng, lo, hi);
+  return n;
+}
+
 function nfExpandedToStandard(level: Level, rng: Rng): MathQuestion {
   const { lo, hi } = nfDigits(level);
-  const n = randInt(rng, lo, hi);
+  const n = expandable(rng, lo, hi);
   return {
     prompt: `${toExpanded(n)} = ?`,
     answer: n,
@@ -1466,7 +1506,7 @@ function nfBig(rng: Rng): MathQuestion {
     };
   }
   if (roll === 2) {
-    const n = randInt(rng, 100_000, 999_999);
+    const n = expandable(rng, 100_000, 999_999);
     return {
       prompt: `${toExpanded(n)} = ?`,
       answer: n,
@@ -1625,6 +1665,11 @@ function genGeometry(level: Level, rng: Rng): MathQuestion {
 
 // --------------------------------------------------------------------- angles
 
+/** Fractions of a full turn that come out in whole degrees: 360 ÷ d is whole. */
+const TURN_FRACTIONS: readonly { n: number; d: number }[] = [2, 3, 4, 5, 6, 8, 9, 10, 12].flatMap((d) =>
+  Array.from({ length: d - 1 }, (_, i) => ({ n: i + 1, d })),
+);
+
 /** Grade 5: angles inside shapes (4), then turns and matching angles (5). */
 function genAnglesG5(level: Level, rng: Rng): MathQuestion {
   if (level === 4) {
@@ -1655,9 +1700,12 @@ function genAnglesG5(level: Level, rng: Rng): MathQuestion {
       b: sum,
     };
   }
+  // Minutes in fives and turns picked by denominator were 11 and 39 prompts,
+  // and back-to-back lessons shared 14% of their questions. Any minute, and
+  // any fraction of a turn drawn from one list, spread them out.
   const roll = randInt(rng, 1, 3);
   if (roll === 1) {
-    const minutes = randInt(rng, 1, 11) * 5;
+    const minutes = randInt(rng, 2, 59);
     return {
       prompt: `The minute hand moves ${minutes} minutes. How many degrees is that?`,
       answer: minutes * 6,
@@ -1669,8 +1717,7 @@ function genAnglesG5(level: Level, rng: Rng): MathQuestion {
     };
   }
   if (roll === 2) {
-    const d = pick(rng, [4, 5, 6, 8, 10, 12]);
-    const n = randInt(rng, 1, d - 1);
+    const { n, d } = pick(rng, TURN_FRACTIONS);
     const each = 360 / d;
     return {
       prompt: `How many degrees is ${n}/${d} of a full turn?`,
@@ -1699,6 +1746,7 @@ function genAngles(level: Level, rng: Rng): MathQuestion {
   if (level >= 4) return genAnglesG5(level, rng);
   // Levels 1 and 2 were 15 and 33 questions, all fives. Any whole degree, and
   // at level 1 a second part to add first, keeps him working them out.
+  // Two parts get no picture: drawn as one wedge, the adding was done for him.
   if (level === 1) {
     if (rng() < 0.5) {
       const first = randInt(rng, 1, 8) * 5;
@@ -1706,7 +1754,7 @@ function genAngles(level: Level, rng: Rng): MathQuestion {
       return {
         prompt: `A right angle is 90°. Parts are ${first}° and ${second}°. The rest?`,
         answer: 90 - first - second,
-        visual: { kind: "angle", total: 90, known: first + second },
+        visual: NONE,
         how: `${first} + ${second} = ${first + second}. 90 - ${first + second} = ${90 - first - second}`,
         op: "-",
         a: 90,
@@ -1742,7 +1790,7 @@ function genAngles(level: Level, rng: Rng): MathQuestion {
     return {
       prompt: `A full turn is 360°. Parts are ${first}° and ${second}°. The rest?`,
       answer: 360 - first - second,
-      visual: { kind: "angle", total: 360, known: first + second },
+      visual: NONE,
       how: `${first} + ${second} = ${first + second}. 360 - ${first + second} = ${360 - first - second}`,
       op: "-",
       a: 360,
@@ -1754,7 +1802,7 @@ function genAngles(level: Level, rng: Rng): MathQuestion {
   return {
     prompt: `180° splits into ${first}°, ${second}° and ?°`,
     answer: 180 - first - second,
-    visual: { kind: "angle", total: 180, known: first + second },
+    visual: NONE,
     how: `${first} + ${second} = ${first + second}. 180 - ${first + second} = ${180 - first - second}`,
     op: "-",
     a: 180,
@@ -1908,7 +1956,11 @@ function article(name: ShapeName): string {
   return "aeiou".includes(name[0]) ? "an" : "a";
 }
 
-/** Grade 5: use what a shape is to work out a side or an angle. */
+/**
+ * Grade 5: use what a shape is to work out a side or an angle. Sides run to
+ * 20 and angles take any whole degree: sides to 12 and angles in fives were
+ * 10 or 20 prompts a kind, and back-to-back lessons shared 13.5% of them.
+ */
 function genShapeMeasures(rng: Rng): MathQuestion {
   const roll = randInt(rng, 1, 6);
   const q = (name: ShapeName, prompt: string, answer: number, how: string, op: MathQuestion["op"]): MathQuestion => ({
@@ -1921,7 +1973,7 @@ function genShapeMeasures(rng: Rng): MathQuestion {
   });
   if (roll <= 2) {
     const name = roll === 1 ? "square" : "rhombus";
-    const side = randInt(rng, 3, 12);
+    const side = randInt(rng, 3, 20);
     return q(
       name,
       `A ${name} has a side of ${side}. What is its perimeter?`,
@@ -1931,7 +1983,7 @@ function genShapeMeasures(rng: Rng): MathQuestion {
     );
   }
   if (roll === 3) {
-    const side = randInt(rng, 3, 12);
+    const side = randInt(rng, 3, 20);
     return q(
       "square",
       `A square has a perimeter of ${4 * side}. How long is one side?`,
@@ -1941,8 +1993,8 @@ function genShapeMeasures(rng: Rng): MathQuestion {
     );
   }
   if (roll === 4) {
-    const x = randInt(rng, 3, 12);
-    const y = randInt(rng, 3, 12);
+    const x = randInt(rng, 3, 20);
+    const y = randInt(rng, 3, 20);
     return q(
       "parallelogram",
       `A parallelogram has sides of ${x} and ${y}. What is its perimeter?`,
@@ -1952,7 +2004,7 @@ function genShapeMeasures(rng: Rng): MathQuestion {
     );
   }
   if (roll === 5) {
-    const known = randInt(rng, 8, 17) * 5;
+    const known = randInt(rng, 20, 89);
     return q(
       "parallelogram",
       `A parallelogram has ${aOrAn(known)} ${known}° angle. How big is the angle next to it?`,
@@ -1961,10 +2013,10 @@ function genShapeMeasures(rng: Rng): MathQuestion {
       "-",
     );
   }
-  const known = randInt(rng, 4, 14) * 5;
+  const known = randInt(rng, 10, 80);
   return q(
     "right triangle",
-    `A right triangle has a ${known}° angle. How big is the other small one?`,
+    `A right triangle has ${aOrAn(known)} ${known}° angle. How big is the other small one?`,
     90 - known,
     `One angle is 90°, so the other 2 add to 90°. 90 - ${known} = ${90 - known}`,
     "-",
@@ -2090,7 +2142,9 @@ function genWordProblemG5(level: Level, rng: Rng): MathQuestion {
     const friends = randInt(rng, 3, 9);
     const each = randInt(rng, 12, 40);
     const given = friends * each;
-    const start = given + randInt(rng, 1, 40) * 10;
+    // Any number left, not only round tens: 10 to 400 by tens made "ends in
+    // 0" the answer every time.
+    const start = given + randInt(rng, 10, 400);
     return {
       prompt: `${kid.name} had ${start} ${noun}. ${kid.they} gave ${friends} friends ${each} each. How many left?`,
       answer: start - given,
@@ -2285,13 +2339,14 @@ function genWordProblem(level: Level, rng: Rng): MathQuestion {
       b: boxes,
     };
   }
-  // Remainder interpretation: the leftovers still need a box.
+  // Remainder interpretation: the leftovers still need a box. Asked as just
+  // "How many boxes?", it read as how many boxes are full.
   const per = randInt(rng, 4, 9);
   const full = randInt(rng, 3, 12);
   const left = randInt(rng, 1, per - 1);
   const total = per * full + left;
   return {
-    prompt: `Each box holds ${per} ${noun}. There are ${total}. How many boxes?`,
+    prompt: `Each box holds ${per} ${noun}. There are ${total}. How many boxes are needed?`,
     answer: full + 1,
     visual: NONE,
     how: `${total} ÷ ${per} = ${full} with ${left} left. The last ${left} need a box, so ${full + 1}.`,

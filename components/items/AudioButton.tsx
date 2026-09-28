@@ -18,6 +18,13 @@ export type AudioButtonProps = {
 };
 
 /**
+ * The speaker button playing right now, across every one on screen. Each
+ * button kept only its own player, so tapping a second word on the words-first
+ * screen talked over the first.
+ */
+let current: Playback | null = null;
+
+/**
  * Big round speaker. Every listen item and every learn card has one, and the
  * tap target never drops below 56px.
  */
@@ -36,13 +43,15 @@ export default function AudioButton({
   const play = useCallback(() => {
     if (!text.trim()) return;
     playback.current?.cancel();
+    current?.cancel();
     // The TTS service sits behind a network call, so one blip is worth a
     // silent second try before we tell him the sound is broken.
     const attempt = (retriesLeft: number) => {
       const pb = playTextThroughTTS(text);
       playback.current = pb;
+      current = pb;
       void pb.promise.then((end) => {
-        if (end !== "failed" || playback.current !== pb) return;
+        if (end !== "failed" || playback.current !== pb || current !== pb) return;
         if (retriesLeft > 0) attempt(retriesLeft - 1);
         else setFailed(true);
       });

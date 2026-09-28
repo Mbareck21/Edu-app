@@ -8,7 +8,11 @@ export function groq(): Groq {
     if (!apiKey || apiKey.startsWith("gsk_xxx")) {
       throw new Error("GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys");
     }
-    _client = new Groq({ apiKey });
+    // The SDK's own defaults are a 60s timeout and two retries, including on a
+    // 429 it will sleep out. That outlived every route's time limit (transcribe
+    // has 30s), and stacked under the reading route's own retry. One try each,
+    // cut off in time for the route to answer him itself.
+    _client = new Groq({ apiKey, timeout: 25_000, maxRetries: 0 });
   }
   return _client;
 }
@@ -382,24 +386,41 @@ Copy the SHAPE, not the values:
 - Informational passages should feel like a good school reader, not a lecture.
 `.trim();
 // ────────────────────────────────────────────────────────────────────────────
-// Simple in-memory rate limiter — 30 messages / hour per IP.
+// Simple in-memory rate limiter — calls / hour per feature per IP.
 // Good enough for one family. Resets when the Node process restarts.
+//
+// One bucket per feature, not one for everything: both boys share the home
+// IP, and echo reading transcribes every sentence (17-30 a passage). With a
+// single 30-an-hour bucket one echo reading locked chat and new stories for
+// both of them for an hour.
 // ────────────────────────────────────────────────────────────────────────────
+const LIMITS = {
+  transcribe: 240,
+  chat: 60,
+  reading: 20,
+  clues: 30,
+  seed: 30,
+  examples: 30,
+  explain: 30,
+  translate: 30,
+} as const;
+export type RateBucket = keyof typeof LIMITS;
+
 const HITS = new Map<string, number[]>();
 const WINDOW_MS = 60 * 60 * 1000;
-const LIMIT = 30;
 
-export function rateLimit(ip: string): { ok: boolean; retryAfterSec: number } {
+export function rateLimit(ip: string, bucket: RateBucket): { ok: boolean; retryAfterSec: number } {
+  const key = `${bucket}:${ip}`;
   const now = Date.now();
   const cutoff = now - WINDOW_MS;
-  const recent = (HITS.get(ip) || []).filter((t) => t > cutoff);
-  if (recent.length >= LIMIT) {
+  const recent = (HITS.get(key) || []).filter((t) => t > cutoff);
+  if (recent.length >= LIMITS[bucket]) {
     const retryAfterSec = Math.ceil((recent[0] + WINDOW_MS - now) / 1000);
-    HITS.set(ip, recent);
+    HITS.set(key, recent);
     return { ok: false, retryAfterSec };
   }
   recent.push(now);
-  HITS.set(ip, recent);
+  HITS.set(key, recent);
   return { ok: true, retryAfterSec: 0 };
 }
 
@@ -423,10 +444,15 @@ export function friendlyAiError(err: unknown, fallback: string): string {
       : 0;
   console.warn(`[ai] ${status || "?"} ${raw}`);
 
-  if (status === 429 || /rate.?limit|quota|tokens per day/i.test(raw)) {
+  if (/per day|\((?:TPD|RPD)\)|quota/i.test(raw)) {
     // The daily budget, not a passing blip. Say so plainly rather than
     // inviting him to hammer a button that cannot work yet.
     return "That is all the new writing for today. Try again tomorrow — everything already made still works.";
+  }
+  if (status === 429 || /rate.?limit/i.test(raw)) {
+    // A per-minute limit ("try again in 5.2s"). Telling him "tomorrow" sent
+    // him away from something that works again in seconds.
+    return "Too much writing at once. Wait a minute, then tap it again.";
   }
   if (status === 401 || status === 403) return "The writing key is not working. Ask a grown-up to check it.";
   if (status === 408 || status >= 500 || /timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(raw)) {

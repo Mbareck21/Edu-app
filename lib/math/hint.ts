@@ -18,6 +18,17 @@ const BY_OP: Record<MathQuestion["op"], string> = {
   "?": "Read it again slowly, and use the picture.",
 };
 
+/**
+ * Divisions with something left over. No number times the one he knows makes
+ * the total, so the plain ÷ hint sent him looking for one that is not there.
+ */
+const LEFT_OVER: readonly (readonly [RegExp, string])[] = [
+  [/left over\?$/, "Make as many equal groups as you can. What is left is smaller than the number you divide by."],
+  [/boxes are needed\?$/, "Fill as many boxes as you can. Do the ones left over need a box too?"],
+  [/full boxes\?$/, "Fill as many boxes as you can. The ones left over do not fill a box."],
+  [/whole groups\?$/, "Make as many equal groups as you can. Some will be left over."],
+];
+
 export function mathHint(question: MathQuestion, given: number): string {
   const answer = question.answer;
   const near = answer !== 0 && Math.abs(given - answer) / Math.abs(answer) <= 0.1;
@@ -26,9 +37,11 @@ export function mathHint(question: MathQuestion, given: number): string {
     : given > answer
       ? "Too big."
       : "Too small.";
+  const leftOver = question.op === "÷" ? LEFT_OVER.find(([re]) => re.test(question.prompt)) : undefined;
   // "Use the picture" sent him looking for one on a question that has none.
-  const how =
-    question.op === "?" && question.visual.kind === "none"
+  const how = leftOver
+    ? leftOver[1]
+    : question.op === "?" && question.visual.kind === "none"
       ? "Read it again slowly, one part at a time."
       : BY_OP[question.op];
   return `${size} ${how}`;

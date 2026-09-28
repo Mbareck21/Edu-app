@@ -39,7 +39,9 @@ export default function ArabicChip({ arabic, faded = false, className = "" }: Ar
   if (shown) {
     return (
       <span
-        className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1 font-body text-base ${className}`}
+        // A long gloss wraps inside the chip (the item caps its width), so the
+        // corners are a tile's, not a pill's.
+        className={`inline-flex min-h-[44px] items-center rounded-tile px-3 py-1 text-right font-body text-base leading-snug ${className}`}
         style={{ background: "var(--color-sand)", color: "var(--color-ink)" }}
         dir="rtl"
         lang="ar"

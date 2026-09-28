@@ -83,6 +83,9 @@ export function listenOnce(opts: {
     } catch {
       finish();
     }
+    // Safari's recogniser sometimes never fires onend after stop(), and the
+    // tables round sat on "listening" for good. Give it a moment, then end.
+    setTimeout(finish, 1500);
   }, opts.maxMs ?? 8000);
 
   rec.onresult = (e) => {

@@ -57,7 +57,7 @@ export default function TypeAnswer({
         autoCapitalize="off"
         spellCheck={false}
         maxLength={40}
-        className={`w-full rounded-tile border-2 px-4 text-center font-display text-2xl font-bold lowercase outline-none ${almost ? "q-shake" : ""}`}
+        className={`w-full rounded-tile border-2 px-4 text-center font-display text-2xl font-bold lowercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue ${almost ? "q-shake" : ""}`}
         style={{
           minHeight: 64,
           background: "#fff",

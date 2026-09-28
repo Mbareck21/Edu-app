@@ -52,8 +52,12 @@ export default function StartButton({
             <Icon name="trophy" size={30} strokeWidth={2.2} />
           </span>
           <div className="min-w-0">
-            <p className="font-display text-xl font-bold" style={{ color: "var(--color-gold-ink)" }}>
-              All done today! 🎉
+            <p
+              className="inline-flex items-center gap-1 font-display text-xl font-bold"
+              style={{ color: "var(--color-gold-ink)" }}
+            >
+              All done today!
+              <Icon name="sparkles" size={20} />
             </p>
             <p className="text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
               Every beat, start to finish. So proud of you!

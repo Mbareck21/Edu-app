@@ -19,14 +19,18 @@ import type { Rng } from "@/lib/math/types";
 import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList";
 import {
   itemForSkill,
+  makeCloze,
   makeLearnCard,
+  makeRecognize,
   makeSentenceCombine,
+  makeSpell,
   makeWrite,
   schoolItem,
   type ItemPool,
   type ItemSkill,
   type LessonItem,
 } from "@/lib/items";
+import { ROTATE_WIDTH, checkDue, isFinished, type ChainState } from "@/lib/spell-chain";
 
 // Re-exported so callers can get the whole session vocabulary from one module.
 export { reEnqueue } from "@/lib/items";
@@ -107,12 +111,33 @@ function blockedSet(
 ): LessonItem[] {
   const third: ItemSkill =
     skill === "mixed" || skill === "recognize" || skill === "listen" ? "spell" : skill;
+  const recognize = makeRecognize(word, pool, rng);
+  const listen = itemForSkill(word, "listen", pool, rng, false);
+  const last = itemForSkill(word, third, pool, rng, false);
   return [
     makeLearnCard(word, pool),
-    itemForSkill(word, "recognize", pool, rng, false),
-    itemForSkill(word, "listen", pool, rng, false),
-    itemForSkill(word, third, pool, rng, false),
+    recognize ?? meaninglessStandIn(word, pool, rng, [listen.kind, last.kind]),
+    listen,
+    last,
   ];
+}
+
+/**
+ * A new word with no clue and no explanation yet cannot be asked "which word
+ * means this?". Its usual stand-in is the listen question, which is the very
+ * next item, so he got "Listen, then pick the word" twice in a row. This one
+ * is a kind the set does not already have: the word's own sentence, else the
+ * tiles, else typing it. It still feeds "recognize", like the other stand-ins.
+ */
+function meaninglessStandIn(
+  word: ClientWord,
+  pool: ItemPool,
+  rng: Rng,
+  taken: string[]
+): LessonItem {
+  const cloze = taken.includes("use-cloze") ? null : makeCloze(word, pool, rng);
+  const item = cloze ?? (taken.includes("spell") ? makeWrite(word, pool) : makeSpell(word, pool, rng));
+  return { ...item, skill: "recognize" };
 }
 
 /** Two items for one word: the plain rung, then the harder one when earned. */
@@ -360,6 +385,32 @@ export function buildProductionSession({
   // for it existed but nothing ever called it.
   if (items.length > 0) items.push(makeSentenceCombine(pool, rng));
   return interleave(items);
+}
+
+/**
+ * The words the Write It step drills: due first, then the weakest spelling.
+ * A word whose chain is finished and not yet due a re-check only takes a slot
+ * nothing else needs. Picked by spelling need alone, finished chains took the
+ * slots while words that had not reached ten waited.
+ */
+export function writeItWords(
+  words: ClientWord[],
+  chains: Readonly<Record<string, ChainState | undefined>>,
+  now: Date,
+  rng: Rng
+): string[] {
+  const nowIso = now.toISOString();
+  const resting = (w: ClientWord) => {
+    const chain = chains[w.word];
+    return Boolean(chain && isFinished(chain) && !checkDue(chain, nowIso));
+  };
+  const ordered = orderByNeed(words, rng, (w) => ({
+    due: skillDue(w.skills.spell, now),
+    streak: w.skills.spell.streak,
+  }));
+  return [...ordered.filter((w) => !resting(w)), ...ordered.filter(resting)]
+    .slice(0, ROTATE_WIDTH)
+    .map((w) => w.word);
 }
 
 /** How many items in the lesson belong to `word`. Used by the tests. */

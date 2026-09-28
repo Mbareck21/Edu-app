@@ -31,6 +31,7 @@ import {
   ARCHIVE_MAX,
   pickArchived,
   planQuarter,
+  tidyReading,
   maxReadingLevel,
   MAX_READING_LEVEL,
 } from "@/lib/reading";
@@ -174,10 +175,15 @@ function dedupeGlosses(raw: { word: string; meaning: string; arabic: string }[])
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const rl = rateLimit(ip);
+  const rl = rateLimit(ip, "reading");
   if (!rl.ok) {
+    // The wait can be most of an hour; "a minute" had him tapping for nothing.
+    const minutes = Math.max(1, Math.ceil(rl.retryAfterSec / 60));
     return NextResponse.json(
-      { error: "The story writer needs a short rest. Try again in a minute.", retryAfterSec: rl.retryAfterSec },
+      {
+        error: `The story writer needs a rest. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`,
+        retryAfterSec: rl.retryAfterSec,
+      },
       { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
     );
   }
@@ -330,6 +336,15 @@ Write the passage and the questions now. Strict JSON only.`;
   // wave through a 50s second one and blow the limit, which on Vercel is a
   // killed function and a raw gateway error rather than our own message.
   const BUDGET_MS = 55_000;
+  // The reply budget. Groq's free tier counts prompt + max_tokens against its
+  // 8k tokens-a-minute cap and refuses a request bigger than that outright.
+  // Attempt 1's 5000 fits beside the prompt; the retry once asked for 8000,
+  // which can never fit. A cut-off passage is fixed by the "write shorter"
+  // correction, not by more room.
+  const REPLY_TOKENS = 5000;
+  const WRITE_SHORTER = `
+
+Your last answer was not valid JSON — it ran out of room before the closing brace. Write the SHORTEST passage the word target allows, keep every "acceptable" list to 4 entries, and keep hints under 12 words.`;
 
   for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
     if (attempt === 2 && hardFail) break;
@@ -349,10 +364,9 @@ Write the passage and the questions now. Strict JSON only.`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.75,
-        // The retry gets more room: the commonest first-attempt failure was
-        // the JSON being cut off mid-question, and repeating the same budget
-        // just fails the same way twice.
-        max_tokens: attempt === 1 ? 5000 : 8000,
+        // The retry's correction is paid for out of the reply budget (about
+        // four characters a token), so the request is no bigger than attempt 1's.
+        max_tokens: REPLY_TOKENS - Math.ceil(correction.length / 4),
         reasoning_effort: "low",
       });
       const text = completion.choices[0]?.message?.content ?? "{}";
@@ -369,12 +383,12 @@ Write the passage and the questions now. Strict JSON only.`;
       } catch {
         lastErr = "the reading was cut off before it finished";
         console.warn(`[reading/generate] attempt ${attempt} returned unparseable JSON`);
-        correction = `
-
-Your last answer was not valid JSON — it ran out of room before the closing brace. Write the SHORTEST passage the word target allows, keep every "acceptable" list to 4 entries, and keep hints under 12 words.`;
+        correction = WRITE_SHORTER;
         continue;
       }
-      const validated = ResponseShape.safeParse(parsed);
+      // Small slips are mended first so one off field does not cost the
+      // whole passage. See tidyReading.
+      const validated = ResponseShape.safeParse(tidyReading(parsed, plan, READING_QUESTION_TYPES));
       if (!validated.success) {
         // Name the field that broke. "malformed reading" on its own left
         // nothing to debug when one generation in five failed.
@@ -425,6 +439,17 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       }
       reading = validated.data;
     } catch (err) {
+      // In JSON mode Groq checks the JSON itself and answers 400
+      // json_validate_failed when it does not parse — nearly always a passage
+      // cut off mid-question. That is the fault the "write shorter" retry is
+      // for, the same as the unparseable text above, not a writer that is down.
+      const status = typeof err === "object" && err !== null ? (err as { status?: unknown }).status : 0;
+      if (status === 400 && /json_validate_failed/.test(String(err))) {
+        lastErr = "the reading was cut off before it finished";
+        console.warn(`[reading/generate] attempt ${attempt} failed Groq's JSON check`);
+        correction = WRITE_SHORTER;
+        continue;
+      }
       // Never hand the upstream text to the screen — it carried org ids and a
       // billing link the day the daily token budget ran out.
       lastErr = friendlyAiError(err, "The story would not come. Tap it again.");
@@ -451,16 +476,24 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     // error, look for a passage from this list he has not seen for a week: an
     // old one beats none, and the Groq free tier runs out on a busy day.
     const archive = archiveOf(doc);
-    const old = pickArchived(archive, Date.now());
+    // Passages stored before the circular check get the same filter now. One
+    // left with nothing to ask is skipped: served, it opened on an empty
+    // questions screen.
+    const servable = (a: Archived) => {
+      const questions = Array.isArray(a.questions) ? a.questions : [];
+      const circular = circularQuestions(questions, String(a.paragraph ?? ""));
+      return questions.filter((_, i) => !circular.has(i));
+    };
+    const old = pickArchived(
+      archive.filter((a) => servable(a).length > 0),
+      Date.now()
+    );
     if (old) {
       const kept = archive.filter((a) => a !== old);
       if (unfinished) kept.push(unfinished);
-      // Passages stored before the circular check get the same filter now.
-      const oldQuestions = Array.isArray(old.questions) ? old.questions : [];
-      const circular = circularQuestions(oldQuestions, String(old.paragraph ?? ""));
       doc.set("currentReading", {
         ...old,
-        questions: oldQuestions.filter((_, i) => !circular.has(i)),
+        questions: servable(old),
         generatedAt: new Date(),
         reused: true,
       });

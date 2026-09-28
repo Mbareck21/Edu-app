@@ -1,184 +1,33 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import mongoose from "mongoose";
 
 import { db } from "@/lib/db";
-import { currentLearner } from "@/lib/auth";
+import { fillExamples } from "@/lib/fill-examples";
 import { toClient } from "@/lib/models/WordList";
-import { syncList } from "@/lib/shared-lists";
-import { CLUE_MODEL, friendlyAiError, getClientIp, groq, rateLimit } from "@/lib/groq";
+import { getClientIp } from "@/lib/groq";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** Words per Groq call. */
-const BATCH = 15;
-/** Calls per request — the rest waits for the next visit. */
-const MAX_BATCHES = 3;
-
-const SYSTEM_PROMPT = `
-You write example sentences and word families for a 9-year-old boy who is
-learning English. His first language is Arabic and he reads at Grade 3 level.
-
-For EACH word you are given, return:
-- "examples": EXACTLY 3 sentences showing the 3 MOST COMMON different uses of
-  the word. Different situations, not three versions of the same sentence.
-- "family": up to 4 REAL related forms of the word (help / helps / helped /
-  helpful). Only forms that are actual English words. Empty list if there are
-  none. Never invent a form.
-
-Rules for the sentences:
-- Grade 3 words only. Short: 10 words or fewer.
-- The word itself (or one of its forms) MUST appear in every sentence.
-- Concrete and true. A child can picture it.
-- No metaphors, no idioms, no rare senses.
-- No quotation marks inside the sentences. End each with a full stop.
-
-Output STRICT JSON, nothing else:
-{"words": {"help": {"examples": ["...","...","..."], "family": ["helps","helped","helpful"]}}}
-Keys MUST be exactly the lowercase words you were given.
-`.trim();
-
-const Shape = z.object({
-  examples: z.array(z.string().min(4).max(160)).min(1).max(3),
-  family: z.array(z.string().min(1).max(40)).max(6).default([]),
-});
-
-type Filled = { examples: string[]; family: string[] };
-
-function parseBatch(raw: string): Map<string, Filled> {
-  const out = new Map<string, Filled>();
-  let json: unknown;
-  try {
-    json = JSON.parse(raw);
-  } catch {
-    return out;
-  }
-  if (!json || typeof json !== "object") return out;
-  const record = json as Record<string, unknown>;
-  // Documented shape is {words: {...}}; the model sometimes drops the wrapper.
-  const map =
-    record.words && typeof record.words === "object"
-      ? (record.words as Record<string, unknown>)
-      : record;
-
-  for (const [key, value] of Object.entries(map)) {
-    const parsed = Shape.safeParse(value);
-    if (!parsed.success) continue;
-    out.set(String(key).trim().toLowerCase(), {
-      examples: parsed.data.examples.map((s) => s.trim()).slice(0, 3),
-      family: parsed.data.family.map((s) => s.trim().toLowerCase()).slice(0, 4),
-    });
-  }
-  return out;
-}
-
+/** Fill the list's words that have no example sentence, then send the list. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!mongoose.isValidObjectId(id)) {
     return NextResponse.json({ error: "bad id" }, { status: 400 });
   }
 
-  const { WordList } = await db();
-  // readingHistory is server-only and can be long; nothing here reads it.
-  const doc = await WordList.findById(id).select("-readingHistory");
-  if (!doc) return NextResponse.json({ error: "not found" }, { status: 404 });
-
-  // Missing = no examples at all. A parent who wrote one sentence keeps it,
-  // and an empty family alone is never a reason to call the model.
-  const missing = (doc.words ?? [])
-    .filter((w) => (w.examples?.length ?? 0) === 0)
-    .map((w) => String(w.word).trim().toLowerCase())
-    .filter(Boolean);
-
-  if (missing.length === 0) {
-    return NextResponse.json(toClient(doc.toObject()));
-  }
-
-  // Only a real model call spends the allowance: this route runs on every
-  // visit, and a visit with nothing to fill used to use it up.
-  const rl = rateLimit(getClientIp(req));
-  if (!rl.ok) {
+  const outcome = await fillExamples(id, getClientIp(req));
+  if (outcome.kind === "not-found") return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (outcome.kind === "rate-limited") {
     return NextResponse.json(
-      { error: "rate limit", retryAfterSec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      { error: "rate limit", retryAfterSec: outcome.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(outcome.retryAfterSec) } }
     );
   }
+  if (outcome.kind === "failed") return NextResponse.json({ error: outcome.error }, { status: 502 });
 
-  const batches: string[][] = [];
-  for (let i = 0; i < missing.length && batches.length < MAX_BATCHES; i += BATCH) {
-    batches.push(missing.slice(i, i + BATCH));
-  }
-
-  const filled = new Map<string, Filled>();
-  // A batch that blows up stops the run but keeps what earlier batches filled;
-  // the rest waits for the next visit.
-  let failure: string | null = null;
-  for (const batch of batches) {
-    try {
-      const completion = await groq().chat.completions.create({
-        model: CLUE_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: `Write examples and word families for: ${batch.join(", ")}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.4,
-        max_tokens: 5000,
-        reasoning_effort: "low",
-      });
-      const text = completion.choices[0]?.message?.content ?? "{}";
-      for (const [key, value] of parseBatch(text)) {
-        if (batch.includes(key)) filled.set(key, value);
-      }
-    } catch (err) {
-      failure = friendlyAiError(err, "The examples would not come. Try again.");
-      break;
-    }
-  }
-
-  if (failure && filled.size === 0) {
-    return NextResponse.json({ error: failure }, { status: 502 });
-  }
-
-  // Only the example and family fields of the words that were filled are
-  // written, matched by the word itself. The model call takes seconds, and
-  // saving the whole words array loaded before it overwrote any review
-  // progress a session wrote to this list in the meantime. The filters are
-  // re-checked at write time, so a sentence a parent typed during the wait is
-  // never overwritten either. The family rides along with a fresh examples
-  // fill; it is never written on its own.
-  // "x.0" not existing is Mongo's test for an array that is empty or missing.
-  const empty = { $exists: false };
-  // The keys are trimmed and lower-cased; the filter has to match the word as stored.
-  const stored = new Map((doc.words ?? []).map((w) => [String(w.word).trim().toLowerCase(), String(w.word)]));
-  const updates = [...filled].map(([key, got]) => {
-    const word = stored.get(key) ?? key;
-    const withFamily = got.family.length > 0;
-    return {
-      updateOne: {
-        filter: { _id: doc._id },
-        update: {
-          $set: {
-            "words.$[w].examples": got.examples,
-            ...(withFamily ? { "words.$[f].family": got.family } : {}),
-          },
-        },
-        arrayFilters: [
-          { "w.word": word, "w.examples.0": empty },
-          ...(withFamily ? [{ "f.word": word, "f.examples.0": empty, "f.family.0": empty }] : []),
-        ],
-      },
-    };
-  });
-  if (updates.length === 0) return NextResponse.json(toClient(doc.toObject()));
-
-  await WordList.bulkWrite(updates);
-  // Examples are shared: the other child's copy gets them too.
-  await syncList(await currentLearner(), id);
+  const { WordList } = await db();
+  // readingHistory is server-only and can be long; nothing here reads it.
   const fresh = await WordList.findById(id).select("-readingHistory").lean();
   if (!fresh) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(toClient(fresh));

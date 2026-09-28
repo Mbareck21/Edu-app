@@ -17,9 +17,10 @@ import {
 } from "@/lib/models/WordList";
 
 /** The fields a summary needs. Everything else stays in Mongo. */
-const SUMMARY_FIELDS = "name updatedAt pathProgress words.word words.skills";
+const SUMMARY_FIELDS = "name updatedAt pathProgress words.word words.skills words.srs.reviewCount";
 
-export type SummaryWord = { word: string; skills: WordSkills };
+/** reviewCount: flashcard flips count as meeting a word (see isNewWord). */
+export type SummaryWord = { word: string; skills: WordSkills; reviewCount?: number };
 
 export type ListSummary = {
   _id: string;
@@ -46,7 +47,7 @@ function toSummary(doc: any): ListSummary {
       const w = raw as any;
       const skills = {} as WordSkills;
       for (const id of SKILL_IDS) skills[id] = toSkillState(w?.skills?.[id]);
-      return { word: String(w?.word ?? ""), skills };
+      return { word: String(w?.word ?? ""), skills, reviewCount: Number(w?.srs?.reviewCount ?? 0) || 0 };
     }),
   };
 }

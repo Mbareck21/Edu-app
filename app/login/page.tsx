@@ -29,7 +29,15 @@ function LoginForm() {
             body: JSON.stringify({ pin }),
           });
           if (!res.ok) {
-            setError("Wrong PIN. Try again.");
+            // After 8 misses the server stops checking for a while. Saying
+            // "wrong PIN" then made the right PIN look wrong too.
+            setError(
+              res.status === 429
+                ? "Too many tries. Wait a few minutes, then try again."
+                : res.status === 401
+                  ? "Wrong PIN. Try again."
+                  : "Something went wrong. Try again."
+            );
             return;
           }
           // Sessions that got a 401 while the cookie was gone are still on the
@@ -60,7 +68,7 @@ function LoginForm() {
         value={pin}
         onChange={(e) => setPin(e.target.value)}
         placeholder="••••"
-        className="mt-2 w-full rounded-card border-2 bg-white py-4 text-center font-display text-3xl tracking-[0.4em] outline-none"
+        className="mt-2 w-full rounded-card border-2 bg-white py-4 text-center font-display text-3xl tracking-[0.4em] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-blue"
         style={{
           borderColor: error ? "var(--color-coral)" : "var(--color-line)",
           color: "var(--color-ink)",

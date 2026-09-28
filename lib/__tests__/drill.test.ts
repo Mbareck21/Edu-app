@@ -304,7 +304,7 @@ test("a word missed early today is not done for now: the halved streak is a miss
 });
 
 test("the suggested word drill fixes the weak skill, not just any", () => {
-  assert.deepEqual(modesFor(["spell"]), ["spell", "mixed", "flashcards", "write"]);
+  assert.deepEqual(modesFor(["spell"]), ["spell", "mixed", "write"]);
   assert.deepEqual(modesFor(["recognize", "use"]), ["match", "use", "mixed"]);
   assert.equal(modesFor([]).length, 8, "nothing weak: every type");
   const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();

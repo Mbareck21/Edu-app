@@ -108,7 +108,7 @@ export default async function LearnPage() {
             {lists.length > 3 ? (
               <details className="group">
                 <summary
-                  className="cursor-pointer list-none py-1 text-center font-display text-sm font-bold group-open:hidden [&::-webkit-details-marker]:hidden"
+                  className="flex min-h-11 cursor-pointer list-none items-center justify-center text-center font-display text-sm font-bold group-open:hidden [&::-webkit-details-marker]:hidden"
                   style={{ color: "var(--color-blue-dark)" }}
                 >
                   Show all {lists.length} units

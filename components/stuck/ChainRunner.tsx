@@ -21,7 +21,7 @@ import {
 } from "@/lib/spell-chain";
 import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import { estimateXp } from "@/lib/rewards";
+import { estimateXp, type GainedBadge } from "@/lib/rewards";
 import type { SessionResult, StepId } from "@/lib/types";
 import { playTextThroughTTS } from "@/lib/voice";
 
@@ -181,7 +181,12 @@ function ChainRunnerInner({
   const [done, setDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   /** What the post paid; null until it answers, so "Next drill" waits for it. */
-  const [outcome, setOutcome] = useState<{ xp: number; note?: string } | null>(null);
+  const [outcome, setOutcome] = useState<{
+    xp: number;
+    note?: string;
+    leveledUp?: boolean;
+    newBadges?: GainedBadge[];
+  } | null>(null);
   const [hidden, setHidden] = useState(false);
 
   const watch = useRef<Stopwatch | null>(null);
@@ -300,8 +305,13 @@ function ChainRunnerInner({
           };
           // Next drill waits for this: tapped before the session landed, the
           // suggestion would not see the sitting and dealt it again.
+          // The level and badges too: earned here, they went unannounced.
           void postSession(result).then((res) =>
-            setOutcome({ xp: res.saved ? res.gained.xp : estimateXp(result), note: saveNote(res) })
+            setOutcome({
+              xp: res.saved ? res.gained.xp : estimateXp(result),
+              note: saveNote(res),
+              ...(res.saved ? { leveledUp: res.gained.leveledUp, newBadges: res.gained.newBadges } : {}),
+            })
           );
         }
       } else {
@@ -348,6 +358,8 @@ function ChainRunnerInner({
         note={outcome?.note}
         accuracy={null}
         perfect={wonNow}
+        leveledUp={outcome?.leveledUp ?? false}
+        newBadges={outcome?.newBadges}
         primary={
           onDone
             ? { label: "Done", onClick: onDone }
@@ -463,10 +475,14 @@ function ChainRunnerInner({
             className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-lg"
             style={{ borderColor: "var(--color-line)", background: "#fff" }}
             placeholder="Type the word"
+            aria-label="Type the word"
             value={typed}
+            // A spelling drill: the keyboard must not offer the word.
+            autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
+            enterKeyHint="done"
             onChange={(e) => {
               setTyped(e.target.value);
               // Look, cover, write: the model disappears the moment he starts.

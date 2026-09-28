@@ -55,7 +55,7 @@ export default function SchoolStrip({ href }: { href: string }) {
           <span className="shrink-0" style={{ color: "var(--color-green)" }}>
             <Icon name="book" size={16} />
           </span>
-          <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
+          <span className="min-w-0 flex-1 font-body text-sm leading-snug">
             Reading:{" "}
             {launch
               ? "Launching the Reader's Workshop"
@@ -67,7 +67,7 @@ export default function SchoolStrip({ href }: { href: string }) {
           <span className="shrink-0" style={{ color: "var(--color-green)" }}>
             <Icon name="star" size={16} />
           </span>
-          <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
+          <span className="min-w-0 flex-1 font-body text-sm leading-snug">
             {ela.length > 0
               ? ela.map((s) => shortPlain(s.plain)).join(" · ")
               : "Summer break. Keep reading."}
@@ -77,7 +77,7 @@ export default function SchoolStrip({ href }: { href: string }) {
           <span className="shrink-0" style={{ color: "var(--color-purple)" }}>
             <Icon name="math" size={16} />
           </span>
-          <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
+          <span className="min-w-0 flex-1 font-body text-sm leading-snug">
             Math: {math.name} · Lesson {lesson.lesson}: {lesson.title}
           </span>
         </Link>

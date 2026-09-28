@@ -30,6 +30,29 @@ const NUMBER_WORD = /^(zero|one|two|three|four|five|six|seven|eight|nine|ten|ele
 
 const isNumberToken = (t: string) => /^\d+$/.test(t) || NUMBER_WORD.test(t);
 
+const UNIT = /^(one|two|three|four|five|six|seven|eight|nine)$/;
+const TEEN = /^(ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)$/;
+const TENS = /^(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)$/;
+
+/**
+ * Whether the words say one number the way numbers are said: "one hundred
+ * forty four", "fifty six". Not "two fifty six", which is two numbers.
+ */
+function isOneNumber(words: readonly string[]): boolean {
+  if (words.length === 1 && words[0] === "zero") return true;
+  let i = 0;
+  if (words[0] === "hundred") i = 1;
+  else if (words[1] === "hundred" && (UNIT.test(words[0]) || TEEN.test(words[0]))) i = 2;
+  const next = words[i] ?? "";
+  if (TENS.test(next)) {
+    i++;
+    if (UNIT.test(words[i] ?? "")) i++;
+  } else if (UNIT.test(next) || TEEN.test(next)) {
+    i++;
+  }
+  return i > 0 && i === words.length;
+}
+
 /** The number a run of tokens ends with, reading back from the end. */
 function numberAtEnd(tokens: string[]): number | null {
   for (let i = tokens.length - 1; i >= 0; i--) {
@@ -37,8 +60,20 @@ function numberAtEnd(tokens: string[]): number | null {
     if (NUMBER_WORD.test(tokens[i])) {
       let start = i;
       while (start > 0 && NUMBER_WORD.test(tokens[start - 1])) start--;
-      // "seven times eight is fifty six": only the run at the end counts.
-      return fromWords(tokens.slice(start, i + 1).join(" "));
+      // "seven times eight is fifty six": only the run at the end counts, and
+      // of that run only the words that make one number. Added up whole,
+      // "equal two fifty six" read as 58.
+      for (let s = start; s <= i; s++) {
+        const words = tokens.slice(s, i + 1);
+        // "one forty four" is how 144 is often said out loud; read as a sum
+        // it was 45.
+        if (words[0] === "one" && TENS.test(words[1] ?? "") && isOneNumber(words.slice(1))) {
+          const rest = fromWords(words.slice(1).join(" "));
+          if (rest !== null) return 100 + rest;
+        }
+        if (isOneNumber(words)) return fromWords(words.join(" "));
+      }
+      return fromWords(tokens[i]);
     }
   }
   return null;
@@ -59,7 +94,8 @@ export function lastNumber(text: string): number | null {
     .replace(/-/g, " ")
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
-    .map((t) => SOUNDS_LIKE[t] ?? t)
+    // "is equal to fifty six": after equal, "to" is the word, not a two.
+    .map((t, i, all) => ((t === "to" || t === "too") && /^equals?$/.test(all[i - 1] ?? "") ? t : (SOUNDS_LIKE[t] ?? t)))
     // "one hundred and forty four": the "and" broke the run, which read 44.
     .filter((t, i, all) => !(t === "and" && all[i - 1] === "hundred"));
 

@@ -16,7 +16,7 @@ export default function LockButton() {
         await fetch("/api/adult", { method: "DELETE" }).catch(() => null);
         window.location.replace("/");
       }}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border-2 px-3 py-1.5 font-display text-sm font-bold"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border-2 px-3 py-1.5 font-display text-sm font-bold"
       style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", background: "#fff" }}
     >
       <Icon name="lock" size={16} />

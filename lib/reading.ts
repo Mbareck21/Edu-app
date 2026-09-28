@@ -505,7 +505,11 @@ const ABBREVIATION_END = /(?:^|\s)(?:mr|mrs|ms|dr|st|jr|sr|prof|vs|etc|approx)\.
 
 export function splitSentences(text: string): string[] {
   const parts = text
-    .split(/(?<=[.!?])\s+/)
+    // A sentence can end inside its closing quote: '"The plant is too dry."
+    // Rosa filled the can.' is two. Merged, it tripped the level's sentence
+    // length check and joined two echo lines into one. A lower-case word after
+    // the quote is a said-tag ('"Stop!" she said.'), so that one stays joined.
+    .split(/(?<=[.!?])\s+|(?<=[.!?]["'”’])\s+(?![a-z])/)
     .map((s) => s.trim())
     .filter(Boolean);
   // "Mr. Lopez waved." must not reach echo mode as "Mr." and "Lopez waved." —
@@ -591,6 +595,80 @@ export function wpmNormForDate(date: Date = new Date()): number {
   return norms.spring;
 }
 
+// ── The writer's JSON ─────────────────────────────────────────────────────
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Cut to `max` characters at a word break, never mid-word when it can help it. */
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return (space > 0 ? cut.slice(0, space) : cut).trim();
+}
+
+/**
+ * Mend the small slips in a written reading before its shape is checked.
+ *
+ * One off field used to throw the whole passage away: a "cause-effect" type,
+ * an answerIndex of "1" or null, a null source, a ninth glossary word, a
+ * 72-character title. The passage and every other question were fine, and he
+ * got an error or a second paid call instead. Only slips with one obvious
+ * repair are mended here; anything that would make a broken question (no
+ * answers, no question text) is left for the shape check to refuse.
+ *
+ * `plan` is the question plan the writer was given: a type it garbled falls
+ * back to the one it was asked for.
+ */
+export function tidyReading(
+  raw: unknown,
+  plan: readonly { type: string }[],
+  types: readonly string[]
+): unknown {
+  if (!isRecord(raw)) return raw;
+  const out: Record<string, unknown> = { ...raw };
+  if (typeof out.title === "string") out.title = clip(out.title.trim(), 70);
+  if (out.usedWords === null) out.usedWords = [];
+  if (out.glossary === null) out.glossary = [];
+  if (Array.isArray(out.glossary)) {
+    out.glossary = out.glossary.slice(0, MAX_GLOSSARY_ENTRIES).map((g) =>
+      isRecord(g)
+        ? {
+            ...g,
+            meaning: typeof g.meaning === "string" ? clip(g.meaning.trim(), 160) : (g.meaning ?? ""),
+            arabic: g.arabic ?? "",
+          }
+        : g
+    );
+  }
+  if (Array.isArray(out.questions)) {
+    out.questions = out.questions.map((q, i) => {
+      if (!isRecord(q)) return q;
+      const type =
+        typeof q.type === "string" ? q.type.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+      const index = q.answerIndex;
+      return {
+        ...q,
+        type: types.includes(type) ? type : (plan[i]?.type ?? type),
+        format: q.format ?? "text",
+        answerIndex:
+          index === null || index === undefined
+            ? -1
+            : typeof index === "string" && /^\s*-?\d+\s*$/.test(index)
+              ? Number(index)
+              : index,
+        options: q.options ?? [],
+        source: q.source ?? "",
+        hints: Array.isArray(q.hints)
+          ? q.hints.filter((h) => typeof h !== "string" || h.trim())
+          : q.hints,
+      };
+    });
+  }
+  return out;
+}
+
 // ── Multiple choice sanity ────────────────────────────────────────────────
 
 export type McqCheck = {
@@ -608,13 +686,22 @@ export type McqCheck = {
  * its own "acceptable" list. Either one marks a correct pick wrong. When that
  * happens the question falls back to open text, which is scored against the
  * whole acceptable list and so cannot punish a right answer.
+ *
+ * Punctuation does not make two options different: "patient" and "Patient."
+ * are one option, and an acceptable "patient." that names a different option
+ * than answerIndex is the same broken key as a bare "patient". Comparing with
+ * the full stop left both through, and served a distractor as the answer.
  */
 export function checkMcq(
   options: readonly string[],
   answerIndex: number,
   acceptable: readonly string[]
 ): McqCheck {
-  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
   // Where each distinct option landed, so an answer index that points at a
   // duplicate still finds the copy that was kept.
   const at = new Map<string, number>();
@@ -753,7 +840,11 @@ export function partPlan(
   const partOf = questions.map((q) => {
     const src = squash(q.source ?? "");
     if (!src) return last;
-    const at = flat.findIndex((p) => p.includes(src) || p.includes(src.slice(0, 40)));
+    // The whole sentence first, anywhere in the passage. Checking the prefix in
+    // the same pass let an earlier part that merely opens the same way ("Leo
+    // looked at the garden and saw one red tomato.") claim the question.
+    const exact = flat.findIndex((p) => p.includes(src));
+    const at = exact >= 0 ? exact : flat.findIndex((p) => p.includes(src.slice(0, 40)));
     return at >= 0 ? at : last;
   });
   const order = questions.map((_, i) => i).sort((a, b) => partOf[a] - partOf[b] || a - b);

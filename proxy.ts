@@ -117,6 +117,10 @@ async function proxyImpl(req: NextRequest) {
 export const proxy = proxyImpl;
 export default proxyImpl;
 
+// Only build files, the favicon and the icon folder skip the sign-in check.
+// This used to skip every path ending in an image extension, which made any
+// image in public/ public (the one-by-one screenshot list above did nothing)
+// and let a request like /api/lists/<id>.png reach its route with no sign-in.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icons/).*)"],
 };

@@ -27,10 +27,17 @@ import { fromRow, splitStuck, type ChainState } from "@/lib/spell-chain";
 /** The one pool document's name. Also what the parent sees it called. */
 export const POOL_NAME = "Stuck words";
 
+/**
+ * The whole-passage archive and the reading history are server-only and never
+ * reach toClient, yet they are the bulk of a list that has been read a lot.
+ */
+const NOT_FOR_CLIENT = "-readingArchive -readingHistory";
+
 /** School lists. Never the pool. */
 export async function getUnits(): Promise<ClientWordList[]> {
   const { WordList } = await db();
   const docs = await WordList.find({ kind: { $ne: "pool" } })
+    .select(NOT_FOR_CLIENT)
     .sort({ updatedAt: -1 })
     .lean();
   return docs.map(toClient);
@@ -45,7 +52,7 @@ export async function getUnits(): Promise<ClientWordList[]> {
  */
 export async function getPractice(): Promise<ClientWordList[]> {
   const { WordList } = await db();
-  const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
+  const docs = await WordList.find().select(NOT_FOR_CLIENT).sort({ updatedAt: -1 }).lean();
   const all = docs.map(toClient);
   const units = all.filter((l) => l.kind !== "pool");
   const pools = await Promise.all(all.filter((l) => l.kind === "pool").map((p) => activePool(p, units)));

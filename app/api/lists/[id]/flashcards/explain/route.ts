@@ -40,7 +40,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // Only a real model call spends the allowance: this route runs on every
   // visit, and a visit with nothing to fill used to use it up.
   const ip = getClientIp(req);
-  const rl = rateLimit(ip);
+  const rl = rateLimit(ip, "explain");
   if (!rl.ok) {
     return NextResponse.json(
       { error: "rate limit", retryAfterSec: rl.retryAfterSec },

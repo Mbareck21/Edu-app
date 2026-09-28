@@ -46,7 +46,7 @@ export default function TileBuilder({
         aria-live="polite"
       >
         {used.length === 0 ? (
-          <span className="font-body text-sm" style={{ color: "var(--color-faint)" }}>
+          <span className="font-body text-sm" style={{ color: "var(--color-muted)" }}>
             Tap the letters
           </span>
         ) : (
@@ -56,7 +56,7 @@ export default function TileBuilder({
               type="button"
               disabled={disabled}
               onClick={() => removeAt(slot)}
-              className="press-3d min-h-[44px] min-w-[38px] rounded-tile border-2 px-2 font-display text-xl font-bold uppercase"
+              className="press-3d min-h-[44px] min-w-11 rounded-tile border-2 px-2 font-display text-xl font-bold uppercase"
               style={{
                 borderColor: "var(--color-blue)",
                 background: "var(--color-blue-soft)",

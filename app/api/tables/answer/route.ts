@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { TABLES, TABLE_UP_TO, applyFactAnswer, factFromRow, factKey } from "@/lib/tables";
+import { MAX_ANSWER_MS, TABLES, TABLE_UP_TO, applyFactAnswer, factFromRow, factKey } from "@/lib/tables";
 
 export const runtime = "nodejs";
 
@@ -11,8 +11,10 @@ const Body = z.object({
   b: z.number().int().min(1).max(TABLE_UP_TO),
   /** What he typed. Never whether it was right. */
   typed: z.string().max(12),
-  /** How long the answer took, for the fast mark. */
-  ms: z.number().int().min(0).max(10 * 60 * 1000),
+  /** How long the answer took, for the fast mark. A long wait is capped, not refused. */
+  ms: z.number().int().min(0).transform((ms) => Math.min(ms, MAX_ANSWER_MS)),
+  /** Asked again after a miss showed the answer: see applyFactAnswer. */
+  retry: z.boolean().optional(),
 });
 
 /**
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
   }
   const parsed = Body.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "invalid body" }, { status: 400 });
-  const { a, b, typed, ms } = parsed.data;
+  const { a, b, typed, ms, retry } = parsed.data;
   if (!TABLES.includes(a) && !TABLES.includes(b)) {
     return NextResponse.json({ error: "not a table he is learning" }, { status: 400 });
   }
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
   const { TimesFact } = await db();
   const now = new Date();
   const before = factFromRow(key, await TimesFact.findOne({ key }).lean());
-  const after = applyFactAnswer(before, correct, ms, now.toISOString());
+  const after = applyFactAnswer(before, correct, ms, now.toISOString(), retry ?? false);
 
   await TimesFact.updateOne(
     { key },

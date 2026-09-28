@@ -82,8 +82,8 @@ export default function PathNodes({
                 <Icon name="chest" size={32} />
               </span>
               <span
-                className="mt-1 font-display text-[11px] font-bold uppercase tracking-wide"
-                style={{ color: "var(--color-faint)" }}
+                className="mt-1 font-display text-xs font-bold uppercase tracking-wide"
+                style={{ color: "var(--color-muted)" }}
               >
                 {chestOpen ? "Won" : "Treasure"}
               </span>
@@ -134,8 +134,8 @@ export default function PathNodes({
               />
             </span>
             <span
-              className="mt-1 font-display text-[11px] font-bold uppercase tracking-wide"
-              style={{ color: state === "locked" ? "var(--color-faint)" : "var(--color-ink)" }}
+              className="mt-1 font-display text-xs font-bold uppercase tracking-wide"
+              style={{ color: state === "locked" ? "var(--color-muted)" : "var(--color-ink)" }}
             >
               {step.name}
             </span>

@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import ItemView from "@/components/items/ItemView";
-import Button from "@/components/ui/Button";
+import Button, { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
@@ -369,13 +370,19 @@ function ItemRunnerInner({
         xp: firstTry ? XP.correct + (fast ? XP.fast : 0) : 0,
       });
     } else {
-      // Short answers read best as the headline; a whole sentence does not.
+      // "Good try!" stays the headline; the correction leads the line under
+      // it, unless the explanation already opens with the word. A whole
+      // sentence answer is too long to repeat there.
       const short = current.answer.length <= 22;
+      const opensWithAnswer = current.feedback.toLowerCase().startsWith(current.answer.toLowerCase());
       setFeedback({
         state: "wrong",
-        title: short ? `It is "${current.answer}"` : "Good try!",
+        title: "Good try!",
         answer: current.answer,
-        line: current.feedback,
+        line:
+          short && !opensWithAnswer
+            ? `It is "${current.answer}". ${current.feedback}`.trim()
+            : current.feedback,
       });
     }
   }
@@ -405,9 +412,17 @@ function ItemRunnerInner({
       // Right or wrong, an owed return is consumed here. A word he missed and
       // then got right once is exactly the word that needs seeing again.
       if (plan && plan.left > 0) {
-        plan.left -= 1;
-        next = insertRepeat(rest, head, plan.index, roll);
-        plan.index += 1;
+        if (rest.length === 0 && plan.index > 0) {
+          // Nothing left to put between the returns: a missed last item came
+          // straight back again and again, and he copied the answer just shown.
+          // One immediate return is enough; hand the rest back to the cap.
+          repeatsScheduled.current -= plan.left;
+          plan.left = 0;
+        } else {
+          plan.left -= 1;
+          next = insertRepeat(rest, head, plan.index, roll);
+          plan.index += 1;
+        }
       }
     }
     setQueue(next);
@@ -439,14 +454,21 @@ function ItemRunnerInner({
         <RunnerHeader href={exitHref} value={0} color={accent} />
         <Card className="mt-8 space-y-3 text-center">
           <p className="font-display text-lg font-bold">{emptyNote}</p>
-          <Button
-            color={accent}
-            size="lg"
-            fullWidth
-            onClick={emptyAction ? emptyAction.onClick : () => window.history.back()}
-          >
-            {emptyAction?.label ?? "Go back"}
-          </Button>
+          {emptyAction ? (
+            <Button color={accent} size="lg" fullWidth onClick={emptyAction.onClick}>
+              {emptyAction.label}
+            </Button>
+          ) : (
+            // A link, not history.back(): an installed app opened straight
+            // onto this page has no history to go back to.
+            <Link
+              href={exitHref}
+              className={buttonClass({ color: accent, fullWidth: true })}
+              style={buttonStyle({ color: accent })}
+            >
+              Go back
+            </Link>
+          )}
         </Card>
       </div>
     );
@@ -464,7 +486,6 @@ function ItemRunnerInner({
     }
     const accuracy = outcome.answered === 0 ? 0 : outcome.correct / outcome.answered;
     const won = chest && Math.round(accuracy * 100) >= CHEST_PCT;
-    const badge = outcome.gained?.newBadges[0];
 
     return (
       <div className="safe-top safe-bottom min-h-dvh px-4">
@@ -509,7 +530,7 @@ function ItemRunnerInner({
           accuracy={accuracy}
           perfect={outcome.answered > 0 && outcome.correct === outcome.answered}
           leveledUp={outcome.gained?.leveledUp}
-          newBadge={badge ? { id: badge.id, name: badge.name, blurb: badge.blurb, icon: badge.icon } : null}
+          newBadges={(outcome.gained?.newBadges ?? []).map((b) => ({ id: b.id, name: b.name, blurb: b.blurb, icon: b.icon }))}
           primary={primary}
           secondary={secondary}
           note={outcome.note}
@@ -520,7 +541,9 @@ function ItemRunnerInner({
   }
 
   return (
-    <div className="safe-top min-h-dvh px-4 pb-40">
+    // Room for the answer sheet at its tallest (two-line explanation plus the
+    // phone's bottom inset), so the last option never hides under it.
+    <div className="safe-top min-h-dvh px-4 pb-[calc(16rem+env(safe-area-inset-bottom))]">
       <RunnerHeader
         href={exitHref}
         value={progress}

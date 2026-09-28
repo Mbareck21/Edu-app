@@ -34,12 +34,15 @@ export default function NewListForm() {
             }
             const list = (await res.json()) as { _id: string };
             router.push(`/me/lists/${list._id}`);
+          } catch {
+            setError("No internet. Try again.");
           } finally {
             setBusy(false);
           }
         }}
       >
         <input
+          aria-label="New list name"
           className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
           style={{ borderColor: "var(--color-line)", background: "#fff" }}
           placeholder="Week 1 — Animals"

@@ -49,7 +49,9 @@ const TONES: Record<AccentColor, Tone> = {
     base: "var(--color-gold)",
     dark: "var(--color-gold-dark)",
     soft: "var(--color-gold-soft)",
-    on: "var(--color-gold-ink)",
+    // Ink, not gold-ink or white: the only text dark enough to read on a
+    // solid gold or flame fill at pill size.
+    on: "var(--color-ink)",
     onSoft: "var(--color-gold-ink)",
   },
   coral: {
@@ -63,7 +65,7 @@ const TONES: Record<AccentColor, Tone> = {
     base: "var(--color-flame)",
     dark: "var(--color-flame-dark)",
     soft: "var(--color-gold-soft)",
-    on: "#ffffff",
+    on: "var(--color-ink)",
     onSoft: "var(--color-flame-dark)",
   },
   ink: {

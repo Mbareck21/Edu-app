@@ -53,7 +53,6 @@ export default function TopBar({
           color="flame"
           icon="flame"
           variant={step === "huge" ? "solid" : "soft"}
-          className={step === "none" ? "opacity-70" : ""}
         >
           {streak}
         </Pill>

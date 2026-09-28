@@ -88,3 +88,12 @@ test("a day is shown the morning after but stored only after the grace days, so 
   assert.equal(stored.store?.through, "2026-09-26");
   assert.equal(stored.store?.points, 0);
 });
+
+test("a stored day that is not a date cannot hang the scoreboard", () => {
+  // addDays("") is "", and "" <= yesterday is always true: the loop never ended
+  // and every Home and Me render hung with it.
+  for (const through of ["", "2026-9-30", "undefined"]) {
+    const out = settleThrough({ through, holder: null, points: 0 }, "2026-10-05", () => ({ nour: 10, wissam: 5 }));
+    assert.equal(out.points, 0, through);
+  }
+});

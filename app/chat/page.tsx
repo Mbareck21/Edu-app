@@ -21,6 +21,21 @@ import {
 
 type Msg = { role: "user" | "assistant"; content: string };
 
+/**
+ * What goes up with each turn: the recent conversation only, no empty replies,
+ * nothing over the server's length cap. Sending the whole history failed
+ * every turn once it passed the server's limit, and in hands-free mode he
+ * could not get out of it without clearing the chat.
+ */
+const SENT_MESSAGES = 20;
+const MAX_CHARS = 2000;
+function recentHistory(history: Msg[]): Msg[] {
+  return history
+    .filter((m) => m.content.trim())
+    .slice(-SENT_MESSAGES)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_CHARS) }));
+}
+
 // Conversation-mode state machine. `off` means we're in normal single-utterance UI.
 type ConvState =
   | { kind: "off" }
@@ -74,6 +89,8 @@ export default function ChatPage() {
   const autoPlayRef = useRef(true);
   const micStreamRef = useRef<MediaStream | null>(null);
   const silentRecRef = useRef<SilentRecording | null>(null);
+  /** The page has been left. Nothing may start talking after that. */
+  const goneRef = useRef(false);
 
   // The conversation loop reads the ref, so it follows the value.
   useEffect(() => {
@@ -84,15 +101,22 @@ export default function ChatPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, streaming]);
 
-  // Cleanup on unmount: cancel audio + close mic if conversation mode was on.
-  useEffect(
-    () => () => {
+  // Cleanup on unmount: cancel audio, stop any recording and close the mic.
+  // Without stopRef the hands-free loop ran on after he left — transcribing,
+  // sending and talking to an empty room — and a one-message recording left
+  // the mic on.
+  useEffect(() => {
+    goneRef.current = false;
+    return () => {
+      goneRef.current = true;
+      stopRef.current = true;
+      recordingRef.current?.cancel();
+      recordingRef.current = null;
       playbackRef.current?.cancel();
       silentRecRef.current?.cancel();
       closeMicStream(micStreamRef.current);
-    },
-    []
-  );
+    };
+  }, []);
 
   // Helper that updates both state (for UI) and ref (for loop reads).
   function updateMessages(next: Msg[] | ((m: Msg[]) => Msg[])) {
@@ -139,7 +163,7 @@ export default function ChatPage() {
 
     try {
       const acc = await streamChatReply(next);
-      if (acc === null) return;
+      if (acc === null || goneRef.current) return;
 
       if (autoPlay && acc.trim()) {
         const idx = next.length;
@@ -158,7 +182,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: recentHistory(history) }),
       });
 
       if (!res.ok) {
@@ -170,8 +194,14 @@ export default function ChatPage() {
             )} minute(s).`
           );
         } else {
+          // Only the 502's text is written for him (friendlyAiError). A 400
+          // says "invalid body", which is not a sentence for a nine-year-old.
           const data = await res.json().catch(() => ({}));
-          setError(typeof data.error === "string" ? data.error : `Error ${res.status}`);
+          setError(
+            res.status === 502 && typeof data.error === "string"
+              ? data.error
+              : "I could not answer that. Try again."
+          );
         }
         updateMessages((m) => m.slice(0, -1));
         return null;
@@ -196,8 +226,9 @@ export default function ChatPage() {
         });
       }
       return acc;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
+    } catch {
+      // The browser's own text ("Failed to fetch") is not for him either.
+      setError("I lost the internet. Try that again.");
       updateMessages((m) => m.slice(0, -1));
       return null;
     }
@@ -210,6 +241,11 @@ export default function ChatPage() {
     setSpeakingIdx(null);
     try {
       const rec = await recordAudio();
+      // Left while the mic was opening: the cleanup has already run.
+      if (goneRef.current) {
+        rec.cancel();
+        return;
+      }
       recordingRef.current = rec;
       setRecording(true);
     } catch (err) {
@@ -235,6 +271,7 @@ export default function ChatPage() {
         return;
       }
       const text = await transcribeBlob(blob);
+      if (goneRef.current) return;
       if (!text) {
         setError("I didn't hear anything — try again.");
         return;
@@ -293,6 +330,12 @@ export default function ChatPage() {
           ? "Microphone permission was blocked. Allow it in your browser settings to use voice."
           : "Could not start the microphone."
       );
+      return;
+    }
+    // Left while the mic was opening: resetting stopRef below would start the
+    // loop on a page that is gone.
+    if (goneRef.current) {
+      closeMicStream(stream);
       return;
     }
     micStreamRef.current = stream;
@@ -400,7 +443,7 @@ export default function ChatPage() {
   };
 
   return (
-    <main className="safe-top flex h-[100dvh] flex-col px-4 pb-3">
+    <main className="safe-top flex h-[100dvh] flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <header className="flex items-center justify-between gap-2 py-3">
         <Link
           href="/"
@@ -459,10 +502,10 @@ export default function ChatPage() {
           return (
             <div key={i} className={mine ? "text-right" : "text-left"}>
               <div
-                className="inline-block max-w-[85%] whitespace-pre-wrap rounded-card px-3.5 py-2.5 text-base leading-relaxed"
+                className="inline-block max-w-[85%] whitespace-pre-wrap break-words rounded-card px-3.5 py-2.5 text-base leading-relaxed"
                 style={
                   mine
-                    ? { background: "var(--color-green)", color: "#fff" }
+                    ? { background: "var(--color-green-dark)", color: "#fff" }
                     : { background: "var(--color-sand)", color: "var(--color-ink)" }
                 }
               >
@@ -549,6 +592,7 @@ export default function ChatPage() {
             className="min-h-[48px] min-w-0 flex-1 rounded-full border-2 px-4 text-base"
             style={{ borderColor: "var(--color-line)", background: "#fff" }}
             placeholder={micBusy ? "Listening…" : "Type a message"}
+            aria-label="Message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={streaming || micBusy}

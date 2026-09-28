@@ -16,7 +16,11 @@ import { LEARNER_IDS, ownerOf, type LearnerId } from "@/lib/learners";
 import { listContent, wordContent } from "@/lib/models/WordList";
 
 export async function syncList(from: LearnerId, listId: string): Promise<void> {
-  const source = await (await learnerModels(from)).WordList.findById(listId).lean();
+  // Only what listContent() copies: the reading passages and progress are
+  // this child's and are never sent across, so they are not loaded.
+  const source = await (await learnerModels(from)).WordList.findById(listId)
+    .select("kind name hiddenMessage addedBy words")
+    .lean();
   if (source?.kind === "pool") return; // Stuck words belong to one child.
   for (const other of LEARNER_IDS) {
     if (other === from) continue;

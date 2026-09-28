@@ -25,11 +25,20 @@ export default function ChoiceGrid({
   layout = "words",
 }: ChoiceGridProps) {
   const sentences = layout === "sentences";
+  // A long word ("responsibility") gets the whole row: split across two lines
+  // in a half-width tile it read as a broken spelling.
+  const oneColumn = options.some((o) => o.length > 12);
 
   return (
-    // minmax(0, 1fr): a long word ("responsibility") wraps inside its tile
-    // instead of widening the grid past the screen.
-    <div className={sentences ? "flex flex-col gap-2.5" : "grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5"}>
+    <div
+      className={
+        sentences
+          ? "flex flex-col gap-2.5"
+          : oneColumn
+            ? "grid grid-cols-1 gap-2.5"
+            : "grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5"
+      }
+    >
       {options.map((option) => {
         const isAnswer = revealed && option === answer;
         const isMiss = revealed && chosen === option && option !== answer;
@@ -67,7 +76,7 @@ export default function ChoiceGrid({
               onPick(option);
             }}
             className={[
-              "press-3d min-h-[56px] rounded-tile border-2 px-4 py-3 font-body font-bold break-words hyphens-auto disabled:cursor-default",
+              "press-3d min-h-[56px] rounded-tile border-2 px-4 py-3 font-body font-bold break-words disabled:cursor-default",
               sentences ? "text-left text-[15px] leading-snug" : "text-center text-lg",
             ].join(" ")}
             style={style}

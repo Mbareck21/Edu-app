@@ -94,7 +94,9 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
       // and the Start button fell below the bottom edge.
       <div
         className="fixed inset-0 z-50 mx-auto w-full max-w-app overflow-y-auto"
-        style={{ background: "var(--color-bg)" }}
+        // The page sets --nav-h for its tab bar; over the whole screen there
+        // is none, and the finish button floated 61px above the bottom.
+        style={{ background: "var(--color-bg)", ["--nav-h" as string]: "0px" }}
       >
         <VoiceTablesRunner
           facts={voice}
@@ -115,7 +117,8 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
       // keypad's bottom row fell off a small phone.
       <div
         className="fixed inset-0 z-50 mx-auto w-full max-w-app overflow-y-auto"
-        style={{ background: "var(--color-bg)" }}
+        // No tab bar over the whole screen, as for the spoken round.
+        style={{ background: "var(--color-bg)", ["--nav-h" as string]: "0px" }}
       >
         <TablesRunner
           facts={running.facts}
@@ -160,7 +163,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           </p>
         </div>
         {lit >= total ? (
-          <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-dark)" }}>
+          <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
             {gold >= total
               ? "Every fact gold. You own this grid."
               : known >= total
@@ -197,7 +200,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                     return (
                       <td key={i} className="p-0">
                         <div
-                          className="flex h-6 w-full items-center justify-center rounded text-[10px] font-bold"
+                          className="flex h-6 w-full items-center justify-center rounded text-[11px] font-bold"
                           title={`${t} x ${i + 1} = ${c.value}`}
                           style={{
                             background: c.gold
@@ -207,7 +210,9 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
                                 : c.lit
                                   ? LIT_BG
                                   : "var(--color-line)",
-                            color: c.known || c.lit ? "#fff" : "var(--color-muted)",
+                            // White only on the full purple: on the light purple and the
+                            // gold it was under 2:1.
+                            color: c.known && !c.gold ? "#fff" : c.lit ? "var(--color-ink)" : "var(--color-muted)",
                           }}
                         >
                           {c.lit ? c.value : ""}

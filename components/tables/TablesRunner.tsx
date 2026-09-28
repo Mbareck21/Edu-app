@@ -12,7 +12,7 @@ import { clearProgress, saveProgress } from "@/lib/resume";
 import type { Gained } from "@/lib/rewards";
 import { sessionPerfect } from "@/lib/session-score";
 import { sfx } from "@/lib/sfx";
-import { isLit, roundStars, type Fact, type FactState } from "@/lib/tables";
+import { MAX_ANSWER_MS, isLit, roundStars, type Fact, type FactState } from "@/lib/tables";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import type { SessionResult } from "@/lib/types";
 
@@ -185,8 +185,11 @@ export default function TablesRunner({
     if (!question || !fact || !input || flash || feedback) return;
     const clean = input.trim();
     const correct = /^\d+$/.test(clean) && Number(clean) === question.answer;
-    const ms = Math.max(0, Date.now() - askedAt.current);
-    if (firstTry.current[index] === undefined) firstTry.current[index] = correct;
+    // Capped as the server caps it: a question left open is still an answer.
+    const ms = Math.min(MAX_ANSWER_MS, Math.max(0, Date.now() - askedAt.current));
+    // Answered before in this round: he has seen the answer since the miss.
+    const retry = firstTry.current[index] !== undefined;
+    if (!retry) firstTry.current[index] = correct;
 
     // The server grades and moves the grid. Fire and forget: the screen has
     // already decided from the same rule, and a lost post costs one answer
@@ -194,7 +197,7 @@ export default function TablesRunner({
     void fetch("/api/tables/answer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ a: fact.a, b: fact.b, typed: clean, ms }),
+      body: JSON.stringify({ a: fact.a, b: fact.b, typed: clean, ms, retry }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -208,10 +211,11 @@ export default function TablesRunner({
       timer.current = setTimeout(advance, FLASH_MS);
       return;
     }
-    sfx.wrong();
+    // The feedback sheet plays the wrong sound; playing it here too doubled it.
     setFlash("wrong");
     setShakeKey((k) => k + 1);
-    setFeedback({ state: "wrong", title: `${fact.a} × ${fact.b} = ${question.answer}`, line: question.how });
+    // Encouragement first; the fact itself ("7 × 8 = 56 (7 groups of 8)") under it.
+    setFeedback({ state: "wrong", title: "Good try!", line: question.how });
   }, [advance, fact, feedback, flash, index, input, question]);
 
   const afterWrong = useCallback(() => {
@@ -245,7 +249,7 @@ export default function TablesRunner({
           accuracy={facts.length === 0 ? 0 : outcome.correct / facts.length}
           perfect={outcome.stars > 0}
           leveledUp={outcome.gained?.leveledUp ?? false}
-          newBadge={outcome.gained?.newBadges[0] ?? null}
+          newBadges={outcome.gained?.newBadges ?? []}
           primary={onDone ? { label: "Back to the grid", onClick: onDone } : { label: "Back to the grid", href: "/math/tables" }}
           note={outcome.note}
         />
