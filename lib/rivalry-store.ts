@@ -7,9 +7,9 @@
  * Server-only: these touch Mongo.
  */
 
-import { addDays, todayKey } from "@/lib/day";
+import { todayKey } from "@/lib/day";
 import { connectDB } from "@/lib/db";
-import { freshRivalry, settleThrough, type Rivalry } from "@/lib/rivalry";
+import { freshRivalry, rivalryView, type Rivalry } from "@/lib/rivalry";
 import { raceXp } from "@/lib/scoreboard";
 import type { ProfileState } from "@/lib/types";
 
@@ -17,7 +17,10 @@ type Doc = { _id: string } & Rivalry;
 
 const ID = "rivalry";
 
-/** The rivalry settled through yesterday. `family` is every child's profile. */
+/**
+ * The rivalry through yesterday, as shown. Stored only past the grace days
+ * (see rivalryView). `family` is every child's profile.
+ */
 export async function currentRivalry(
   family: readonly { learner: string; state: ProfileState }[],
   now: Date = new Date()
@@ -28,17 +31,15 @@ export async function currentRivalry(
   const before: Rivalry = stored
     ? { through: stored.through, holder: stored.holder, points: stored.points }
     : freshRivalry();
-  const yesterday = addDays(todayKey(now), -1);
-  if (before.through >= yesterday) return before;
-
-  const after = settleThrough(before, yesterday, (day) =>
+  const { store, shown } = rivalryView(before, todayKey(now), (day) =>
     Object.fromEntries(family.map(({ learner, state }) => [learner, raceXp(state.activity, day)]))
   );
+  if (!store) return shown;
   // Only lands on the count it read: two pages settling at once write once.
   if (stored) {
-    await col.updateOne({ _id: ID, through: before.through }, { $set: after });
+    await col.updateOne({ _id: ID, through: before.through }, { $set: store });
   } else {
-    await col.insertOne({ _id: ID, ...after }).catch(() => undefined);
+    await col.insertOne({ _id: ID, ...store }).catch(() => undefined);
   }
-  return after;
+  return shown;
 }

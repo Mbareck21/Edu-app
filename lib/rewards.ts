@@ -34,6 +34,7 @@ import { allFactKeys } from "@/lib/tables";
 //   Reading passage, 4 questions, ~8 min . 4 x 150 + 20 + 30        = 650
 //     same list again today .............. 4 x 45 + 30              = 210
 //   Text structure, 6 texts, ~5 min ...... 6 x 45 + 50              = 320
+//     again today ........................ 6 x 15 + 30              = 120
 //   Vocab lesson, 10 items, all fast ..... 10 x 15 + 25 + 50        = 225
 //   A word reaching known +50, mastered +100, in the session that does it.
 // Under 3 answers pays no lesson or perfect bonus; 0 answers not the day either.
@@ -92,7 +93,12 @@ export function rightXp(
   firstToday: boolean
 ): number {
   if (result.kind === "reading") {
-    return result.reading && firstToday ? XP.passageCorrect : XP.readingCorrect;
+    if (result.reading) return firstToday ? XP.passageCorrect : XP.readingCorrect;
+    // Text structure: 18 short texts, so by the third round in a row he knows
+    // the answers, and six taps in thirty seconds paid 300 at the reading
+    // rate (2,430 XP in eight minutes on 2026-09-27). Again today, it pays
+    // what a word drill's quick choices pay.
+    return firstToday ? XP.readingCorrect : XP.correct;
   }
   if (result.kind !== "math") return XP.correct;
   const level = Math.min(5, Math.max(1, Math.floor(Number(result.mathLevel)) || 1));
@@ -102,22 +108,25 @@ export function rightXp(
 
 /**
  * What a session is worth before the server has seen it: offline, the runners
- * show this instead of "+0". Counts it as the first play today, with no new
- * streak day and no perfect bonus, so it never promises more than it pays.
+ * show this instead of "+0". Counts it as a repeat of something played today —
+ * no lesson bonus, no first-read passage rate, no new streak day, no perfect
+ * bonus — so it never promises more than it pays. It used to count it as the
+ * first play today, and a drill replayed offline showed +77 and paid +57.
  */
 export function estimateXp(result: SessionResult): number {
   const answered = Math.max(0, Math.floor(result.answered) || 0);
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
-  return (
-    Math.round(paidRight * rightXp(result, true)) +
-    Math.min(fast, FAST_PAID) * XP.fast +
-    (answered >= BONUS_MIN_ANSWERED ? XP.lessonDone : 0)
-  );
+  return Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast;
 }
 
-export const ACTIVITY_CAP = 200;
+/**
+ * The log is the only record behind the race, the rivalry, the drill duel and
+ * last week's champion (13 days back). At 200, a 31-session day like
+ * 2026-09-27 left barely a week, and the duel lost its early days.
+ */
+export const ACTIVITY_CAP = 600;
 
 /**
  * Re-exported so the API and the runners keep importing it from one place. The

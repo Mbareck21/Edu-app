@@ -166,3 +166,11 @@ test("math is the school lesson's skill in the year, a lowest-level skill after 
   levels["fractions"] = 2;
   assert.equal(mathSkillFor(summer, levels), "fractions");
 });
+
+test("New words does not promise new words once every word is met", () => {
+  const allMet = { ...metUnit, words: metUnit.words.slice(1) } as unknown as ListSummary;
+  const blurb = (lists: ListSummary[]) =>
+    planBeats({ activity: [], lists, mathLevels: {}, today: DAY }).find((x) => x.id === "new")?.blurb;
+  assert.equal(blurb([metUnit]), "Three new words");
+  assert.equal(blurb([allMet]), "Practise your words");
+});

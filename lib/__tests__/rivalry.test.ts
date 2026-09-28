@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RIVALRY_START, freshRivalry, pointsOf, rankRows, settleDay, settleThrough } from "@/lib/rivalry";
+import {
+  RIVALRY_START,
+  SETTLE_GRACE_DAYS,
+  freshRivalry,
+  pointsOf,
+  rankRows,
+  rivalryView,
+  settleDay,
+  settleThrough,
+} from "@/lib/rivalry";
 
 test("the winner takes a point, and a win against the holder takes one back", () => {
   let r = freshRivalry();
@@ -58,4 +67,24 @@ test("the scoreboard sorts by XP today, then by trophy points", () => {
   assert.deepEqual(rankRows(rows, r).map((x) => x.learner), ["wissam", "nour"], "a new day: points decide");
   rows[0].xp = 40;
   assert.deepEqual(rankRows(rows, r).map((x) => x.learner), ["nour", "wissam"], "during the day: XP decides");
+});
+
+test("a day is shown the morning after but stored only after the grace days, so late sessions count", () => {
+  const xp: Record<string, Record<string, number>> = {
+    "2026-09-25": { nour: 300, wissam: 0 },
+    "2026-09-26": { nour: 300, wissam: 650 }, // Wissam's 650 arrives late
+  };
+  const early = (day: string) => (day === "2026-09-26" ? { nour: 300, wissam: 0 } : (xp[day] ?? {}));
+  // The morning of the 27th: the 26th is shown, not stored.
+  const first = rivalryView(freshRivalry(), "2026-09-27", early);
+  assert.equal(first.shown.holder, "nour");
+  assert.equal(first.shown.points, 2);
+  assert.equal(first.store, null, "nothing past the grace days yet");
+  // Wissam's phone sends the 26th's session later: the shown count follows.
+  const later = rivalryView(freshRivalry(), "2026-09-27", (day) => xp[day] ?? {});
+  assert.equal(later.shown.points, 0);
+  // Past the grace days the day is stored, with the late session in it.
+  const stored = rivalryView(freshRivalry(), `2026-09-${27 + SETTLE_GRACE_DAYS}`, (day) => xp[day] ?? {});
+  assert.equal(stored.store?.through, "2026-09-26");
+  assert.equal(stored.store?.points, 0);
 });

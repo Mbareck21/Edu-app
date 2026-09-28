@@ -29,9 +29,15 @@ export type StuckBoardProps = {
  * is stuck — mid-homework, one hand on the worksheet. Hiding that behind the
  * Me tab would mean the word never gets typed at all.
  */
+/**
+ * A sitting on the Words tab pays XP like the writing drill: it is the same
+ * work, and it used to pay nothing.
+ */
+const STUCK_REF = "stuck:write";
+
 export default function StuckBoard(props: StuckBoardProps) {
   // A sitting that was under way when the page reloaded comes straight back.
-  const saved = useSavedRun(chainResumeKey(undefined), isChainSaved);
+  const saved = useSavedRun(chainResumeKey(STUCK_REF), isChainSaved);
   return (
     <StuckBoardInner key={saved ? "resumed" : "fresh"} {...props} resumed={saved?.words ?? null} />
   );
@@ -113,6 +119,7 @@ function StuckBoardInner({
           words={running}
           senses={senses}
           chains={state}
+          post={{ ref: STUCK_REF }}
           onDone={() => {
             setRunning(null);
             // The counts moved on the server; take the page again so the board

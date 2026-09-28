@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { previousDay, lastSevenDays, todayKey } from "@/lib/day";
 import {
+  ACTIVITY_CAP,
   BADGES,
   FAST_PAID,
   XP,
@@ -405,13 +406,14 @@ test("ten math sessions earn math-star", () => {
 
 // ── activity + immutability ───────────────────────────────────────────────
 
-test("activity gets the newest entry first and is capped at 200", () => {
+test("activity gets the newest entry first and is capped", () => {
   let p: ProfileState = emptyProfile();
-  for (let i = 0; i < 205; i++) {
+  for (let i = 0; i < ACTIVITY_CAP + 5; i++) {
     p = applySession(p, result({ ref: `run-${i}` }), now()).profile;
   }
-  assert.equal(p.activity.length, 200);
-  assert.equal(p.activity[0].ref, "run-204");
+  assert.equal(p.activity.length, ACTIVITY_CAP);
+  assert.ok(ACTIVITY_CAP >= 31 * 14, "two weeks of a long day, for the duel");
+  assert.equal(p.activity[0].ref, `run-${ACTIVITY_CAP + 4}`);
   assert.equal(p.activity[0].pct, 80);
 });
 
@@ -449,7 +451,7 @@ test("reading progress counts good readings in a row at this level", () => {
   assert.equal(readingProgress({ level: 2, recent: [log(100, 1)] }, now).goodInARow, 0);
 });
 
-test("the offline XP estimate matches what the server pays, bar the day bonus", () => {
+test("the offline XP estimate never promises more than the server pays", () => {
   const at = { at: new Date("2026-09-25T15:00:00Z"), today: "2026-09-25" };
   const cases: SessionResult[] = [
     { kind: "math", ref: "math:fractions", answered: 10, correct: 8, fastCount: 0, ms: 1, perfect: false, mathLevel: 4 },
@@ -457,8 +459,13 @@ test("the offline XP estimate matches what the server pays, bar the day bonus", 
     { kind: "vocab", ref: "drill:vocab:mixed", answered: 2, correct: 2, fastCount: 2, ms: 1, perfect: false },
   ];
   for (const r of cases) {
-    const { gained } = applySession(emptyProfile(), r, at);
-    assert.equal(estimateXp(r), gained.xp - XP.streakDay, r.ref);
+    // First play today: the estimate leaves out the day and lesson bonuses.
+    const first = applySession(emptyProfile(), r, at);
+    const bonus = r.answered >= 3 ? XP.lessonDone : 0;
+    assert.equal(estimateXp(r), first.gained.xp - XP.streakDay - bonus, r.ref);
+    // Played again the same day: exactly what the server pays.
+    const again = applySession(first.profile, r, at);
+    assert.equal(estimateXp(r), again.gained.xp, r.ref);
   }
 });
 
@@ -483,4 +490,13 @@ test("reading and words pay more per right answer than math", () => {
   assert.ok(XP.correct > XP.mathCorrect);
   assert.ok(XP.readingCorrect > XP.mathCorrect * 2);
   assert.ok(XP.passageCorrect > XP.readingCorrect);
+});
+
+test("Text structure pays the reading rate once a day; again, the quick-choice rate", () => {
+  const at = { at: new Date("2026-09-27T01:00:00Z"), today: "2026-09-26" };
+  const r: SessionResult = { kind: "reading", ref: "read:structure", answered: 6, correct: 6, fastCount: 0, ms: 30_000, perfect: true };
+  const first = applySession(emptyProfile(), r, at);
+  assert.equal(first.gained.xp, 6 * XP.readingCorrect + XP.lessonDone + XP.perfect + XP.streakDay);
+  const again = applySession(first.profile, r, at);
+  assert.equal(again.gained.xp, 6 * XP.correct + XP.perfect);
 });

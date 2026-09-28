@@ -37,9 +37,8 @@ export type ChainRunnerProps = {
   /** Meaning per word. A word lands in the pool because he does not know it. */
   senses: Record<string, WordSense>;
   /**
-   * Set when this sitting is a step on a unit path, so finishing it marks the
-   * step done, or a drill, so it pays and logs like any other drill. Left off
-   * for the Words tab, where writing is its own thing and completes nothing.
+   * What the sitting posts: a step on a unit path (finishing it marks the
+   * step done), a drill, or the Words tab. Each pays for its right writes.
    */
   post?: { ref: string; listId?: string; step?: StepId };
   /** Where the finish screen sends him. Defaults back to the Words tab. */

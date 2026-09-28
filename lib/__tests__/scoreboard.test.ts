@@ -107,6 +107,7 @@ test("activity kinds group by what he is learning", () => {
   assert.notEqual(activityKind("drill:vocab:mixed"), activityKind("drill:vocab:spell"));
   assert.equal(activityKind("drill:vocab:spell"), activityKind("drill:vocab:spell"));
   assert.equal(activityKind("tables:7"), activityKind("tables:voice"));
+  assert.equal(activityKind("stuck:write"), "stuck words");
   assert.equal(activityKind("abc:spell"), activityKind("def:spell"));
   assert.notEqual(activityKind("abc:spell"), activityKind("abc:match"));
 });

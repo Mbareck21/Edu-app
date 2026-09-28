@@ -5,7 +5,7 @@
 
 import { learnerFromCookie } from "@/lib/learners";
 import type { ClientProfile, SessionResult } from "@/lib/types";
-import type { Gained } from "@/lib/rewards";
+import { estimateXp, type Gained } from "@/lib/rewards";
 
 export const QUEUE_KEY = "quest:queue";
 const ENDPOINT = "/api/sessions/complete";
@@ -162,6 +162,16 @@ export async function postSession(result: SessionResult): Promise<PostSessionRes
  * it again, so it is not kept. Telling him it was saved on the phone would be
  * a lie, and the work would quietly vanish.
  */
+/**
+ * XP for the finish screen: what the server paid; offline, what the work is
+ * worth (it is paid when the queue sends); nothing for a session the server
+ * refused, which is dropped.
+ */
+export function shownXp(res: PostSessionResult, result: SessionResult): number {
+  if (res.saved) return res.gained.xp;
+  return res.invalid ? 0 : estimateXp(result);
+}
+
 export function saveNote(res: PostSessionResult): string | undefined {
   if (res.saved) return undefined;
   if (res.invalid) return "I could not save that one. Tell Dad.";

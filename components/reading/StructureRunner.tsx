@@ -8,12 +8,13 @@ import Icon from "@/components/ui/Icon";
 import LessonComplete from "@/components/ui/LessonComplete";
 import ProgressBar from "@/components/ui/ProgressBar";
 import { mulberry32 } from "@/lib/math/rng";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import type { PlanProgress } from "@/lib/daily-plan";
 import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { sfx } from "@/lib/sfx";
+import type { SessionResult } from "@/lib/types";
 import {
   structureSession,
   TEXT_STRUCTURES,
@@ -182,7 +183,7 @@ function StructureRunnerInner({
     void (async () => {
       setSaving(true);
       try {
-        const posted = await postSession({
+        const result: SessionResult = {
           kind: "reading",
           ref: "read:structure",
           answered: rounds.length,
@@ -190,9 +191,10 @@ function StructureRunnerInner({
           fastCount: 0,
           ms: elapsedMs,
           perfect,
-        });
-        if (posted.saved) setGainedXp(posted.gained.xp);
-        else setQueuedNote(saveNote(posted));
+        };
+        const posted = await postSession(result);
+        setGainedXp(shownXp(posted, result));
+        if (!posted.saved) setQueuedNote(saveNote(posted));
       } finally {
         setSaving(false);
       }
