@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { mulberry32 } from "@/lib/math/rng";
+import { mulberry32, shuffle } from "@/lib/math/rng";
 import {
+  STRUCTURE_HISTORY,
   STRUCTURE_IDS,
   STRUCTURE_PASSAGES,
   TEXT_STRUCTURES,
   findSignalWords,
+  rememberDealt,
   structureById,
   structureChoices,
   structureSession,
@@ -34,13 +36,46 @@ test("every structure has a distinct id, name, question and a non-empty frame", 
   }
 });
 
-test("every structure has several passages, not one", () => {
+test("every structure has at least eight passages", () => {
   // One passage each meant the lesson ran the same five texts in the same
-  // order every time, so he could answer from position without reading.
+  // order every time, so he could answer from position without reading. Three
+  // each were memorised within a week (2026-09-27). Eight is also what lets a
+  // session skip everything from his last three (see STRUCTURE_HISTORY).
+  const perSession = 2; // one round each, plus the encore
+  const sessions = STRUCTURE_HISTORY / STRUCTURE_ROUNDS;
   for (const id of STRUCTURE_IDS) {
-    assert.ok(passagesFor(id).length >= 3, `only ${passagesFor(id).length} for ${id}`);
+    assert.ok(passagesFor(id).length >= 8, `only ${passagesFor(id).length} for ${id}`);
+    assert.ok(passagesFor(id).length >= perSession * (sessions + 1), `${id} runs out inside the history`);
   }
+  assert.ok(STRUCTURE_PASSAGES.length >= 40);
+});
+
+test("no two passages share an id or a title", () => {
   assert.equal(new Set(STRUCTURE_PASSAGES.map((p) => p.id)).size, STRUCTURE_PASSAGES.length);
+  const titles = STRUCTURE_PASSAGES.map((p) => p.title.toLowerCase());
+  assert.equal(new Set(titles).size, titles.length);
+});
+
+test("no word in a title gives the structure away", () => {
+  // The title is on screen before he answers. Every title with "and" in it
+  // was compare and contrast and no other title had one, so "and" answered
+  // the question without reading. A word several titles share must be spread
+  // over the structures: no one structure may hold more than half of them.
+  const uses = new Map<string, string[]>();
+  for (const p of STRUCTURE_PASSAGES) {
+    for (const word of new Set(p.title.toLowerCase().match(/[a-z']+/g) ?? [])) {
+      uses.set(word, [...(uses.get(word) ?? []), p.structure]);
+    }
+  }
+  for (const [word, structures] of uses) {
+    if (structures.length < 2) continue;
+    const most = Math.max(...STRUCTURE_IDS.map((id) => structures.filter((s) => s === id).length));
+    assert.ok(
+      most * 2 <= structures.length,
+      `"${word}" is in ${structures.length} titles and ${most} of them are one structure`
+    );
+    if (structures.length >= 3) assert.ok(new Set(structures).size >= 2, `"${word}" names one structure`);
+  }
 });
 
 test("the teacher's five passages are still here, word for word", () => {
@@ -119,6 +154,63 @@ test("the same seed gives the same session", () => {
   const a = structureSession(mulberry32(99)).map((r) => r.passage.id);
   const b = structureSession(mulberry32(99)).map((r) => r.passage.id);
   assert.deepEqual(a, b);
+  // A resumed run rebuilds from its seed and the history it was dealt against.
+  const recent = a.slice(0, 4);
+  assert.deepEqual(
+    structureSession(mulberry32(99), recent).map((r) => r.passage.id),
+    structureSession(mulberry32(99), recent).map((r) => r.passage.id)
+  );
+});
+
+test("a session skips the passages dealt recently", () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    // Three sessions' worth of history, dealt the way the runner deals it.
+    let recent: string[] = [];
+    for (let s = 0; s < 3; s++) {
+      recent = rememberDealt(recent, structureSession(mulberry32(seed * 31 + s), recent));
+    }
+    assert.equal(recent.length, STRUCTURE_HISTORY);
+    const session = structureSession(mulberry32(seed), recent);
+    const again = session.filter((r) => recent.includes(r.passage.id)).map((r) => r.passage.id);
+    assert.deepEqual(again, [], `seed ${seed} dealt ${again.join(", ")} again`);
+    // Still a full session: every structure, one twice, six different texts.
+    assert.equal(new Set(session.map((r) => r.passage.structure)).size, STRUCTURE_IDS.length);
+    assert.equal(new Set(session.map((r) => r.passage.id)).size, STRUCTURE_ROUNDS);
+  }
+});
+
+test("with nothing unseen left, the passage seen longest ago comes back", () => {
+  // Every passage in the history, in a known order: the oldest of each
+  // structure is the one to deal (and the next oldest for the encore).
+  const recent = shuffle(mulberry32(5), STRUCTURE_PASSAGES.map((p) => p.id));
+  const session = structureSession(mulberry32(8), recent);
+  for (const id of STRUCTURE_IDS) {
+    const dealt = session.filter((r) => r.passage.structure === id).map((r) => r.passage.id);
+    const oldestFirst = passagesFor(id)
+      .map((p) => p.id)
+      .sort((a, b) => recent.indexOf(a) - recent.indexOf(b));
+    assert.deepEqual(dealt.sort(), oldestFirst.slice(0, dealt.length).sort(), id);
+  }
+});
+
+test("200 sessions in a row repeat nothing from the session before", () => {
+  // The audit that found the farm: without a history a session repeated 2.4
+  // of the last one's six texts, and 97.5% of sessions repeated at least one.
+  let recent: string[] = [];
+  let previous: string[] = [];
+  let repeats = 0;
+  const seen = new Set<string>();
+  for (let s = 1; s <= 200; s++) {
+    const session = structureSession(mulberry32(s * 7919), recent);
+    const ids = session.map((r) => r.passage.id);
+    repeats += ids.filter((id) => previous.includes(id)).length;
+    for (const id of ids) seen.add(id);
+    recent = rememberDealt(recent, session);
+    previous = ids;
+  }
+  assert.equal(repeats / 199, 0);
+  // Steering away from repeats must not strand part of the bank.
+  assert.equal(seen.size, STRUCTURE_PASSAGES.length);
 });
 
 test("structure choices include the right answer and plausible distractors", () => {

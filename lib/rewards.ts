@@ -150,10 +150,10 @@ export function rightXp(
 ): number {
   if (result.kind === "reading") {
     if (result.reading) return firstToday ? XP.passageCorrect : XP.readingCorrect;
-    // Text structure: 18 short texts, so by the third round in a row he knows
-    // the answers, and six taps in thirty seconds paid 300 at the reading
-    // rate (2,430 XP in eight minutes on 2026-09-27). Again today, it pays
-    // what a word drill's quick choices pay.
+    // Text structure: 40 short texts now, but with 15 he knew the answers by
+    // the third round in a row, and six taps in thirty seconds paid 300 at the
+    // reading rate (2,430 XP in eight minutes on 2026-09-27). Again today, it
+    // pays what a word drill's quick choices pay.
     return firstToday ? XP.readingCorrect : XP.correct;
   }
   if (result.kind !== "math") return XP.correct;
