@@ -2,8 +2,7 @@ import Link from "next/link";
 
 import Icon from "@/components/ui/Icon";
 import {
-  ELA_STANDARDS,
-  currentQuarter,
+  elaFocus,
   isLaunchWeek,
   isReviewWeek,
   SCHOOL_YEAR_END,
@@ -14,10 +13,11 @@ import {
 import { todayKey } from "@/lib/day";
 import { currentLesson, currentUnit } from "@/lib/math";
 
-/** First clause only — the strip has one line per subject. */
+/** First clause only — the strip has one line per subject. Cut between words. */
 function shortPlain(plain: string): string {
-  const cut = plain.split(/[:,]/)[0].trim();
-  return cut.length > 62 ? `${cut.slice(0, 59).trimEnd()}…` : cut;
+  const cut = plain.split(/[:,]| [-—–] /)[0].trim();
+  if (cut.length <= 66) return cut;
+  return `${cut.slice(0, 64).replace(/\s+\S*$/, "")}…`;
 }
 
 /**
@@ -28,10 +28,7 @@ export default function SchoolStrip({ href }: { href: string }) {
   const today = todayKey();
   // After the last school day the calendar would stop on the final unit.
   if (today > SCHOOL_YEAR_END) return null;
-  const quarter = currentQuarter(today);
-  const ela = ELA_STANDARDS.filter(
-    (s) => quarter !== "summer" && s.quarters.includes(quarter)
-  ).slice(0, 2);
+  const ela = elaFocus(today);
   const math = currentUnit(today);
   const lesson = currentLesson(today);
   const science = scienceUnitForWeek(today);

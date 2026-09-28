@@ -19,10 +19,20 @@ export function maxReadingLevel(grade: Grade): number {
 
 /**
  * Hu & Nation 98% coverage: the most words a passage may carry that he will
- * not know. The single source — the prompt is handed this number, and the
- * generator validates the glossary against it.
+ * not know, at the longest level. The single source for the glossary cap; each
+ * level's own budget is 2% of its length (see unknownBudgetFor).
  */
 export const MAX_UNKNOWN_BUDGET = 6;
+
+/**
+ * 2% of the passage, so 98% of it is words he knows. A flat 6 was 94.5% known
+ * on a 110-word level 1 passage, under even the 95% floor. At least 2, so a
+ * passage still teaches a new word. His list words are not counted: they are
+ * taught on the words-first screen before he reads.
+ */
+export function unknownBudgetFor(targetWords: number): number {
+  return Math.max(2, Math.min(MAX_UNKNOWN_BUDGET, Math.floor(targetWords * 0.02)));
+}
 
 /** Glossary cap the generator accepts: the budget plus slack for a model that
     glosses a word or two more than it was asked to. */
@@ -109,7 +119,7 @@ export function readingParams(rawLevel: number): ReadingParams {
     minWords: Math.round(targetWords * 0.85),
     maxWords: Math.round(targetWords * 1.25),
     maxSentenceWords: 8 + level,
-    unknownBudget: MAX_UNKNOWN_BUDGET,
+    unknownBudget: unknownBudgetFor(targetWords),
     paragraphs: level <= 2 ? 2 : level <= 5 ? 3 : 4,
   };
 }

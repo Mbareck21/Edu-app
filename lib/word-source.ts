@@ -100,11 +100,18 @@ export async function clearSettledStuck(
  */
 export async function getPool(): Promise<ClientWordList> {
   const { WordList } = await db();
-  const doc = await WordList.findOneAndUpdate(
-    { kind: "pool" },
-    { $setOnInsert: { kind: "pool", name: POOL_NAME, words: [] } },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
-  ).lean();
+  const open = () =>
+    WordList.findOneAndUpdate(
+      { kind: "pool" },
+      { $setOnInsert: { kind: "pool", name: POOL_NAME, words: [] } },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+    ).lean();
+  // The one_pool index turns a second, simultaneous insert into a duplicate-key
+  // error instead of a second pool; that request then reads the one that won.
+  const doc = await open().catch((err: unknown) => {
+    if ((err as { code?: unknown })?.code === 11000) return open();
+    throw err;
+  });
   if (!doc) throw new Error("could not open the stuck-words pool");
   return toClient(doc);
 }

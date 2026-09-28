@@ -23,6 +23,53 @@ export const FPS_QUARTERS: Quarter[] = [
 export const SCHOOL_YEAR_START = "2026-08-11";
 export const SCHOOL_YEAR_END = "2027-05-20";
 
+/**
+ * Weekdays inside a quarter with no school, from the FPS 2026-27 district
+ * calendar ("2026-27 District Calendar for Parents", approved 22 Jan 2026,
+ * linked from asbell.fayar.net): Labor Day, parent-teacher conferences,
+ * Thanksgiving week, MLK Day, the 12 Feb PD day, spring break and the two
+ * flexible make-up days. Breaks between quarters (fall, winter) need no entry.
+ * With these, every quarter counts out to the district's own day total.
+ */
+export const FPS_DAYS_OFF: readonly string[] = [
+  "2026-09-07",
+  "2026-10-23",
+  "2026-11-23",
+  "2026-11-24",
+  "2026-11-25",
+  "2026-11-26",
+  "2026-11-27",
+  "2027-01-18",
+  "2027-02-12",
+  "2027-02-15",
+  "2027-03-22",
+  "2027-03-23",
+  "2027-03-24",
+  "2027-03-25",
+  "2027-03-26",
+  "2027-04-23",
+];
+
+/** Every school day of a quarter, in order: its weekdays minus FPS_DAYS_OFF. */
+export function schoolDaysOf(q: Quarter): string[] {
+  const out: string[] = [];
+  const off = new Set(FPS_DAYS_OFF);
+  for (let n = dayNum(q.start); n <= dayNum(q.end); n++) {
+    const weekday = (n + 4) % 7; // 0 = Sunday; 1970-01-01 was a Thursday
+    const iso = new Date(n * 86_400_000).toISOString().slice(0, 10);
+    if (weekday !== 0 && weekday !== 6 && !off.has(iso)) out.push(iso);
+  }
+  return out;
+}
+
+/** The date of school day `n` (1-based) of quarter `id`. */
+export function quarterDay(id: Quarter["id"], n: number): string {
+  const q = FPS_QUARTERS.find((x) => x.id === id);
+  const days = q ? schoolDaysOf(q) : [];
+  const clamped = Math.max(1, Math.min(days.length, n));
+  return days[clamped - 1] ?? SCHOOL_YEAR_START;
+}
+
 /** Days since the Unix epoch for an ISO date, timezone-free. */
 function dayNum(dateISO: string): number {
   const [y, m, d] = dateISO.slice(0, 10).split("-").map(Number);
@@ -137,6 +184,20 @@ export const ELA_STANDARDS: ElaStandard[] = [
     itemTypes: ["sentence-combine", "use", "retell-pick"],
   },
 ];
+
+/**
+ * The quarter's essential standards, two a week, taking turns. They are all
+ * taught across the quarter; showing the same first two every day for nine
+ * weeks made the "At school now" card look stuck.
+ */
+export function elaFocus(dateISO: string, count = 2): ElaStandard[] {
+  const quarter = currentQuarter(dateISO);
+  if (quarter === "summer") return [];
+  const inQuarter = ELA_STANDARDS.filter((s) => s.quarters.includes(quarter));
+  if (inQuarter.length <= count) return inQuarter;
+  const first = (schoolWeekIndex(dateISO) * count) % inQuarter.length;
+  return Array.from({ length: count }, (_, i) => inQuarter[(first + i) % inQuarter.length]);
+}
 
 /* ------------------------------------------------------------------ *
  * Reading themes (Benchmark Advance Grade 4 units)
@@ -415,16 +476,18 @@ export type ScienceUnit = {
 
 export const SCIENCE_UNITS: ScienceUnit[] = [
   {
-    // The Growing Plants investigation his class is running now. It sits
-    // inside the same weeks as adaptations and senses because it is a short
-    // investigation taught alongside them, not a unit of its own; the shared
-    // span splits between the three, so it gets its turn as a reading topic.
+    // The Growing Plants investigation his class ran at the start of the
+    // year. The district plan (Asbell's curriculum link, 4th Grade Science)
+    // has two units in weeks 2-9, Adaptations then Senses; this short
+    // investigation opens the first of them, so it takes weeks 2-3, then
+    // Adaptations 4-5 and Senses 6-9: an even split of the district's two.
+    // Split three ways, the card still said Adaptations in late September.
     // Standards here are the science PRACTICE, not a content expectation:
     // the point of the lesson is planning a fair test, not plant biology.
     id: "growing-plants",
     title: "Growing Plants: Fair Tests",
     weekStart: 2,
-    weekEnd: 9,
+    weekEnd: 3,
     standards: [
       {
         code: "NGSS SEP 3",
@@ -444,8 +507,8 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
   {
     id: "adaptations",
     title: "Plants & Animals: Adaptations",
-    weekStart: 2,
-    weekEnd: 9,
+    weekStart: 4,
+    weekEnd: 5,
     standards: [
       {
         code: "4-LS1-1",
@@ -464,7 +527,7 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
   {
     id: "senses",
     title: "Animals: Senses & Information Processing",
-    weekStart: 2,
+    weekStart: 6,
     weekEnd: 9,
     standards: [
       {
@@ -580,8 +643,8 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
  * Because breaks are ignored, week 36 falls in mid-April; the remaining school
  * weeks stay on the last unit rather than going blank. Outside the school year,
  * and in week 1 (launch week, before Unit 1 starts), the answer is null.
- * Two units share weeks 2-9 and two share weeks 31-32; a shared span is split
- * evenly between the units that claim it, in list order.
+ * Two units share weeks 31-32; a shared span is split evenly between the
+ * units that claim it, in list order.
  */
 export function scienceUnitForWeek(dateISO: string): ScienceUnit | null {
   const n = dayNum(dateISO);

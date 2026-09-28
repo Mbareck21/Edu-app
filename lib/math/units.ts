@@ -1,36 +1,26 @@
-import { FPS_QUARTERS } from "@/lib/curriculum";
+import { quarterDay } from "@/lib/curriculum";
 
 import type { MathUnit } from "./types";
 
 /**
  * Fayetteville Public Schools, Grade 4 Math Year-at-a-Glance 2026-27.
  *
- * The quarter windows are the district calendar's, read from FPS_QUARTERS in
- * lib/curriculum.ts — the one place they are written down. Units 1, 3, 4 and 6
- * end on a quarter boundary; units 2 and 5 are listed as spanning two quarters
- * with no exact dates, so they take the front of the quarter they share and
- * the mid-quarter hand-over below decides where that front ends.
+ * The district gives each unit a number of school days inside each quarter
+ * (docs/curriculum-fps-grade4.md, section 2): Q1 is "What is a
+ * Mathematician?" 4, Unit 1 28, Unit 2 10; Q2 is Unit 2 18, Unit 3 25; Q3 is
+ * Unit 4 35, Unit 5 8; Q4 is Unit 5 8, Unit 6 22, then ATLAS review. The
+ * windows below count those days out on the district calendar (quarterDay).
+ * They used to run Unit 1 to the end of Q1 and start each shared unit at a
+ * quarter, so from 25 September the Home card still said Unit 1, lesson 5,
+ * while the class had moved on to multiplying and dividing.
  */
-const Q = Object.fromEntries(FPS_QUARTERS.map((q) => [q.id, q])) as Record<
-  (typeof FPS_QUARTERS)[number]["id"],
-  (typeof FPS_QUARTERS)[number]
->;
-
-/**
- * The two mid-quarter hand-overs. Not on the district calendar — the last
- * school day of the outgoing unit and the first of the next one, picked so
- * the units stay in school order with no overlap. Literals on purpose.
- */
-const Q2_HANDOVER = { last: "2026-11-13", next: "2026-11-16" } as const;
-const Q3_HANDOVER = { last: "2027-02-12", next: "2027-02-16" } as const;
-
 export const MATH_UNITS: readonly MathUnit[] = [
   {
     id: 1,
     name: "Place Value: Add & Subtract",
     quarter: "Q1",
-    start: Q.Q1.start,
-    end: Q.Q1.end,
+    start: quarterDay("Q1", 5),
+    end: quarterDay("Q1", 32),
     standards: ["4.NPV.1", "4.NPV.2", "4.CAR.2"],
     skills: ["place-value", "number-forms", "add-sub-big"],
   },
@@ -38,8 +28,8 @@ export const MATH_UNITS: readonly MathUnit[] = [
     id: 2,
     name: "Place Value: Multiply & Divide",
     quarter: "Q1-Q2",
-    start: Q.Q2.start,
-    end: Q2_HANDOVER.last,
+    start: quarterDay("Q1", 33),
+    end: quarterDay("Q2", 18),
     standards: ["4.CAR.3", "4.CAR.8"],
     skills: ["mul-facts", "mul-multi", "word-problems"],
   },
@@ -47,8 +37,8 @@ export const MATH_UNITS: readonly MathUnit[] = [
     id: 3,
     name: "Multiply & Divide Multi-Digit",
     quarter: "Q2",
-    start: Q2_HANDOVER.next,
-    end: Q.Q2.end,
+    start: quarterDay("Q2", 19),
+    end: quarterDay("Q2", 43),
     standards: ["4.CAR.3", "4.CAR.4"],
     skills: ["division", "factors-multiples"],
   },
@@ -56,8 +46,8 @@ export const MATH_UNITS: readonly MathUnit[] = [
     id: 4,
     name: "Fractions",
     quarter: "Q3",
-    start: Q.Q3.start,
-    end: Q3_HANDOVER.last,
+    start: quarterDay("Q3", 1),
+    end: quarterDay("Q3", 35),
     standards: ["4.NPV.7", "4.DA.1"],
     skills: ["fractions", "data"],
   },
@@ -65,8 +55,8 @@ export const MATH_UNITS: readonly MathUnit[] = [
     id: 5,
     name: "Decimal Fractions",
     quarter: "Q3-Q4",
-    start: Q3_HANDOVER.next,
-    end: Q.Q3.end,
+    start: quarterDay("Q3", 36),
+    end: quarterDay("Q4", 8),
     standards: [],
     skills: ["decimals"],
   },
@@ -74,8 +64,8 @@ export const MATH_UNITS: readonly MathUnit[] = [
     id: 6,
     name: "Angles & Plane Figures",
     quarter: "Q4",
-    start: Q.Q4.start,
-    end: Q.Q4.end,
+    start: quarterDay("Q4", 9),
+    end: quarterDay("Q4", 30),
     standards: ["4.GM.3", "4.GM.5"],
     skills: ["geometry", "angles", "shapes"],
   },

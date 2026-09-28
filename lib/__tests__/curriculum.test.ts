@@ -99,13 +99,16 @@ test("science units have enough words and monotonic weeks", () => {
 
 test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2026-08-11")?.id, undefined); // week 1: no unit yet
-  // The 2-9 span is shared and splits in list order, so adding the Growing
-  // Plants investigation moved the other two along. It goes first on purpose:
-  // it is the investigation his class is running now, and a reading topic a
-  // month after the worksheet is no use to him.
+  // The district plan has two units in weeks 2-9, Adaptations then Senses.
+  // The Growing Plants investigation opens the first (weeks 2-3), then
+  // Adaptations 4-5 and Senses 6-9. Split three ways, the card still said
+  // Adaptations on 28 September.
   assert.equal(scienceUnitForWeek("2026-08-18")?.id, "growing-plants"); // week 2
-  assert.equal(scienceUnitForWeek("2026-09-22")?.id, "adaptations"); // week 7
-  assert.equal(scienceUnitForWeek("2026-09-29")?.id, "senses"); // week 8
+  assert.equal(scienceUnitForWeek("2026-08-25")?.id, "growing-plants"); // week 3
+  assert.equal(scienceUnitForWeek("2026-09-01")?.id, "adaptations"); // week 4
+  assert.equal(scienceUnitForWeek("2026-09-15")?.id, "senses"); // week 6
+  assert.equal(scienceUnitForWeek("2026-09-28")?.id, "senses"); // week 7
+  assert.equal(scienceUnitForWeek("2026-10-06")?.id, "senses"); // week 9
   assert.equal(scienceUnitForWeek("2026-11-03")?.id, "earth-features");
   assert.equal(scienceUnitForWeek("2027-01-12")?.id, "energy");
   assert.equal(scienceUnitForWeek("2027-03-16")?.id, "waves");
@@ -152,4 +155,35 @@ test("leftover weeks cycle back through the units for review", () => {
   assert.ok(isReviewWeek(late));
   assert.equal(themeForWeek(late).id, READING_THEMES[0].id);
   assert.equal(themeForWeek("2027-04-19").id, READING_THEMES[1].id);
+});
+
+test("the school calendar counts out to the district's own day totals", async () => {
+  const { schoolDaysOf } = await import("@/lib/curriculum");
+  const counts = Object.fromEntries(FPS_QUARTERS.map((q) => [q.id, schoolDaysOf(q).length]));
+  assert.equal(counts.Q1, 42);
+  assert.equal(counts.Q2, 43);
+  assert.equal(counts.Q3, 45);
+  assert.equal(counts.Q4, 44);
+  assert.ok(!schoolDaysOf(FPS_QUARTERS[0]).includes("2026-09-07"), "Labor Day");
+  assert.ok(!schoolDaysOf(FPS_QUARTERS[3]).includes("2027-03-24"), "spring break");
+});
+
+test("the reading-skills line moves with the weeks and stays in the quarter", async () => {
+  const { elaFocus } = await import("@/lib/curriculum");
+  // It showed the same two Q1 standards every day for the whole quarter.
+  const q1 = ELA_STANDARDS.filter((s) => s.quarters.includes("Q1")).map((s) => s.code);
+  const shown = new Set<string>();
+  const pairs: string[] = [];
+  for (const monday of ["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"]) {
+    const focus = elaFocus(monday);
+    assert.equal(focus.length, 2, monday);
+    for (const s of focus) {
+      assert.ok(q1.includes(s.code), `${monday}: ${s.code} is not a Q1 standard`);
+      shown.add(s.code);
+    }
+    pairs.push(focus.map((s) => s.code).join("+"));
+  }
+  assert.deepEqual([...shown].sort(), [...q1].sort(), "every Q1 standard gets its turn");
+  for (let i = 1; i < pairs.length; i++) assert.notEqual(pairs[i], pairs[i - 1], "next week is a different pair");
+  assert.deepEqual(elaFocus("2027-07-01"), []);
 });

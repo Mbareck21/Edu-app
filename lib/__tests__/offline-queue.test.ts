@@ -9,7 +9,9 @@ import {
   postSession,
   queueSize,
   saveNote,
+  shownXp,
 } from "@/lib/offline-queue";
+import { estimateXp } from "@/lib/rewards";
 import type { SessionResult } from "@/lib/types";
 
 // offline-queue only touches storage when `window` exists, so the fake window
@@ -256,4 +258,22 @@ test("a finished passage that cannot be sent waits, and the flush sends it", asy
   await flushQueue();
   assert.equal(sentReadings.length, 2);
   assert.equal(JSON.parse(store.get(READING_QUEUE_KEY) ?? "[]").length, 0);
+});
+
+test("a session already saved, whose first reply was lost, still shows its XP", async () => {
+  // The first send reached the server but its answer never came back; the
+  // retry is told "already applied" with xp 0, and the finish screen showed
+  // +0 for work that was paid for.
+  respondWith(
+    () =>
+      new Response(
+        JSON.stringify({ replay: true, gained: { xp: 0, newBadges: [] }, profile: { xp: 500 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+  );
+  const res = await postSession(session);
+  assert.equal(res.saved, true);
+  assert.equal(shownXp(res, session), estimateXp(session));
+  assert.ok(estimateXp(session) > 0);
+  assert.equal(queueSize(), 0, "it is saved, so it leaves the phone");
 });

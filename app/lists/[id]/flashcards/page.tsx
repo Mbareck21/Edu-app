@@ -1,41 +1,8 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import mongoose from "mongoose";
-import { db } from "@/lib/db";
-import { toClient } from "@/lib/models/WordList";
-import Flashcards from "@/components/Flashcards";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function FlashcardsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+// The old flashcards page. Its words are practised on the unit's path now; an
+// old link or bookmark lands there instead of on the retired page.
+export default async function OldFlashcardsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!mongoose.isValidObjectId(id)) notFound();
-  const { WordList } = await db();
-  const doc = await WordList.findById(id).lean();
-  if (!doc) notFound();
-  const list = toClient(doc);
-
-  return (
-    <main className="mx-auto max-w-2xl px-4 py-6 space-y-4">
-      <nav className="text-sm">
-        {/* Home, not the list editor: that page is for grown-ups (PIN). */}
-        <Link href="/" className="inline-flex min-h-11 items-center font-bold text-slate-600">
-          ← Home
-        </Link>
-      </nav>
-      <header>
-        <h1 className="text-2xl font-bold">Flashcards — {list.name}</h1>
-        <p className="text-sm text-slate-600">
-          Tap the card to see what the word means. Then rate how easy it was —
-          the next time depends on your answer.
-        </p>
-      </header>
-
-      <Flashcards list={list} />
-    </main>
-  );
+  redirect(`/learn/${encodeURIComponent(id)}`);
 }

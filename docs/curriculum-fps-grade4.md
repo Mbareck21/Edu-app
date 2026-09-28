@@ -13,6 +13,10 @@ What Nour's school teaches, when, and which parts of this app exercise it.
 | Q3 | Jan 5 – Mar 11, 2027 | 45 |
 | Q4 | Mar 12 – May 20, 2027 | 44 |
 
+**Days off inside the quarters** (FPS "2026-27 District Calendar for Parents", approved Jan 22 2026, linked from asbell.fayar.net): Labor Day Sep 7; parent-teacher conferences Oct 23; Thanksgiving Nov 23–27; MLK Day Jan 18; PD day Feb 12; flex make-up days Feb 15 and Apr 23; spring break Mar 22–26. Fall break (Oct 9, 12) and winter break (Dec 21 – Jan 4) fall between quarters. Counted out, these give exactly the quarter totals above. `lib/curriculum.ts` (`FPS_DAYS_OFF`, `quarterDay`) uses them to place the math units by their day counts.
+
+**Where the unit plans live:** Asbell's site links an FPS Curriculum & Instruction doc ("Curriculum" in the header) whose 4th Grade ELA, Math and Science entries are the public Year-at-a-Glance sheets used here. Science there lists two units for weeks 2–9 (Plants & Animals Adaptations, then Animals: Senses & Information Processing); the app splits those weeks evenly, after the Growing Plants investigation in weeks 2–3.
+
 FPS note on the ELA sheet: if a student is not proficient (3) on a standard in Q1–Q3, that standard is reassessed in Q4, and every standard carries a Q4 grade.
 
 ---

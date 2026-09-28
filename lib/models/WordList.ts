@@ -237,6 +237,15 @@ export const WordListSchema = new Schema(
   { timestamps: true }
 );
 
+// One Stuck-words pool per database, enforced by the database itself. getPool
+// upserts it, and two first requests at the same moment (Wissam's first day
+// on a new database) could each create one. Only pool documents are indexed.
+// kind -1 because kind 1 already has a plain index; the key has to differ.
+WordListSchema.index(
+  { kind: -1 },
+  { name: "one_pool", unique: true, partialFilterExpression: { kind: "pool" } }
+);
+
 export type WordListDoc = InferSchemaType<typeof WordListSchema> & { _id: unknown };
 
 export const WordList: Model<WordListDoc> =

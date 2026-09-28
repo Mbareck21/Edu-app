@@ -163,8 +163,18 @@ test("units cover the whole year and every skill once", () => {
 test("currentUnit finds the unit school is in", () => {
   assert.equal(currentUnit("2026-08-11").id, 1);
   assert.equal(currentUnit("2026-09-20").id, 1);
-  assert.equal(currentUnit("2026-10-08").id, 1);
+  // Unit 1 is 28 school days after the 4-day "What is a Mathematician?", so
+  // it ends 24 September and Unit 2 starts inside Q1, not at Q2.
+  assert.equal(currentUnit("2026-09-24").id, 1);
+  assert.equal(currentUnit("2026-09-25").id, 2);
+  assert.equal(currentUnit("2026-10-08").id, 2);
   assert.equal(currentUnit("2026-10-20").id, 2);
+  assert.equal(currentUnit("2026-11-06").id, 2);
+  assert.equal(currentUnit("2026-11-09").id, 3);
+  assert.equal(currentUnit("2027-02-25").id, 4);
+  assert.equal(currentUnit("2027-02-26").id, 5);
+  assert.equal(currentUnit("2027-03-30").id, 5);
+  assert.equal(currentUnit("2027-03-31").id, 6);
   assert.equal(currentUnit("2026-12-01").id, 3);
   assert.equal(currentUnit("2027-01-20").id, 4);
   assert.equal(currentUnit("2027-03-01").id, 5);
