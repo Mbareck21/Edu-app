@@ -235,10 +235,30 @@ export function buildLesson({
 
   const school: LessonItem[] = [];
   for (let i = 0; i < schoolCount; i++) {
-    school.push(schoolItem(pool, rng, ordered[i]));
+    // The word-part and joining banks are small: two draws could be the same
+    // question (about 1 lesson in 100), and interleave can put them side by
+    // side. Draw again. Compared by what it asks, not by id.
+    let item = schoolItem(pool, rng, ordered[i]);
+    for (let tries = 0; tries < 6 && school.some((s) => sameQuestion(s, item)); tries++) {
+      item = schoolItem(pool, rng, ordered[i]);
+    }
+    school.push(item);
   }
 
   return [...blocked, ...interleave([...body, ...school])];
+}
+
+/** The same question, whatever order its options come in. */
+function sameQuestion(a: LessonItem, b: LessonItem): boolean {
+  const key = (i: LessonItem) =>
+    JSON.stringify([
+      i.kind,
+      "answer" in i ? i.answer : "",
+      "part" in i ? i.part : "",
+      "lead" in i ? i.lead : "",
+      "first" in i ? i.first : "",
+    ]);
+  return key(a) === key(b);
 }
 
 export type ReviewList = {

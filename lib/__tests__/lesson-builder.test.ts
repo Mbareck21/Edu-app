@@ -27,6 +27,7 @@ import {
 } from "@/lib/lesson-builder";
 import { scheduleSkill, wordKnowledge } from "@/lib/mastery";
 import { mulberry32 } from "@/lib/math/rng";
+import { WORD_PACKS } from "@/lib/word-packs";
 import type { ClientWord, SkillState, WordSkills } from "@/lib/models/WordList";
 
 const NOW = new Date("2026-08-19T10:00:00.000Z");
@@ -546,4 +547,24 @@ test("a lesson with no words is empty, not broken", () => {
     rng: mulberry32(1),
   });
   assert.deepEqual(lesson, []);
+});
+
+test("a Use or Challenge lesson never deals the same word-part or joining question twice", () => {
+  // A pack's words, all started: the case where 1 lesson in 100 did.
+  const pack = WORD_PACKS.find((p) => p.id === "growing-plants");
+  assert.ok(pack);
+  const words = pack.words.map((w) => seen(w.word));
+  const key = (i: LessonItem) =>
+    JSON.stringify([i.kind, "answer" in i ? i.answer : "", "lead" in i ? i.lead : "", "first" in i ? i.first : ""]);
+  let dupes = 0;
+  for (const step of ["use", "challenge"] as const) {
+    for (let seedNum = 1; seedNum <= 2000; seedNum++) {
+      const lesson = buildLesson({ words, step, now: NOW, rng: mulberry32(seedNum * 13 + 1), listId: "g" });
+      const school = lesson.filter((i) =>
+        ["word-part-meaning", "word-part-build", "sentence-combine"].includes(i.kind)
+      );
+      if (new Set(school.map(key)).size < school.length) dupes++;
+    }
+  }
+  assert.equal(dupes, 0);
 });
