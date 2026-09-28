@@ -168,7 +168,7 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
         ) : null}
         <div className="mt-3 overflow-x-auto">
           <table
-            className="w-full border-separate"
+            className="w-full table-fixed border-separate"
             style={{ borderSpacing: 2 }}
             aria-label="Times tables grid"
           >

@@ -53,7 +53,7 @@ export default function CreatureCollection({ badges }: { badges: CollectionBadge
               sfx.tap();
               setTab(n);
             }}
-            className="whitespace-nowrap rounded-full px-1 py-1.5 font-display text-sm font-bold"
+            className="min-h-[44px] rounded-full px-1 py-1.5 font-display text-sm leading-tight font-bold"
             style={{
               background: tab === n ? "var(--color-gold-soft)" : "var(--color-sand)",
               color: tab === n ? "var(--color-gold-ink)" : "var(--color-muted)",

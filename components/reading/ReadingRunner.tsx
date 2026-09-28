@@ -396,7 +396,7 @@ function ReadingRunnerInner({
     patchQ(qIdx, { done: true });
     setFeedback({
       state: "correct",
-      title: judged.verdict === "correct" ? "That's it." : "Yes — that's the idea.",
+      title: judged.verdict === "correct" ? "That's it!" : "Yes — that's the idea.",
       line: withNames(
         judged.verdict === "correct"
           ? q.acceptable[0]
@@ -412,7 +412,7 @@ function ReadingRunnerInner({
     setPicked(index);
     if (index === q.answerIndex) {
       patchQ(qIdx, { done: true });
-      setFeedback({ state: "correct", title: "That's it.", line: q.options[index] });
+      setFeedback({ state: "correct", title: "That's it!", line: q.options[index] });
     } else {
       setTried((t) => [...t, `#${index}`]);
       markWrong(qIdx);
@@ -520,7 +520,7 @@ function ReadingRunnerInner({
   if (phase === "done") {
     return (
       <LessonComplete
-        title={perfect ? "Every one right." : "Reading done."}
+        title={perfect ? "Every one right!" : "Reading done!"}
         subtitle={
           echo
               ? `You read back ${echo.passed} of ${echo.sentences} sentences.`
@@ -919,7 +919,7 @@ function ReadingRunnerInner({
             </span>
             <p className="text-sm" style={{ color: "var(--color-muted)" }}>
               The answer is in the <strong>marked sentence</strong> above. Read it
-              again, then write it your own way.
+              again, then {isMcq ? "pick the answer." : "write it your own way."}
             </p>
           </div>
         ) : null}
@@ -978,9 +978,16 @@ function ReadingRunnerInner({
                   disabled={state.done}
                   className="press-3d w-full rounded-tile border-2 px-4 py-3 text-left text-base"
                   style={{
+                    // Right pick green, a miss flashes coral, and a tried
+                    // option stays faded so he can see what is left.
                     borderColor:
-                      picked === i ? "var(--color-coral)" : "var(--color-line)",
-                    background: "#fff",
+                      picked === i
+                        ? state.done
+                          ? "var(--color-green)"
+                          : "var(--color-coral)"
+                        : "var(--color-line)",
+                    background: picked === i && state.done ? "var(--color-green-soft)" : "#fff",
+                    opacity: tried.includes(`#${i}`) ? 0.45 : 1,
                   }}
                 >
                   {opt}

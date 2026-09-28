@@ -111,13 +111,14 @@ export default function LessonComplete({
     else if (perfect) sfx.chest();
   }, [perfect, leveledUp]);
 
-  // A finished beat of the plan gets its own cheer, unless the one above
-  // already fired: small for a beat, big for the last one of the day.
+  // Every finish gets a cheer, unless the one above already fired: small for
+  // a lesson or a beat of the plan, big for the last beat of the day.
   const inPlan = plan !== undefined;
   const planDone = plan !== undefined && plan.done >= plan.total;
   useEffect(() => {
-    if (!inPlan || perfect || leveledUp) return;
+    if (perfect || leveledUp) return;
     void fireConfetti(planDone ? "big" : "small");
+    if (!inPlan) return;
     if (planDone) sfx.levelUp();
     else sfx.correct();
   }, [inPlan, planDone, perfect, leveledUp]);

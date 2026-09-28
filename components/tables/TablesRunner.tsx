@@ -236,7 +236,7 @@ export default function TablesRunner({
     return (
       <div className="safe-top safe-bottom">
         <LessonComplete
-          title={outcome.stars === 3 ? "Lightning fast!" : outcome.stars > 0 ? `${label} done!` : "Round done."}
+          title={outcome.stars === 3 ? "Lightning fast!" : outcome.stars > 0 ? `${label} done!` : "Round done!"}
           subtitle={`${outcome.correct} of ${facts.length} on the first try. ${starLine}`}
           xp={outcome.gained?.xp ?? 0}
           ms={outcome.ms}

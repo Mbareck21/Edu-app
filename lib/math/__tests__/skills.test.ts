@@ -200,6 +200,12 @@ test("every answer is a whole number he can type, across many seeds", () => {
             Number.isInteger(q.answer) && q.answer >= 0,
             `${skill.id} L${level} seed ${seed}: answer ${q.answer} in "${q.prompt}"`,
           );
+          // The answer box takes MAX_DIGITS (components/math/QuestionPad.tsx).
+          // At 7, 35,300,000 could not be typed and came back forever.
+          assert.ok(
+            String(q.answer).length <= 9,
+            `${skill.id} L${level} seed ${seed}: answer ${q.answer} too long for the pad`,
+          );
         }
       }
     }

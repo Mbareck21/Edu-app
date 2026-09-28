@@ -4,7 +4,7 @@ import BottomNav from "@/components/ui/BottomNav";
 import StuckBoard from "@/components/stuck/StuckBoard";
 import { db } from "@/lib/db";
 import { fromRow, type ChainState } from "@/lib/spell-chain";
-import { getPool } from "@/lib/word-source";
+import { clearSettledStuck, getPool, getUnits } from "@/lib/word-source";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Words" };
@@ -17,7 +17,8 @@ export const metadata = { title: "Words" };
  * The tab a nine-year-old taps should hand him something to do.
  */
 export default async function WordsPage() {
-  const pool = await getPool();
+  const [raw, units] = await Promise.all([getPool(), getUnits()]);
+  const pool = await clearSettledStuck(raw, units);
   const { SpellChain } = await db();
 
   const words = pool.words.map((w) => w.word);
@@ -43,8 +44,8 @@ export default async function WordsPage() {
 
         <StuckBoard list={pool} chains={chains} />
 
-        <p className="mt-10 text-center text-sm" style={{ color: "var(--color-muted)" }}>
-          <Link href="/me/lists" className="font-bold underline underline-offset-4">
+        <p className="mt-7 text-center text-sm" style={{ color: "var(--color-muted)" }}>
+          <Link href="/me/lists" className="inline-block py-3 font-bold underline underline-offset-4">
             Manage word lists
           </Link>
         </p>

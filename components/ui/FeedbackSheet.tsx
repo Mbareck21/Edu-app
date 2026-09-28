@@ -39,7 +39,7 @@ export default function FeedbackSheet({
 
   const good = feedback.state === "correct";
   const t = tone(good ? "green" : "coral");
-  const title = feedback.title ?? (good ? "Nice work!" : "Not this time");
+  const title = feedback.title ?? (good ? "Nice work!" : "Good try!");
   const line =
     feedback.line ??
     (good ? "" : feedback.state === "wrong" && feedback.answer ? `Answer: ${feedback.answer}` : "");

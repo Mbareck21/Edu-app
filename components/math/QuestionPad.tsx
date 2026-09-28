@@ -13,8 +13,8 @@ import { speakable, termSegments, type MathTerm } from "@/lib/math/vocab";
 export const FLASH_MS = 520;
 /** How many other questions come before a missed one comes back. */
 export const REQUEUE_AFTER = 2;
-/** Longest answer the box takes. */
-const MAX_DIGITS = 7;
+/** Longest answer the box takes: Grade 5 place value runs to 100,000,000. */
+export const MAX_DIGITS = 9;
 
 /** Sends the question at the head of the queue back a few places. */
 export function requeue(queue: number[]): number[] {

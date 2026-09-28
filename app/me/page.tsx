@@ -66,6 +66,9 @@ export default async function MePage() {
     learner,
     name: s.name || LEARNER_NAMES[learner],
     xp: raceXp(s.activity, today),
+    earned: s.activity
+      .filter((a) => todayKey(new Date(a.at)) === today)
+      .reduce((sum, a) => sum + Math.max(0, a.xp || 0), 0),
     isMe: learner === me,
   }));
   const rivalry = await currentRivalry(family, now);
@@ -143,7 +146,7 @@ export default async function MePage() {
       {/* This week */}
       <Card className="mt-3">
         <h2 className="font-display text-lg font-bold">This week</h2>
-        <div className="mt-3 flex justify-between">
+        <div className="mt-3 grid grid-cols-7 gap-1">
           {week.map((day) => {
             const on = activeDays.has(day);
             const isToday = day === today;
@@ -151,7 +154,7 @@ export default async function MePage() {
             return (
               <div key={day} className="flex flex-col items-center gap-1">
                 <span
-                  className="flex h-10 w-10 items-center justify-center rounded-full border-2"
+                  className="flex aspect-square w-full max-w-10 items-center justify-center rounded-full border-2"
                   style={{
                     background: on ? "var(--color-green)" : "#fff",
                     borderColor: isToday
@@ -180,7 +183,7 @@ export default async function MePage() {
         <p className="text-sm" style={{ color: "var(--color-muted)" }}>
           The last seven days, and what comes due tomorrow.
         </p>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dl className="mt-3 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-4 gap-y-1.5 text-sm">
           {(
             [
               ["Time on task", `${digest.minutes} min in ${digest.sessions} sessions`],

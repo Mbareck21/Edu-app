@@ -34,13 +34,11 @@ export default function RescueRunner({
   seed,
   sessionRef,
   listId,
-  againHref,
 }: {
   words: RescueWord[];
   seed: number;
   sessionRef: string;
   listId?: string;
-  againHref: string;
 }) {
   const router = useRouter();
   const puzzles = useMemo(() => {
@@ -194,7 +192,7 @@ export default function RescueRunner({
             ? { ...outcome.gained.newBadges[0] }
             : null
         }
-        primary={{ label: "Play again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
+        primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
         secondary={{ label: "All drills", href: "/drill" }}
         note={outcome.note}
       />

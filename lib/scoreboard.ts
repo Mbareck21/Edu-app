@@ -10,7 +10,7 @@ import type { ActivityEntry } from "@/lib/types";
 /** The race closes at bedtime: later play still earns XP, just not the day's win. */
 export const RACE_CLOSES = "21:30";
 /** The most XP that counts in one day's race, so it is not won by playing longest. */
-export const RACE_CAP = 5000;
+export const RACE_CAP = 10000;
 
 /** Sessions of one kind a day that count in full; the ones after count half. */
 export const RACE_FULL_PER_KIND = 2;
@@ -69,7 +69,7 @@ export function raceClosed(now: Date = new Date(), timeZone?: string): boolean {
   return clockKey(now, timeZone) >= RACE_CLOSES;
 }
 
-/** A short cheer for one child, given everyone's XP today. */
+/** A short cheer for one child, given everyone's race points today. */
 export function nudge(me: { xp: number }, rows: readonly { name: string; xp: number }[]): string {
   const others = rows.filter((r) => r !== me);
   const best = others.reduce((a, b) => (b.xp > a.xp ? b : a), others[0]);
@@ -77,6 +77,6 @@ export function nudge(me: { xp: number }, rows: readonly { name: string; xp: num
   if (me.xp === 0 && best.xp === 0) return "New day! First to play takes the lead.";
   if (me.xp === 0) return `Play a round to catch ${best.name}!`;
   if (me.xp === best.xp) return "Tied! One more round breaks it.";
-  if (me.xp > best.xp) return `Ahead by ${me.xp - best.xp} XP. Keep it up!`;
-  return `${best.xp - me.xp} XP to catch ${best.name}!`;
+  if (me.xp > best.xp) return `Ahead by ${me.xp - best.xp} pts. Keep it up!`;
+  return `${best.xp - me.xp} pts to catch ${best.name}!`;
 }

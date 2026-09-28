@@ -12,6 +12,7 @@ import { postSession, saveNote } from "@/lib/offline-queue";
 import { clearProgress, resumeKey, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import type { PlanProgress } from "@/lib/daily-plan";
+import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { sfx } from "@/lib/sfx";
 import {
   structureSession,
@@ -127,6 +128,12 @@ function StructureRunnerInner({
   }, [bankedMs]);
   const [elapsedMs, setElapsedMs] = useState(0);
   const savedRef = useRef(false);
+  // The "not this one" box and the solved panel open below the choices, off a
+  // phone screen: a tap looked like it did nothing. Bring them into view.
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (picked || solved) scrollIntoViewIfNeeded(feedbackRef.current, "end");
+  }, [picked, solved]);
   const [saving, setSaving] = useState(false);
   const [gainedXp, setGainedXp] = useState(0);
   const [queuedNote, setQueuedNote] = useState<string | undefined>(undefined);
@@ -197,7 +204,7 @@ function StructureRunnerInner({
   if (phase === "done") {
     return (
       <LessonComplete
-        title={perfect ? "Every one right." : "Structures done."}
+        title={perfect ? "Every one right!" : "Structures done!"}
         subtitle={`You spotted ${firstTry} of ${rounds.length} on the first try.`}
         xp={gainedXp}
         ms={elapsedMs}
@@ -284,7 +291,7 @@ function StructureRunnerInner({
 
       <Card className={`mt-5 ${shake ? "q-shake" : ""}`}>
         {solved ? (
-          <div className="space-y-4">
+          <div ref={feedbackRef} className="space-y-4">
             <div className="flex items-start gap-3">
               <span
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
@@ -294,7 +301,7 @@ function StructureRunnerInner({
               </span>
               <div className="min-w-0">
                 <p className="font-display text-lg font-bold">
-                  That&rsquo;s it. {right.name}.
+                  That&rsquo;s it! {right.name}.
                 </p>
                 <p className="text-sm" style={{ color: "var(--color-muted)" }}>
                   {right.question} Yes. The signal words are marked in the
@@ -358,6 +365,7 @@ function StructureRunnerInner({
 
             {wrong ? (
               <div
+                ref={feedbackRef}
                 className="mt-4 rounded-tile px-3 py-3"
                 style={{ background: "var(--color-coral-soft)" }}
               >

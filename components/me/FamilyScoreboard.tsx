@@ -8,14 +8,19 @@ import { nudge } from "@/lib/scoreboard";
 export type ScoreRow = {
   learner: string;
   name: string;
+  /** Race points: today's XP after the 9:30 pm close, the halving and the cap. */
   xp: number;
+  /** Every XP he earned today, all of which his level keeps. */
+  earned: number;
   isMe: boolean;
 };
 
 const COLORS: AccentColor[] = ["blue", "purple"];
 
 /**
- * Both children's XP today, a fresh race every day, leader on top. Each keeps
+ * Both children's race points today (see raceXp), a fresh race every day,
+ * leader on top, with the XP each really earned beside them: calling race
+ * points "XP" made them think XP had been taken away. Each keeps
  * his colour, gets a nudge to catch up or stay ahead, and shows his trophy
  * points: the days he is ahead in the tug of war (see lib/rivalry.ts). The
  * headline is what they made together.
@@ -39,20 +44,20 @@ export default function FamilyScoreboard({
 
   return (
     <Card className="mt-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg font-bold">Family scoreboard</h2>
         <span
           className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold"
           style={{ background: "var(--color-gold-soft)", color: "var(--color-gold-ink)" }}
         >
           <Icon name="bolt" size={14} />
-          {together} XP together
+          {together} pts together
         </span>
       </div>
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {closed
           ? "Race closed for tonight. A new race starts at midnight."
-          : "Today, until 9:30 pm. Up to 5,000 XP counts. Mix it up: the 3rd of the same thing counts half."}
+          : "Today, until 9:30 pm. Up to 10,000 pts counts. Mix it up: the 3rd of the same thing counts half."}
       </p>
       <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
         {holder
@@ -88,7 +93,12 @@ export default function FamilyScoreboard({
                       🏆 {pointsOf(rivalry, r.learner)}
                     </span>
                   </p>
-                  <p className="font-display text-sm font-bold">{r.xp} XP</p>
+                  <p className="shrink-0 text-right font-display text-sm font-bold">
+                    {r.xp} pts
+                    <span className="ml-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
+                      · {r.earned} XP
+                    </span>
+                  </p>
                 </div>
                 <ProgressBar value={r.xp / top} color={color} height={10} className="mt-1" />
                 <p className="mt-1 text-[11px] font-bold" style={{ color: "var(--color-muted)" }}>

@@ -23,10 +23,12 @@ test("race XP counts today in the kid's timezone, before 9:30 pm", () => {
 test("race XP stops counting at the cap, and the race closes at 9:30 pm", () => {
   const long = ["quest:review", "math:place-value", "drill:vocab:mixed"].map((ref) => ({
     at: "2026-09-25T15:00:00.000Z",
-    xp: 2000,
+    xp: 4000,
     ref,
   }));
+  assert.equal(RACE_CAP, 10000);
   assert.equal(raceXp(long, "2026-09-25", TZ), RACE_CAP);
+  assert.equal(raceXp(long.slice(0, 2), "2026-09-25", TZ), 8000, "under the cap counts in full");
   assert.equal(raceClosed(new Date("2026-09-26T02:29:00.000Z"), TZ), false); // 21:29
   assert.equal(raceClosed(new Date("2026-09-26T02:30:00.000Z"), TZ), true); // 21:30
 });
@@ -69,13 +71,13 @@ test("mixing kinds counts every session in full", () => {
 test("the cap applies after the halving", () => {
   const same = Array.from({ length: 6 }, () => ({
     at: "2026-09-25T15:00:00.000Z",
-    xp: 1500,
+    xp: 3000,
     ref: "drill:vocab:mixed",
   }));
-  // 1500 + 1500 + 4 x 750 = 6000, capped.
+  // 3000 + 3000 + 4 x 1500 = 12000, capped.
   assert.equal(raceXp(same, "2026-09-25", TZ), RACE_CAP);
-  // 1500 + 1500 + 750 = 3750: under the cap, and not 4500.
-  assert.equal(raceXp(same.slice(0, 3), "2026-09-25", TZ), 3750);
+  // 3000 + 3000 + 1500 = 7500: under the cap, and not 9000.
+  assert.equal(raceXp(same.slice(0, 3), "2026-09-25", TZ), 7500);
 });
 
 test("activity kinds group by what he is learning", () => {
@@ -96,8 +98,8 @@ test("the nudge cheers the leader and tells the other how far to go", () => {
   const nour = { name: "Nour", xp: 120 };
   const wissam = { name: "Wissam", xp: 80 };
   const rows = [nour, wissam];
-  assert.equal(nudge(nour, rows), "Ahead by 40 XP. Keep it up!");
-  assert.equal(nudge(wissam, rows), "40 XP to catch Nour!");
+  assert.equal(nudge(nour, rows), "Ahead by 40 pts. Keep it up!");
+  assert.equal(nudge(wissam, rows), "40 pts to catch Nour!");
 });
 
 test("the nudge handles a fresh day, a zero and a tie", () => {

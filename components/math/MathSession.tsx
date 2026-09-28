@@ -214,7 +214,7 @@ function MathSessionInner({
     setShakeKey((k) => k + 1);
     setFeedback({
       state: "wrong",
-      title: `The answer is ${question.answer}`,
+      title: `The answer is ${question.answer.toLocaleString("en-US")}`,
       line: question.how,
     });
   }, [advance, feedback, flash, hinted, input, queue, question]);
