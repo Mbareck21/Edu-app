@@ -55,7 +55,12 @@ export type Visual =
   | { kind: "table"; rows: DataRow[] }
   | { kind: "bars"; bars: DataRow[]; scale: number }
   | { kind: "angle"; total: number; known: number }
-  | { kind: "shape"; name: ShapeName }
+  | {
+      kind: "shape";
+      name: ShapeName;
+      /** Drawn beside the first when the question counts two kinds of shape. */
+      second?: ShapeName;
+    }
   | { kind: "none" };
 
 export type MathQuestion = {

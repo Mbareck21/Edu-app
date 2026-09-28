@@ -16,6 +16,7 @@ import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { sfx } from "@/lib/sfx";
 import type { SessionResult } from "@/lib/types";
 import {
+  rememberDealt,
   structureSession,
   TEXT_STRUCTURES,
   findSignalWords,
@@ -27,9 +28,35 @@ import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 export type StructureRunnerProps = {
   /** Server-minted seed. Same seed = same answer options, and the Again link. */
   seed: number;
+  /** Who is playing. The brothers share a phone, and each has his own recent passages. */
+  learner: string;
   /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
   dayPlan?: PlanProgress;
 };
+
+/**
+ * Per child: the passage ids dealt in his last few sessions, oldest first.
+ * Not a resume key — it has to outlive the day and the sign-out that clear
+ * those, or every morning would start from a blank history.
+ */
+const seenKey = (learner: string) => `quest:structure-seen:${learner}`;
+
+function readSeen(learner: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(seenKey(learner)) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSeen(learner: string, ids: readonly string[]): void {
+  try {
+    window.localStorage.setItem(seenKey(learner), JSON.stringify(ids));
+  } catch {
+    // Private mode: the next session is dealt without steering, as before.
+  }
+}
 
 type Phase = "intro" | "play" | "done";
 
@@ -67,19 +94,23 @@ function SignalText({
 /**
  * Where he was: which passage, which he has missed, and the seed that built
  * the session — the page mints a new seed per request, so without it a
- * reload would deal a different set of passages.
+ * reload would deal a different set of passages. `recent` is the history the
+ * session was dealt against, for the same reason: the stored history already
+ * holds this session's passages, and dealing against it would swap them.
  */
-type Saved = { seed: number; idx: number; missed: boolean[]; ms?: number };
+type Saved = { seed: number; idx: number; missed: boolean[]; ms?: number; recent?: string[] };
 
 function isSaved(v: unknown): v is Saved {
   if (typeof v !== "object" || v === null) return false;
-  const o = v as { seed?: unknown; idx?: unknown; missed?: unknown; ms?: unknown };
+  const o = v as { seed?: unknown; idx?: unknown; missed?: unknown; ms?: unknown; recent?: unknown };
   return (
     typeof o.seed === "number" &&
     typeof o.idx === "number" &&
     Array.isArray(o.missed) &&
     o.missed.every((b) => typeof b === "boolean") &&
-    (o.ms === undefined || typeof o.ms === "number")
+    (o.ms === undefined || typeof o.ms === "number") &&
+    (o.recent === undefined ||
+      (Array.isArray(o.recent) && o.recent.every((id) => typeof id === "string")))
   );
 }
 
@@ -91,6 +122,7 @@ export default function StructureRunner(props: StructureRunnerProps) {
 
 function StructureRunnerInner({
   seed: freshSeed,
+  learner,
   dayPlan,
   saveKey,
   initial,
@@ -98,13 +130,17 @@ function StructureRunnerInner({
   // A resumed run keeps the seed that dealt its passages. Held in state, so a
   // refresh mid-lesson (a new seed from the server) cannot swap the passages.
   const [seed] = useState(initial ? initial.seed : freshSeed);
+  // The passages he saw lately, steered away from. A fresh run has none until
+  // Start reads them: the server cannot see them, and the intro shows no
+  // passage, so hydration has nothing to disagree about.
+  const [recent, setRecent] = useState<string[]>(initial?.recent ?? []);
   // Same seed on the server and here, so the options never jump on hydration.
   // The seed changes every visit, so the passages and their order do too —
   // walking the five in declaration order taught him the positions, not the
   // structures. See structureSession().
   const rounds = useMemo(
-    () => structureSession(mulberry32(seed % 2147483647)),
-    [seed]
+    () => structureSession(mulberry32(seed % 2147483647), recent),
+    [seed, recent]
   );
 
   // A saved run skips the intro: he has read it and was mid-lesson.
@@ -153,7 +189,7 @@ function StructureRunnerInner({
       setPicked(id);
       setMissed((m) => {
         const next = m.map((v, i) => (i === idx ? true : v));
-        saveProgress(saveKey, { seed, idx, missed: next, ms: watch.current?.read() ?? 0 });
+        saveProgress(saveKey, { seed, idx, missed: next, ms: watch.current?.read() ?? 0, recent });
         return next;
       });
       sfx.wrong();
@@ -168,7 +204,7 @@ function StructureRunnerInner({
       setIdx(idx + 1);
       setSolved(false);
       setPicked(null);
-      saveProgress(saveKey, { seed, idx: idx + 1, missed, ms: watch.current?.read() ?? 0 });
+      saveProgress(saveKey, { seed, idx: idx + 1, missed, ms: watch.current?.read() ?? 0, recent });
     } else {
       clearProgress(saveKey);
       setElapsedMs(watch.current?.read() ?? 0);
@@ -250,6 +286,11 @@ function StructureRunnerInner({
           size="lg"
           color="green"
           onClick={() => {
+            // Recorded as soon as they are dealt, not at the finish: a lesson
+            // he walks away from still showed him its texts.
+            const seen = readSeen(learner);
+            writeSeen(learner, rememberDealt(seen, structureSession(mulberry32(seed % 2147483647), seen)));
+            setRecent(seen);
             watch.current = startStopwatch();
             setPhase("play");
           }}

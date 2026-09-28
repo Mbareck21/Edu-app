@@ -49,10 +49,12 @@ test("progress and points to next are measured within the stage", () => {
 });
 
 test("mood follows today's lessons against the goal", () => {
-  assert.equal(petMood(0, 3), "sleepy");
-  assert.equal(petMood(1, 3), "happy");
-  assert.equal(petMood(3, 3), "proud");
-  assert.equal(petMood(1, 0), "proud");
+  assert.equal(petMood(0, 0, 3), "sleepy");
+  assert.equal(petMood(1, 1, 3), "happy");
+  assert.equal(petMood(3, 3, 3), "proud");
+  assert.equal(petMood(1, 1, 0), "proud");
+  // Eight sessions of one thing are one beat: not the goal.
+  assert.equal(petMood(8, 1, 3), "happy");
 });
 
 test("lines name what is next, with the right plural", () => {

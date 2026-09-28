@@ -25,7 +25,7 @@ import { LEARNER_NAMES } from "@/lib/learners";
 import { getFamilyProfiles, getProfile } from "@/lib/profile";
 import { settleDay } from "@/lib/rivalry";
 import { currentRivalry } from "@/lib/rivalry-store";
-import { raceClosed, raceXp } from "@/lib/scoreboard";
+import { questLeft, raceClosed, raceXp, winXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +67,7 @@ export default async function MePage() {
     learner,
     name: s.name || LEARNER_NAMES[learner],
     xp: raceXp(s.activity, today),
+    questLeft: questLeft(s.activity, today),
     earned: s.activity
       .filter((a) => todayKey(new Date(a.at)) === today)
       .reduce((sum, a) => sum + Math.max(0, a.xp || 0), 0),
@@ -79,7 +80,7 @@ export default async function MePage() {
   const closed = raceClosed(now);
   const rivalry =
     closed && settled.through === previousDay(today)
-    ? settleDay(settled, today, Object.fromEntries(scoreRows.map((r) => [r.learner, r.xp])))
+    ? settleDay(settled, today, Object.fromEntries(family.map(({ learner, state: s }) => [learner, winXp(s.activity, today)])))
     : settled;
 
   const earned = new Map(profile.badges.map((b) => [b.id, b.earnedAt]));

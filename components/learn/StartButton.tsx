@@ -8,6 +8,7 @@ import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import { fireConfetti } from "@/components/ui/Confetti";
 import Icon, { type IconName } from "@/components/ui/Icon";
 import { claimCheer, type BeatId } from "@/lib/daily-plan";
+import { MIN_WIN_PTS } from "@/lib/scoreboard";
 import { sfx } from "@/lib/sfx";
 
 /**
@@ -22,11 +23,13 @@ export default function StartButton({
   started,
   allDone,
   today,
+  race,
 }: {
   next: { id: BeatId; name: string; icon: IconName; href: string } | null;
   started: boolean;
   allDone: boolean;
   today: string;
+  race?: { pts: number; closed: boolean };
 }) {
   useEffect(() => {
     if (!allDone || !claimCheer(today)) return;
@@ -61,6 +64,13 @@ export default function StartButton({
           <Icon name="bolt" size={20} />
           Keep going: next drill
         </Link>
+        {race && !race.closed ? (
+          <p className="text-center text-sm font-bold" style={{ color: "var(--color-blue-dark)" }}>
+            {race.pts < MIN_WIN_PTS
+              ? `${(MIN_WIN_PTS - race.pts).toLocaleString("en-US")} more pts to be in tonight's race!`
+              : "You're in tonight's race! Every point counts until 9:30 pm."}
+          </p>
+        ) : null}
       </div>
     );
   }

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import SchoolStrip from "@/components/learn/SchoolStrip";
 import TodayQuest from "@/components/learn/TodayQuest";
+import { raceClosed, raceXp } from "@/lib/scoreboard";
 import UnitCard from "@/components/learn/UnitCard";
 import PetCard from "@/components/pet/PetCard";
 import AppShell from "@/components/ui/AppShell";
@@ -18,7 +19,7 @@ import { getListSummaries } from "@/lib/lists";
 import { skillsKnowledge, uniqueWords } from "@/lib/mastery";
 import { growthPoints, mathLevelsUp, petMood, type Growth } from "@/lib/pet";
 import { getProfile } from "@/lib/profile";
-import { shownStreak } from "@/lib/rewards";
+import { goalBeats, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
 
@@ -69,9 +70,13 @@ export default async function LearnPage() {
           learner={learner}
           growth={growth}
           points={growthPoints(growth)}
-          mood={petMood(lessonsToday, profile.dailyGoal)}
+          mood={petMood(lessonsToday, beats.filter((b) => b.done).length, goalBeats(profile.dailyGoal))}
         />
-        <TodayQuest beats={beats} today={today} />
+        <TodayQuest
+          beats={beats}
+          today={today}
+          race={{ pts: raceXp(profile.activity, today), closed: raceClosed(new Date()) }}
+        />
         <SchoolStrip href={unit ? `/learn/${unit._id}` : "/me/lists"} />
 
         {lists.length === 0 ? (

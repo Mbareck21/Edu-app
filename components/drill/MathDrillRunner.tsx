@@ -49,15 +49,17 @@ type Outcome = {
   offlineXp: number;
 };
 
+/** Up to `count` questions; fewer when the level has no more new ones. */
 function drawQuestions(
   skill: MathSkillId | "mixed",
   level: Level,
   seed: number,
-  count: number
+  count: number,
+  avoid: string[]
 ): MathQuestion[] {
   return skill === "mixed"
-    ? mixedSession({ level, seed, count })
-    : buildSession({ skillId: skill, level, seed, count });
+    ? mixedSession({ level, seed, count, avoid })
+    : buildSession({ skillId: skill, level, seed, count, avoid });
 }
 
 /**
@@ -102,9 +104,23 @@ function MathDrillRunnerInner({
   const timed = limit !== null;
 
   const [batch, setBatch] = useState(0);
+  // Prompts from earlier timed batches, so a fast round never sees one twice.
+  const [asked, setAsked] = useState<string[]>([]);
   const [at, setAt] = useState(0);
+
+  // Timed rounds draw a fresh batch whenever one runs out.
+  const questions = useMemo(
+    () => drawQuestions(skill, level, seed + batch * 7919, timed ? BATCH : count, asked),
+    [skill, level, seed, batch, timed, count, asked]
+  );
+
+  // A level with fewer questions than he asked for runs short, not repeated.
   const [queue, setQueue] = useState<number[]>(() =>
-    timed ? [] : initial ? initial.queue : Array.from({ length: count }, (_, i) => i)
+    timed
+      ? []
+      : initial
+        ? initial.queue.filter((i) => i < questions.length)
+        : questions.map((_, i) => i)
   );
   const [input, setInput] = useState("");
   const [flash, setFlash] = useState<"correct" | "wrong" | null>(null);
@@ -125,13 +141,9 @@ function MathDrillRunnerInner({
   const firstTry = useRef<Record<number, boolean>>(initial ? { ...initial.firstTry } : {});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Timed rounds draw a fresh batch whenever one runs out.
-  const questions = useMemo(
-    () => drawQuestions(skill, level, seed + batch * 7919, timed ? BATCH : count),
-    [skill, level, seed, batch, timed, count]
-  );
   const question = timed ? questions[at] : questions[queue[0]];
-  const done = timed ? over : queue.length === 0;
+  // A timed round also ends once every question the level has was asked.
+  const done = timed ? over || questions.length === 0 : queue.length === 0;
 
   const bankedMs = initial?.ms ?? 0;
   useEffect(() => {
@@ -201,13 +213,14 @@ function MathDrillRunnerInner({
     setFlash(null);
     setReveal(null);
     askedAt.current = Date.now();
-    if (at + 1 >= BATCH) {
+    if (at + 1 >= questions.length) {
+      setAsked((a) => [...a, ...questions.map((q) => q.prompt)]);
       setBatch((b) => b + 1);
       setAt(0);
       return;
     }
     setAt(at + 1);
-  }, [at]);
+  }, [at, questions]);
 
   const check = useCallback(() => {
     if (!question || !input || flash || feedback) return;
@@ -305,7 +318,7 @@ function MathDrillRunnerInner({
 
   const progress = timed
     ? (limit === null ? 0 : 1 - left / limit)
-    : (count - queue.length) / count;
+    : (questions.length - queue.length) / questions.length;
 
   return (
     <main className="flex h-dvh flex-col">
@@ -321,7 +334,7 @@ function MathDrillRunnerInner({
             </ProgressRing>
           ) : (
             <Pill color="purple" variant="soft" size="sm">
-              {count - queue.length}/{count}
+              {questions.length - queue.length}/{questions.length}
             </Pill>
           )
         }
