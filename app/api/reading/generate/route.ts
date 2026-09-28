@@ -22,6 +22,7 @@ import {
   MAX_PASSAGE_PARAGRAPHS,
   foldParagraphs,
   longestSentenceWords,
+  longestAnswerWarning,
   questionPlan,
   readingParams,
   type PassageKind,
@@ -555,6 +556,10 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   if (served.length === 0) {
     return NextResponse.json({ error: "The story did not come out right. Tap it again." }, { status: 502 });
   }
+  // Logged, not rejected: a length tell is worth knowing about, not worth
+  // taking a passage away from him.
+  const lengthTell = longestAnswerWarning(served);
+  if (lengthTell) console.warn(`[reading/generate] ${lengthTell}`);
 
   const now = new Date();
   // The passage being replaced goes on the archive, newest last, capped.

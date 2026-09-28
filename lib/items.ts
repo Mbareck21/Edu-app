@@ -633,13 +633,19 @@ export function makeListen(
 
 export function makeSpell(word: ClientWord, pool: ItemPool, rng: Rng): SpellItem {
   const letters = word.word.replace(/\s+/g, "").split("");
+  // A shuffle can land on the word itself: "odd" came out already built a
+  // third of the time, "sum" one time in six. Shuffle again until it is not,
+  // unless every letter is the same and no other order exists.
+  let tiles = shuffle(rng, letters);
+  const canMove = new Set(letters).size > 1;
+  while (canMove && tiles.join("") === letters.join("")) tiles = shuffle(rng, letters);
   return {
     ...baseFor(word, pool, "spell", "spell"),
     kind: "spell",
     prompt: "Build the word.",
     hint: meaningOf(word) || "Listen and build it.",
     audioText: word.word,
-    tiles: shuffle(rng, letters),
+    tiles,
     answer: word.word,
     feedback: `${word.word} = ${letters.join(" ")}`,
   };
@@ -723,16 +729,28 @@ export function makeWordForm(
     .map((f) => f.trim().toLowerCase())
     .filter((f) => f && f !== word.word.toLowerCase());
   if (forms.length < 2) return null;
-  const examples = usableExamples(word);
-  if (examples.length === 0) return null;
-  const sentence = pick(rng, examples);
+  // Blank whichever form a sentence really uses, not always the list word.
+  // The list word is the base (help) and the rest of the family is longer
+  // (helps, helped, helpful), so when the base was always the answer, "pick
+  // the shortest" won without reading the sentence. The sentences are written
+  // with a mix of forms, so each form that has one gets an equal chance.
+  const all = [word.word, ...forms];
+  const usable = all
+    .map((form) => ({
+      form,
+      sentences: word.examples.map((s) => s.trim()).filter((s) => s && wordRegex(form).test(s)),
+    }))
+    .filter((u) => u.sentences.length > 0);
+  if (usable.length === 0) return null;
+  const { form, sentences } = pick(rng, usable);
+  const sentence = pick(rng, sentences);
   return {
     ...baseFor(word, pool, "use", "use-word-form"),
     kind: "use-word-form",
     prompt: "Pick the right form of the word.",
-    sentence: blankOut(sentence, word.word),
-    options: fourOptions(word.word, shuffle(rng, forms), rng),
-    answer: word.word,
+    sentence: blankOut(sentence, form),
+    options: fourOptions(form, shuffle(rng, all.filter((f) => f !== form)), rng),
+    answer: form,
     feedback: sentence,
   };
 }
@@ -834,8 +852,20 @@ export function makeWordPartBuild(
 }
 
 /* ------------------------------------------------------------------ *
- * Sentence combining (4.L.14.S) — a small hand-written bank
+ * Sentence combining (4.L.14.S) — a hand-written bank
  * ------------------------------------------------------------------ */
+
+// The bank has to be read to be answered. The first eight items all had one
+// shape: a wrong joiner, the two halves swapped, and a comma splice. The
+// swapped one and the splice could be thrown out unread, and "never pick
+// although" finished six of the eight. So now:
+//   - the right answer often comes in swapped order (or opens with the
+//     joiner), so throwing out the swapped options can throw out the answer;
+//   - a comma splice is in only some items, and many right answers have a
+//     comma too (", but", "Although ..., ...");
+//   - every joiner is right in some items and wrong in others.
+// Every option keeps both sentences word for word, which is what lets the
+// tests check all of that (lib/__tests__/distractors.test.ts).
 
 type CombineSeed = {
   first: string;
@@ -853,23 +883,107 @@ export const COMBINE_SEEDS: readonly CombineSeed[] = [
     joiner: "because",
     answer: "We stayed inside because it rained all day.",
     wrong: [
-      "We stayed inside although it rained all day.",
       "It rained all day because we stayed inside.",
-      "We stayed inside, it rained all day.",
+      "Because we stayed inside, it rained all day.",
+      "It rained all day, or we stayed inside.",
     ],
     why: "because tells why. The rain is the reason.",
   },
   {
-    first: "Sam finished his book.",
-    second: "The bus was late.",
+    first: "Mia put on her coat.",
+    second: "It was cold outside.",
     joiner: "because",
-    answer: "Sam finished his book because the bus was late.",
+    answer: "Because it was cold outside, Mia put on her coat.",
     wrong: [
-      "The bus was late because Sam finished his book.",
-      "Sam finished his book when the bus was late, although he read fast.",
-      "Sam finished his book, the bus was late.",
+      "Because Mia put on her coat, it was cold outside.",
+      "Mia put on her coat although it was cold outside.",
+      "Mia put on her coat, it was cold outside.",
     ],
-    why: "because tells why. The late bus gave him time.",
+    why: "because tells why. The cold is the reason for the coat.",
+  },
+  {
+    first: "The sun was very hot.",
+    second: "The ice cream melted.",
+    joiner: "because",
+    answer: "The ice cream melted because the sun was very hot.",
+    wrong: [
+      "The sun was very hot because the ice cream melted.",
+      "The ice cream melted before the sun was very hot.",
+      "The sun was very hot, but the ice cream melted.",
+    ],
+    why: "because tells why. The hot sun made it melt.",
+  },
+  {
+    first: "Sara wanted to play outside.",
+    second: "It was raining.",
+    joiner: "but",
+    answer: "Sara wanted to play outside, but it was raining.",
+    wrong: [
+      "Sara wanted to play outside because it was raining.",
+      "It was raining, so Sara wanted to play outside.",
+      "It was raining, Sara wanted to play outside.",
+    ],
+    why: "but shows a problem. She wanted to go out, and the rain got in the way.",
+  },
+  {
+    first: "The test was hard.",
+    second: "Ben got every answer right.",
+    joiner: "but",
+    answer: "The test was hard, but Ben got every answer right.",
+    wrong: [
+      "The test was hard, so Ben got every answer right.",
+      "Ben got every answer right because the test was hard.",
+      "Because the test was hard, but Ben got every answer right.",
+    ],
+    why: "but shows a surprise. The test was hard, and he still got them all.",
+  },
+  {
+    first: "The puppy is small.",
+    second: "It has a very loud bark.",
+    joiner: "but",
+    answer: "The puppy is small, but it has a very loud bark.",
+    wrong: [
+      "The puppy is small since it has a very loud bark.",
+      "It has a very loud bark unless the puppy is small.",
+      "The puppy is small, it has a very loud bark.",
+    ],
+    why: "but joins two things that do not match. A small dog with a big bark.",
+  },
+  {
+    first: "The water was too cold.",
+    second: "We did not swim.",
+    joiner: "so",
+    answer: "The water was too cold, so we did not swim.",
+    wrong: [
+      "We did not swim, so the water was too cold.",
+      "The water was too cold, we did not swim.",
+      "The water was too cold, but we did not swim.",
+    ],
+    why: "so tells what happened because of it. The cold water kept us out.",
+  },
+  {
+    first: "Ali packed a snack.",
+    second: "The trip was long.",
+    joiner: "so",
+    answer: "The trip was long, so Ali packed a snack.",
+    wrong: [
+      "Ali packed a snack, so the trip was long.",
+      "Ali packed a snack although the trip was long.",
+      "Ali packed a snack while the trip was long.",
+    ],
+    why: "so shows a result. The long trip is why he packed food.",
+  },
+  {
+    first: "Cars drove slowly.",
+    second: "The road was covered in snow.",
+    joiner: "so",
+    answer: "The road was covered in snow, so cars drove slowly.",
+    wrong: [
+      "Cars drove slowly, so the road was covered in snow.",
+      "The road was covered in snow, cars drove slowly.",
+      "Cars drove slowly unless the road was covered in snow.",
+    ],
+    why: "so shows a result. Snow on the road made the cars slow down.",
   },
   {
     first: "The team kept playing.",
@@ -878,34 +992,226 @@ export const COMBINE_SEEDS: readonly CombineSeed[] = [
     answer: "The team kept playing although they were tired.",
     wrong: [
       "The team kept playing because they were tired.",
-      "Although the team kept playing they were tired if they stopped.",
-      "The team kept playing, they were tired.",
+      "They were tired, so the team kept playing.",
+      "Although they were tired, but the team kept playing.",
     ],
     why: "although shows a surprise. Tired players usually stop.",
   },
   {
-    first: "Nour washed his hands.",
-    second: "He ate dinner.",
-    joiner: "before",
-    answer: "Nour washed his hands before he ate dinner.",
+    first: "Hana finished the race.",
+    second: "Her shoe came off.",
+    joiner: "although",
+    answer: "Although her shoe came off, Hana finished the race.",
     wrong: [
-      "Nour washed his hands although he ate dinner.",
-      "Nour ate dinner before he washed his hands.",
-      "Nour washed his hands, he ate dinner.",
+      "Because her shoe came off, Hana finished the race.",
+      "Hana finished the race because her shoe came off.",
+      "Hana finished the race, her shoe came off.",
     ],
-    why: "before puts the two things in order. Hands first, food after.",
+    why: "although shows a surprise. Losing a shoe could have stopped her.",
   },
   {
-    first: "The lights went out.",
-    second: "The storm hit.",
+    first: "It was very hot.",
+    second: "We went for a long run.",
+    joiner: "although",
+    answer: "We went for a long run although it was very hot.",
+    wrong: [
+      "It was very hot although we went for a long run.",
+      "It was very hot, so we went for a long run.",
+      "We went for a long run, it was very hot.",
+    ],
+    why: "although shows a surprise. Most people do not run far on a very hot day.",
+  },
+  {
+    first: "The book was long.",
+    second: "Zara read all of it in one day.",
+    joiner: "although",
+    answer: "Although the book was long, Zara read all of it in one day.",
+    wrong: [
+      "Because the book was long, Zara read all of it in one day.",
+      "The book was long, so Zara read all of it in one day.",
+      "The book was long, Zara read all of it in one day.",
+    ],
+    why: "although shows a surprise. A long book usually takes more than a day.",
+  },
+  {
+    first: "Mom cooked dinner.",
+    second: "Dad washed the car.",
+    joiner: "while",
+    answer: "Mom cooked dinner while Dad washed the car.",
+    wrong: [
+      "Mom cooked dinner if Dad washed the car.",
+      "Dad washed the car, so Mom cooked dinner.",
+      "Dad washed the car unless Mom cooked dinner.",
+    ],
+    why: "while joins two things that happen at the same time.",
+  },
+  {
+    first: "Rami read a book.",
+    second: "His sister drew a picture.",
+    joiner: "while",
+    answer: "Rami read a book while his sister drew a picture.",
+    wrong: [
+      "Rami read a book, so his sister drew a picture.",
+      "Rami read a book, his sister drew a picture.",
+      "Rami read a book unless his sister drew a picture.",
+    ],
+    why: "while shows two things at the same time. Both of them were busy.",
+  },
+  {
+    first: "The storm hit.",
+    second: "The lights went out.",
     joiner: "when",
     answer: "The lights went out when the storm hit.",
     wrong: [
-      "The lights went out although the storm hit.",
-      "The storm hit when the lights went out.",
-      "The lights went out, the storm hit.",
+      "The lights went out, so the storm hit.",
+      "The lights went out before the storm hit.",
+      "The storm hit, the lights went out.",
     ],
-    why: "when joins two things that happen at the same time.",
+    why: "when tells the time. The storm came, and right then the lights went out.",
+  },
+  {
+    first: "Grandpa smiles.",
+    second: "We visit him.",
+    joiner: "when",
+    answer: "Grandpa smiles when we visit him.",
+    wrong: [
+      "Grandpa smiles unless we visit him.",
+      "We visit him, or Grandpa smiles.",
+      "Grandpa smiles although we visit him.",
+    ],
+    why: "when tells the time. Each time we visit, he smiles.",
+  },
+  {
+    first: "The class goes to lunch.",
+    second: "The bell rings.",
+    joiner: "when",
+    answer: "When the bell rings, the class goes to lunch.",
+    wrong: [
+      "The class goes to lunch although the bell rings.",
+      "The bell rings, the class goes to lunch.",
+      "The class goes to lunch unless the bell rings.",
+    ],
+    why: "when tells the time. The bell rings, and then it is lunch.",
+  },
+  {
+    first: "The library was closed.",
+    second: "We read at home.",
+    joiner: "since",
+    answer: "We read at home since the library was closed.",
+    wrong: [
+      "The library was closed since we read at home.",
+      "We read at home unless the library was closed.",
+      "Since the library was closed, so we read at home.",
+    ],
+    why: "since works like because here. The closed library is the reason.",
+  },
+  {
+    first: "Nadia wore a hat.",
+    second: "The sun was strong.",
+    joiner: "since",
+    answer: "Nadia wore a hat since the sun was strong.",
+    wrong: [
+      "The sun was strong since Nadia wore a hat.",
+      "Nadia wore a hat although the sun was strong.",
+      "The sun was strong, Nadia wore a hat.",
+    ],
+    why: "since tells why, like because. The strong sun is the reason for the hat.",
+  },
+  {
+    first: "You will miss the bus.",
+    second: "You hurry.",
+    joiner: "unless",
+    answer: "You will miss the bus unless you hurry.",
+    wrong: [
+      "You will miss the bus if you hurry.",
+      "You hurry unless you will miss the bus.",
+      "You hurry, and you will miss the bus.",
+    ],
+    why: "unless means if not. If you do not hurry, you will miss it.",
+  },
+  {
+    first: "The plant will dry up.",
+    second: "You water it.",
+    joiner: "unless",
+    answer: "Unless you water it, the plant will dry up.",
+    wrong: [
+      "Because you water it, the plant will dry up.",
+      "The plant will dry up when you water it.",
+      "The plant will dry up, you water it.",
+    ],
+    why: "unless means if not. With no water, the plant dries up.",
+  },
+  {
+    first: "Lina fed the cat.",
+    second: "Omar walked the dog.",
+    joiner: "and",
+    answer: "Lina fed the cat, and Omar walked the dog.",
+    wrong: [
+      "Lina fed the cat unless Omar walked the dog.",
+      "Omar walked the dog because Lina fed the cat.",
+      "Omar walked the dog, Lina fed the cat.",
+    ],
+    why: "and joins two jobs that go together. One did not cause the other.",
+  },
+  {
+    first: "We made sandwiches.",
+    second: "We ate them in the park.",
+    joiner: "and",
+    answer: "We made sandwiches, and we ate them in the park.",
+    wrong: [
+      "We made sandwiches, or we ate them in the park.",
+      "We made sandwiches although we ate them in the park.",
+      "We made sandwiches, we ate them in the park.",
+    ],
+    why: "and adds the next thing that happened. First the sandwiches, then the park.",
+  },
+  {
+    first: "We can play outside.",
+    second: "We can read inside.",
+    joiner: "or",
+    answer: "We can play outside, or we can read inside.",
+    wrong: [
+      "We can play outside because we can read inside.",
+      "We can read inside, so we can play outside.",
+      "Although we can read inside, but we can play outside.",
+    ],
+    why: "or gives a choice. We pick one: outside or inside.",
+  },
+  {
+    first: "You can have juice.",
+    second: "You can have milk.",
+    joiner: "or",
+    answer: "You can have juice, or you can have milk.",
+    wrong: [
+      "You can have juice since you can have milk.",
+      "You can have juice when you can have milk.",
+      "You can have milk, you can have juice.",
+    ],
+    why: "or gives a choice. Juice or milk, not both.",
+  },
+  {
+    first: "We brushed our teeth.",
+    second: "We went to bed.",
+    joiner: "before",
+    answer: "We brushed our teeth before we went to bed.",
+    wrong: [
+      "We went to bed before we brushed our teeth.",
+      "We brushed our teeth, we went to bed.",
+      "We brushed our teeth unless we went to bed.",
+    ],
+    why: "before puts things in order. Teeth first, then bed.",
+  },
+  {
+    first: "The cake baked in the oven.",
+    second: "Mom mixed the batter.",
+    joiner: "before",
+    answer: "Mom mixed the batter before the cake baked in the oven.",
+    wrong: [
+      "The cake baked in the oven before Mom mixed the batter.",
+      "Mom mixed the batter, the cake baked in the oven.",
+      "Mom mixed the batter while the cake baked in the oven.",
+    ],
+    why: "before puts things in order. The batter is mixed first, then it bakes.",
   },
   {
     first: "You can borrow my pen.",
@@ -920,28 +1226,16 @@ export const COMBINE_SEEDS: readonly CombineSeed[] = [
     why: "if sets the deal. Giving it back is the condition.",
   },
   {
-    first: "Ali packed a coat.",
-    second: "The morning was cold.",
-    joiner: "since",
-    answer: "Ali packed a coat since the morning was cold.",
+    first: "We will go to the beach.",
+    second: "The weather is nice.",
+    joiner: "if",
+    answer: "If the weather is nice, we will go to the beach.",
     wrong: [
-      "Ali packed a coat although the morning was cold.",
-      "The morning was cold since Ali packed a coat.",
-      "Ali packed a coat, the morning was cold.",
+      "If we will go to the beach, the weather is nice.",
+      "We will go to the beach although the weather is nice.",
+      "The weather is nice, but we will go to the beach.",
     ],
-    why: "since works like because here. The cold is the reason.",
-  },
-  {
-    first: "The plants grew fast.",
-    second: "We watered them every day.",
-    joiner: "because",
-    answer: "The plants grew fast because we watered them every day.",
-    wrong: [
-      "The plants grew fast although we watered them every day.",
-      "We watered them every day because the plants grew fast.",
-      "The plants grew fast, we watered them every day.",
-    ],
-    why: "because tells why. Water made them grow.",
+    why: "if sets the condition. Nice weather first, then the beach.",
   },
 ];
 

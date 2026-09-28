@@ -7,7 +7,8 @@
 //   • due skills first, weakest streak first
 //   • at most 3 NEW words, and each of them gets a blocked mini-set
 //     (learn card + 3 items back to back) BEFORE any interleaved work
-//   • every word in the lesson gets at least 2 items — never one and done
+//   • every word in the lesson gets at least 2 items — never one and done —
+//     a round apart, not back to back
 //   • the harder rung of a skill once its streak is 2 or more
 //   • a wrong item comes back 2-4 places later (reEnqueue)
 
@@ -205,14 +206,24 @@ export function buildLesson({
   const schoolCount = skill === "use" || skill === "mixed" ? 2 : 0;
   const budget = Math.max(0, size - blocked.length - schoolCount);
 
-  const body: LessonItem[] = [];
+  // A word's two items go in two rounds: one item for every word, then the
+  // second for every word. Below streak 2 the two are the same question, and
+  // built pair by pair it came back two items later, so he was copying the
+  // answer he had just tapped, not recalling it. A round apart (as many items
+  // as there are words, six in a full lesson) is a real second retrieval, the
+  // same reason lib/repetition.ts spaces its later returns out.
+  const firsts: LessonItem[] = [];
+  const seconds: LessonItem[] = [];
   const used: ClientWord[] = [];
   const ordered = reviewOrder(rest, skill, now, rng);
   for (const word of ordered) {
-    if (body.length + 2 > budget) break;
-    body.push(...pairFor(word, pool, rng, skill, now));
+    if ((used.length + 1) * 2 > budget) break;
+    const [first, second] = pairFor(word, pool, rng, skill, now);
+    firsts.push(first);
+    seconds.push(second);
     used.push(word);
   }
+  const body = [...firsts, ...seconds];
   // Leftover slots go to words already in the lesson, so nobody ends on one item.
   let guard = 0;
   while (body.length < budget && used.length > 0 && guard < budget + 4) {

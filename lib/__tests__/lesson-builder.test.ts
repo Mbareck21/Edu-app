@@ -229,6 +229,49 @@ test("no two items in a row drill the same word (outside the blocked set)", () =
   }
 });
 
+/** The same question: kind, word, what is shown and the answer. Option and tile order do not count. */
+function questionKey(item: LessonItem): string {
+  const shown = item as { variant?: string; clue?: string; sentence?: string; audioText?: string; answer?: string };
+  return [item.kind, shown.variant, item.word, shown.clue ?? shown.sentence ?? shown.audioText, shown.answer].join("|");
+}
+
+test("a word below streak 2 does not get the same question again within four items", () => {
+  // Below streak 2 a word's two items are the same question. Built pair by
+  // pair, the copy came two items later in half of every Match, Listen and
+  // Spell lesson, and he copied the answer he had just tapped.
+  for (const step of ["match", "listen", "spell", "use", "challenge"] as const) {
+    for (let seedNum = 1; seedNum <= 200; seedNum++) {
+      const lesson = buildLesson({ words: SEEN_LIST, step, now: NOW, rng: mulberry32(seedNum) });
+      lesson.forEach((item, i) => {
+        if (!item.word) return;
+        for (let j = Math.max(0, i - 4); j < i; j++) {
+          assert.notEqual(
+            questionKey(lesson[j]),
+            questionKey(item),
+            `${step}/${seedNum}: items ${j} and ${i} are the same question`
+          );
+        }
+      });
+    }
+  }
+});
+
+test("spell tiles never come already in the word's order", () => {
+  // Three shuffled letters land on the word itself one time in six, and
+  // "odd" one time in three: the word was built before he touched a tile.
+  for (const name of ["odd", "sum", "gas"]) {
+    const w = seen(name);
+    for (let seedNum = 1; seedNum <= 2000; seedNum++) {
+      const item = makeSpell(w, { words: [w] }, mulberry32(seedNum));
+      assert.notEqual(item.tiles.join(""), name, `${name} came built on seed ${seedNum}`);
+      assert.deepEqual([...item.tiles].sort(), name.split("").sort());
+    }
+  }
+  // Every letter the same: there is no other order, and it must not hang.
+  const same = seen("aaa");
+  assert.deepEqual(makeSpell(same, { words: [same] }, mulberry32(1)).tiles, ["a", "a", "a"]);
+});
+
 test("review pulls due skills from every list and caps the size", () => {
   const overdue = (name: string) =>
     word(name, {
