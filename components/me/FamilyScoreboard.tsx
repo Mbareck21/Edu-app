@@ -4,7 +4,7 @@ import ProgressBar from "@/components/ui/ProgressBar";
 import type { AccentColor } from "@/components/ui/colors";
 import { PLAN_ORDER } from "@/lib/daily-plan";
 import { pointsOf, rankRows, type Rivalry } from "@/lib/rivalry";
-import { nudge } from "@/lib/scoreboard";
+import { MIN_WIN_PTS, nudge } from "@/lib/scoreboard";
 
 export type ScoreRow = {
   learner: string;
@@ -60,7 +60,7 @@ export default function FamilyScoreboard({
       <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
         {closed
           ? "Race closed for tonight. A new race starts at midnight."
-          : "Today, until 9:30 pm. Finish the quest to be in the race, then mix it up: a repeat counts less. Up to 10,000 pts."}
+          : `Today, until 9:30 pm. To be in the race: the whole quest and ${MIN_WIN_PTS.toLocaleString("en-US")} pts. Mix it up: a repeat counts less.`}
       </p>
       <p className="mt-1 text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
         {holder

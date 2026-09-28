@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import SchoolStrip from "@/components/learn/SchoolStrip";
 import TodayQuest from "@/components/learn/TodayQuest";
+import { raceClosed, raceXp } from "@/lib/scoreboard";
 import UnitCard from "@/components/learn/UnitCard";
 import PetCard from "@/components/pet/PetCard";
 import AppShell from "@/components/ui/AppShell";
@@ -71,7 +72,11 @@ export default async function LearnPage() {
           points={growthPoints(growth)}
           mood={petMood(lessonsToday, beats.filter((b) => b.done).length, goalBeats(profile.dailyGoal))}
         />
-        <TodayQuest beats={beats} today={today} />
+        <TodayQuest
+          beats={beats}
+          today={today}
+          race={{ pts: raceXp(profile.activity, today), closed: raceClosed(new Date()) }}
+        />
         <SchoolStrip href={unit ? `/learn/${unit._id}` : "/me/lists"} />
 
         {lists.length === 0 ? (

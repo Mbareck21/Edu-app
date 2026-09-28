@@ -104,16 +104,26 @@ export function questLeft(
 }
 
 /**
- * The points that can win `day`: the race points, or 0 while the quest is
- * unfinished (from QUEST_RULE_FROM). Nobody finished: nobody wins.
+ * Race points a child needs, as well as the whole quest, to be in the day's
+ * race (from QUEST_RULE_FROM). The quest alone pays about 1,000 to 1,500, so
+ * the rest comes from drills: a real day's practice, not six quick beats.
+ */
+export const MIN_WIN_PTS = 2500;
+
+/**
+ * The points that can win `day`: the race points, or 0 while he is not in
+ * the race — quest unfinished or under MIN_WIN_PTS (from QUEST_RULE_FROM).
+ * Nobody in it: nobody wins.
  */
 export function winXp(
   activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref" | "xp">[],
   day: string,
   timeZone?: string
 ): number {
-  if (day >= QUEST_RULE_FROM && questLeft(activity, day, timeZone) > 0) return 0;
-  return raceXp(activity, day, timeZone);
+  const pts = raceXp(activity, day, timeZone);
+  if (day < QUEST_RULE_FROM) return pts;
+  if (questLeft(activity, day, timeZone) > 0 || pts < MIN_WIN_PTS) return 0;
+  return pts;
 }
 
 /** True once today's race has closed. */
@@ -121,10 +131,15 @@ export function raceClosed(now: Date = new Date(), timeZone?: string): boolean {
   return clockKey(now, timeZone) >= RACE_CLOSES;
 }
 
+/** In the day's race: the whole quest, and MIN_WIN_PTS (rows without a quest count are in). */
+function inRace(r: { xp: number; questLeft?: number }): boolean {
+  return (r.questLeft ?? 0) === 0 && (r.questLeft === undefined || r.xp >= MIN_WIN_PTS);
+}
+
 /**
  * A short cheer for one child, given everyone's race points today and how
- * much of the quest each has left: until his quest is done he is not in the
- * race, and only rivals who are in it count.
+ * much of the quest each has left: until his quest is done and he has
+ * MIN_WIN_PTS he is not in the race, and only rivals who are in it count.
  */
 export function nudge(
   me: { xp: number; questLeft?: number },
@@ -132,8 +147,9 @@ export function nudge(
 ): string {
   const left = me.questLeft ?? 0;
   if (left > 0) return `Finish today's quest to be in the race: ${left} to go!`;
-  const others = rows.filter((r) => r !== me && (r.questLeft ?? 0) === 0);
-  if (others.length === 0 && rows.length > 1) return "Quest done: you're in the race! Keep it up.";
+  if (!inRace(me)) return `Quest done! ${(MIN_WIN_PTS - me.xp).toLocaleString("en-US")} more pts to be in the race: try a drill!`;
+  const others = rows.filter((r) => r !== me && inRace(r));
+  if (others.length === 0 && rows.length > 1) return "You're in the race! Keep it up.";
   const best = others.reduce((a, b) => (b.xp > a.xp ? b : a), others[0]);
   if (!best) return "";
   if (me.xp === 0 && best.xp === 0) return "New day! First to play takes the lead.";

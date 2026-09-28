@@ -12,7 +12,16 @@ import { nextBeat, type PlanBeat } from "@/lib/daily-plan";
  * that opens the next unfinished one. The list stays, small, under it: he can
  * still see the day and pick a beat himself.
  */
-export default function TodayQuest({ beats, today }: { beats: PlanBeat[]; today: string }) {
+export default function TodayQuest({
+  beats,
+  today,
+  race,
+}: {
+  beats: PlanBeat[];
+  today: string;
+  /** His race points today, and whether tonight's race has closed. */
+  race?: { pts: number; closed: boolean };
+}) {
   const done = beats.filter((b) => b.done).length;
   const next = nextBeat(beats);
 
@@ -46,6 +55,7 @@ export default function TodayQuest({ beats, today }: { beats: PlanBeat[]; today:
           started={done > 0}
           allDone={done === beats.length}
           today={today}
+          race={race}
         />
       </div>
 
