@@ -168,3 +168,13 @@ test("with no weak words the driver still drills words: due ones, then the ones 
   const next = suggestDrill({ weakWords: 0, dueWords: 7, toGoWords: 40, skills, todayRefs: ["drill:vocab:match"], seed: 1 });
   assert.equal(next?.kind, "math");
 });
+
+test("the Drill tab's card and Keep going pick the same drill until another is played", () => {
+  const activity = [{ ref: "drill:vocab:match", at: "2026-09-28T16:00:00.000Z" }];
+  const base = { weakWords: 0, dueWords: 6, toGoWords: 30, played: [], activity };
+  const card = suggestionFor({ ...base, now: new Date("2026-09-28T17:00:00.000Z") });
+  const keepGoing = suggestionFor({ ...base, now: new Date("2026-09-28T17:04:09.000Z") });
+  assert.equal(card?.title, keepGoing?.title);
+  assert.equal(param(card?.href, "mode"), param(keepGoing?.href, "mode"));
+  assert.equal(param(card?.href, "skill"), param(keepGoing?.href, "skill"));
+});

@@ -127,8 +127,12 @@ export function suggestDrill(opts: {
   skills: readonly SkillSeen[];
   /** Refs of the sessions played today. */
   todayRefs: readonly string[];
+  /** Seeds the drill's own questions. */
   seed: number;
+  /** Seeds the shuffle among equally good picks. Default: `seed`. */
+  pickSeed?: number;
 }): Suggestion | null {
+  const pickSeed = opts.pickSeed ?? opts.seed;
   const wordDrills = opts.todayRefs.filter((r) => r.startsWith("drill:vocab")).length;
   const mathDrills = opts.todayRefs.filter((r) => r.startsWith("drill:math")).length;
   const math = weakestSkill(leastDrilledToday(opts.skills, opts.todayRefs));
@@ -143,7 +147,7 @@ export function suggestDrill(opts: {
       words.source.kind === "weak"
         ? (opts.wordModes ?? SUGGESTED_WORD_MODES).filter((m) => m !== "rescue")
         : SUGGESTED_WORD_MODES;
-    const mode = nextWordMode(opts.todayRefs, modes, opts.seed);
+    const mode = nextWordMode(opts.todayRefs, modes, pickSeed);
     return {
       kind: "words",
       title: `${words.title} · ${VOCAB_MODE_LABEL[mode]}`,
@@ -152,7 +156,7 @@ export function suggestDrill(opts: {
     };
   }
   const slipping = math.skill.recentPcts.length > 0 && math.skill.recentPcts[0] < SLIPPING_PCT;
-  const mode = nextMathMode(opts.todayRefs, slipping, opts.seed);
+  const mode = nextMathMode(opts.todayRefs, slipping, pickSeed);
   return {
     kind: "math",
     title: mode === "relaxed" ? math.skill.name : `${math.skill.name} · ${MATH_MODE_LABEL[mode]}`,
@@ -193,6 +197,7 @@ export function suggestionFor(opts: {
   now: Date;
 }): Suggestion | null {
   const today = todayKey(opts.now);
+  const todayRefs = opts.activity.filter((a) => todayKey(new Date(a.at)) === today).map((a) => a.ref);
   return suggestDrill({
     weakWords: opts.weakWords,
     dueWords: opts.dueWords,
@@ -202,7 +207,11 @@ export function suggestionFor(opts: {
       const p = opts.played.find((x) => x.skill === s.id);
       return { id: s.id, name: s.name, recentPcts: p?.recentPcts ?? [], lastAt: p?.lastAt ?? null };
     }),
-    todayRefs: opts.activity.filter((a) => todayKey(new Date(a.at)) === today).map((a) => a.ref),
+    todayRefs,
     seed: opts.now.getTime(),
+    // The same day and the same drills played give the same pick, so the
+    // Drill tab's card and Home's "Keep going: next drill" (/drill/next)
+    // always agree; it moves on each time a drill is logged.
+    pickSeed: Number(today.replaceAll("-", "")) * 100 + todayRefs.length,
   });
 }
