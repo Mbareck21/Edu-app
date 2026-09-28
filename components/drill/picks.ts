@@ -7,7 +7,7 @@
  */
 
 import { todayKey } from "@/lib/day";
-import { KNOWN_STREAK, dueSkills, skillDue } from "@/lib/mastery";
+import { KNOWN_STREAK, STUCK_WINDOW_DAYS, dueSkills, skillDue } from "@/lib/mastery";
 import type { Rng } from "@/lib/math/types";
 import { orderByNeed } from "@/lib/practice-order";
 import { SKILL_IDS, type ClientWord, type SkillId } from "@/lib/models/WordList";
@@ -15,7 +15,7 @@ import { itemForSkill, makeWrite, type ItemPool, type LessonItem } from "@/lib/i
 
 import type { DrillSource, VocabMode } from "@/components/drill/options";
 
-/** Below this streak a skill still counts as weak. */
+/** Below this streak a skill still gets tile support. */
 export const WEAK_STREAK = 2;
 
 export type DrillList = {
@@ -33,9 +33,23 @@ export type PickedWord = {
   pool: ItemPool;
 };
 
-/** Any skill still under streak 2. */
-export function isWeak(word: SkillsOnly): boolean {
-  return SKILL_IDS.some((id) => word.skills[id].streak < WEAK_STREAK);
+/**
+ * A word he has been getting wrong: some skill whose last answer was a miss
+ * in the last STUCK_WINDOW_DAYS, or a skill he has answered before that is
+ * due again at streak 0. Words he never started are not weak, just new.
+ *
+ * It used to be any skill under streak 2, which is every word not yet known:
+ * 181 of 182, so "Weak" was just "All" under another name.
+ */
+export function isWeak(word: SkillsOnly, now: Date): boolean {
+  return SKILL_IDS.some((id) => {
+    const s = word.skills[id];
+    if (s.lastAt === null) return false;
+    // Same reading as isStuckMiss: streak 0, or an early miss's dueAt === lastAt.
+    const lastWasMiss = s.wrong > 0 && (s.streak === 0 || s.dueAt === s.lastAt);
+    const recent = now.getTime() - new Date(s.lastAt).getTime() <= STUCK_WINDOW_DAYS * 86_400_000;
+    return (lastWasMiss && recent) || (s.streak === 0 && skillDue(s, now));
+  });
 }
 
 /** Any skill due for review right now. */
@@ -96,7 +110,7 @@ export function sourceCounts(lists: CountableList[], now: Date): SourceCounts {
     all += toGo;
     total += l.words.length;
     for (const word of l.words) {
-      if (isWeak(word)) weak++;
+      if (isWeak(word, now)) weak++;
       if (isDue(word, now)) due++;
     }
     return { listId: l.listId, name: l.name, total: l.words.length, toGo };
@@ -120,7 +134,7 @@ export function pickWords(lists: DrillList[], source: DrillSource, now: Date): P
   for (const list of chosen) {
     const pool: ItemPool = { words: list.words, listId: list.listId };
     for (const word of list.words) {
-      if (source.kind === "weak" && !isWeak(word)) continue;
+      if (source.kind === "weak" && !isWeak(word, now)) continue;
       if (source.kind === "due" && !isDue(word, now)) continue;
       out.push({ word, pool });
     }

@@ -66,6 +66,9 @@ export default async function MePage() {
     learner,
     name: s.name || LEARNER_NAMES[learner],
     xp: raceXp(s.activity, today),
+    earned: s.activity
+      .filter((a) => todayKey(new Date(a.at)) === today)
+      .reduce((sum, a) => sum + Math.max(0, a.xp || 0), 0),
     isMe: learner === me,
   }));
   const rivalry = await currentRivalry(family, now);

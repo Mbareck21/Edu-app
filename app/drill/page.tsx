@@ -2,7 +2,7 @@ import DrillDuel from "@/components/drill/DrillDuel";
 import DrillRankCard from "@/components/drill/DrillRankCard";
 import MathDrillCard from "@/components/drill/MathDrillCard";
 import SuggestedDrill from "@/components/drill/SuggestedDrill";
-import { suggestDrill, type SkillSeen } from "@/components/drill/suggest";
+import { suggestionFor } from "@/components/drill/suggest";
 import WordDrillCard from "@/components/drill/WordDrillCard";
 import {
   MATH_MODES,
@@ -48,10 +48,8 @@ export default async function DrillPage() {
 
   const today = todayKey(now);
   const levels = new Map<string, number>();
-  const seen = new Map<string, SkillSeen>();
-  for (const doc of mathDocs) {
-    const p = toClientMathProgress(doc);
-    seen.set(p.skill, { id: p.skill, name: "", recentPcts: p.recentPcts, lastAt: p.lastAt });
+  const played = mathDocs.map((doc) => toClientMathProgress(doc));
+  for (const p of played) {
     levels.set(p.skill, servedLevel(p, today));
   }
   const autoLevels: Record<string, number> = {
@@ -94,12 +92,7 @@ export default async function DrillPage() {
       </div>
 
       <SuggestedDrill
-        suggestion={suggestDrill({
-          weakWords: counts.weak,
-          skills: MATH_SKILLS.map((s) => ({ ...(seen.get(s.id) ?? { recentPcts: [], lastAt: null }), id: s.id, name: s.name })),
-          todayRefs: profile.activity.filter((a) => todayKey(new Date(a.at)) === today).map((a) => a.ref),
-          seed: now.getTime(),
-        })}
+        suggestion={suggestionFor({ weakWords: counts.weak, played, activity: profile.activity, now })}
       />
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />

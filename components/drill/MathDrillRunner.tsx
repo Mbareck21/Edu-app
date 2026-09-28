@@ -37,8 +37,6 @@ export type MathDrillRunnerProps = {
   count: number;
   mode: MathMode;
   seed: number;
-  /** Drill URL without a seed — "Again" adds a fresh one. */
-  againHref: string;
 };
 
 type Outcome = {
@@ -96,7 +94,6 @@ function MathDrillRunnerInner({
   count,
   mode,
   seed,
-  againHref,
   saveKey,
   initial,
 }: MathDrillRunnerProps & { saveKey: string; initial: Saved | null }) {
@@ -298,7 +295,7 @@ function MathDrillRunnerInner({
           perfect={sessionPerfect({ answered: outcome.answered, correct: outcome.correct, timed })}
           leveledUp={outcome.gained?.leveledUp ?? false}
           newBadge={outcome.gained?.newBadges[0] ?? null}
-          primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
+          primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
           secondary={{ label: "All drills", href: "/drill" }}
           note={outcome.note}
         />

@@ -18,7 +18,7 @@ import { adultLockOn } from "@/lib/adult";
 import { currentLearner } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { LEARNER_NAMES } from "@/lib/learners";
-import { getPractice } from "@/lib/word-source";
+import { getPool, getUnits } from "@/lib/word-source";
 import { todayKey } from "@/lib/day";
 import { countKnowledge } from "@/lib/mastery";
 import { type ClientWordList } from "@/lib/models/WordList";
@@ -107,7 +107,10 @@ export default async function WordsPage() {
   // Everything, the Stuck-words pool included. This is the page where a wrong
   // AI translation gets corrected, so the pool has to be reachable here even
   // though it is deliberately hidden from the units strip and the daily beats.
-  const lists = await getPractice();
+  // Not getPractice: that holds back the pool's waiting words, and this is
+  // where any word, waiting or not, gets its meaning fixed.
+  const [pool, units] = await Promise.all([getPool(), getUnits()]);
+  const lists = [pool, ...units];
   const me = await currentLearner();
 
   return (

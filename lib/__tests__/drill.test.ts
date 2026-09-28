@@ -121,10 +121,36 @@ test("best score reads counts for timed and percents for relaxed", () => {
 });
 
 test("weak and due read the skill states", () => {
-  assert.equal(isWeak(word("melt")), true);
-  assert.equal(isWeak(strong("solid")), false);
+  assert.equal(isWeak(word("melt"), NOW), false, "never started is new, not weak");
+  assert.equal(isWeak(strong("solid"), NOW), false);
   assert.equal(isDue(word("melt"), NOW), true);
   assert.equal(isDue(strong("solid"), NOW), false);
+});
+
+test("weak means missed lately, or answered before and due again at streak 0", () => {
+  const ago = (days: number) => new Date(NOW.getTime() - days * DAY).toISOString();
+  const later = new Date(NOW.getTime() + 3 * DAY).toISOString();
+  // Missed yesterday: weak.
+  const missed = word("a", { skills: skills({ spell: { wrong: 1, lastAt: ago(1), dueAt: ago(1) } }) });
+  assert.equal(isWeak(missed, NOW), true);
+  // An early slip only halves the streak, but dueAt === lastAt gives it away.
+  const slipped = word("b", {
+    skills: skills({ listen: { streak: 2, wrong: 1, correct: 4, lastAt: ago(2), dueAt: ago(2) } }),
+  });
+  assert.equal(isWeak(slipped, NOW), true);
+  // Right on the last try and not due yet: not weak.
+  const right = word("c", {
+    skills: skills({ spell: { streak: 1, wrong: 1, correct: 1, lastAt: ago(1), dueAt: later } }),
+  });
+  assert.equal(isWeak(right, NOW), false);
+  // A miss long ago that is due again at streak 0: still weak.
+  const old = word("d", { skills: skills({ use: { wrong: 1, lastAt: ago(30), dueAt: ago(30) } }) });
+  assert.equal(isWeak(old, NOW), true);
+  // Some skills never started, the others right and not due: not weak.
+  const partly = word("e", { skills: skills({ recognize: { streak: 1, correct: 1, lastAt: ago(1), dueAt: later } }) });
+  assert.equal(isWeak(partly, NOW), false);
+  const counts = sourceCounts([{ listId: "l", name: "L", words: [missed, slipped, right, old, partly, word("f")] }], NOW);
+  assert.equal(counts.weak, 3);
 });
 
 test("source counts report what is left, not totals", () => {
@@ -134,7 +160,7 @@ test("source counts report what is left, not totals", () => {
   const counts = sourceCounts(lists(), NOW);
   assert.equal(counts.total, 4);
   assert.ok(counts.all <= counts.total);
-  assert.equal(counts.weak, 2);
+  assert.equal(counts.weak, 0, "nothing answered yet, so nothing weak");
   assert.equal(counts.due, 2);
   assert.deepEqual(
     counts.lists.map((l) => l.total).sort(),
@@ -169,7 +195,13 @@ test("a word is settled only once produced and steady on every skill", () => {
 test("pickWords filters by source", () => {
   const all = pickWords(lists(), { kind: "all" }, NOW);
   assert.equal(all.length, 4);
-  assert.equal(pickWords(lists(), { kind: "weak" }, NOW).length, 2);
+  assert.equal(pickWords(lists(), { kind: "weak" }, NOW).length, 0);
+  const missed = word("sink", { skills: skills({ spell: { wrong: 1, lastAt: NOW.toISOString() } }) });
+  const withMiss: DrillList[] = [...lists(), { listId: "c", name: "Unit 3", words: [missed] }];
+  assert.deepEqual(
+    pickWords(withMiss, { kind: "weak" }, NOW).map((p) => p.word.word),
+    ["sink"]
+  );
   assert.equal(pickWords(lists(), { kind: "due" }, NOW).length, 2);
   const one = pickWords(lists(), { kind: "list", listId: "b" }, NOW);
   assert.equal(one.length, 1);

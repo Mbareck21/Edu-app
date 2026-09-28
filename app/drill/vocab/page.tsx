@@ -7,7 +7,6 @@ import {
   isVocabMode,
   parseLength,
   parseSource,
-  vocabHref,
   type VocabMode,
 } from "@/components/drill/options";
 import { buildDrillItems, orderWords, pickWords, type DrillList } from "@/components/drill/picks";
@@ -42,7 +41,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   const mode: VocabMode = q.mode && isVocabMode(q.mode) ? q.mode : "mixed";
   const count = parseLength(q.n);
   const seed = Number(q.seed) || requestSeed();
-  // Remount key. "Again" pushes the same route with a new ?seed, and React
+  // Remount key. "Next drill" can land on the same route with a new ?seed, and React
   // keeps a same-type component's state across that soft navigation — so
   // without a changing key the finished screen just re-renders itself.
   const runKey = q.seed ?? "first";
@@ -56,7 +55,6 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
 
   const now = new Date();
   const rng = mulberry32(seed % 2147483647);
-  const againHref = vocabHref({ source, mode, count });
   const sessionRef = `drill:vocab:${mode}`;
   const listId = source.kind === "list" ? source.listId : undefined;
 
@@ -69,7 +67,6 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
         listName={list?.name ?? "your words"}
         words={list ? list.words.map((w) => w.word) : []}
         sessionRef={sessionRef}
-        againHref={againHref}
       />
     );
   }
@@ -91,7 +88,6 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
         seed={seed}
         sessionRef={sessionRef}
         listId={listId}
-        againHref={againHref}
       />
     );
   }
@@ -123,9 +119,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
         senses={senses}
         chains={chains}
         resumeId="drill:write"
-        // A new seed each time, or a second "Again" lands on the same URL and
-        // key and the finish screen just stays.
-        exit={{ label: "Again", href: vocabHref({ source, mode, count, seed: seed + 1 }) }}
+        exit={{ label: "Next drill", href: "/drill/next" }}
       />
     );
   }
@@ -140,7 +134,6 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
       listId={listId}
       title={DONE_TITLE[mode]}
       subtitle={`${VOCAB_MODE_LABEL[mode]} drill`}
-      againHref={againHref}
       report={mode === "write"}
       emptyNote="No words match that pick. Try another one."
     />

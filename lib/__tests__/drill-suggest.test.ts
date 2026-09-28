@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { suggestDrill, weakestSkill, type SkillSeen } from "@/components/drill/suggest";
+import {
+  nextWordMode,
+  suggestDrill,
+  suggestionFor,
+  weakestSkill,
+  type SkillSeen,
+} from "@/components/drill/suggest";
 
 const skills: SkillSeen[] = [
   { id: "fractions", name: "Fractions", recentPcts: [95], lastAt: "2026-09-20T10:00:00Z" },
@@ -31,4 +37,51 @@ test("weak words come first, then math, turning between them through the day", (
 test("no weak words: math; nothing at all: no suggestion", () => {
   assert.equal(suggestDrill({ weakWords: 0, skills, todayRefs: [], seed: 1 })?.kind, "math");
   assert.equal(suggestDrill({ weakWords: 0, skills: [], todayRefs: [], seed: 1 }), null);
+});
+
+test("word drills turn through the types, least played today first", () => {
+  assert.equal(nextWordMode([]), "match");
+  assert.equal(nextWordMode(["drill:vocab:match"]), "listen");
+  assert.equal(nextWordMode(["drill:vocab:match", "drill:vocab:listen", "drill:vocab:mixed"]), "spell");
+  const everyOnce = ["match", "listen", "spell", "use", "flashcards", "write"].map((m) => `drill:vocab:${m}`);
+  assert.equal(nextWordMode(everyOnce), "match", "a tie goes back to the start of the order");
+  assert.equal(nextWordMode([...everyOnce, "drill:vocab:match"]), "listen");
+
+  const words = suggestDrill({ weakWords: 5, skills, todayRefs: ["drill:vocab:match"], seed: 1 });
+  // One word drill and no math yet: math is next. Then words again, a new type.
+  assert.equal(words?.kind, "math");
+  const again = suggestDrill({
+    weakWords: 5,
+    skills,
+    todayRefs: ["drill:vocab:match", "drill:math:angles:relaxed"],
+    seed: 1,
+  });
+  assert.equal(again?.title, "Weak words · Listen");
+  assert.ok(again?.href.includes("mode=listen"));
+  assert.ok(again?.href.includes("src=weak"));
+});
+
+test("a math skill drilled today waits while others are left", () => {
+  const first = suggestDrill({ weakWords: 0, skills, todayRefs: [], seed: 1 });
+  assert.equal(first?.title, "Angles");
+  const next = suggestDrill({ weakWords: 0, skills, todayRefs: ["drill:math:angles:t60#12"], seed: 1 });
+  assert.equal(next?.title, "Decimals", "angles was drilled today, so the untried one");
+  const all = skills.map((s) => `drill:math:${s.id}:relaxed`);
+  assert.equal(suggestDrill({ weakWords: 0, skills, todayRefs: all, seed: 1 })?.title, "Angles", "all done: back to the weakest");
+});
+
+test("suggestionFor counts only today's sessions", () => {
+  const now = new Date("2026-09-27T17:00:00.000Z");
+  const s = suggestionFor({
+    weakWords: 4,
+    played: [],
+    activity: [
+      { ref: "drill:vocab:match", at: "2026-09-20T17:00:00.000Z" },
+      { ref: "drill:vocab:match", at: "2026-09-27T16:00:00.000Z" },
+      { ref: "drill:math:fractions:relaxed", at: "2026-09-27T16:30:00.000Z" },
+    ],
+    now,
+  });
+  assert.equal(s?.kind, "words");
+  assert.equal(s?.title, "Weak words · Listen");
 });

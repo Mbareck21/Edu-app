@@ -11,8 +11,8 @@ import {
   CHAIN_TARGET,
   ROTATE_WIDTH,
   checkDue,
-  isFinished,
   newChain,
+  splitStuck,
   type ChainState,
 } from "@/lib/spell-chain";
 import type { ClientWordList } from "@/lib/models/WordList";
@@ -54,14 +54,10 @@ function StuckBoardInner({
 
   // "Finished" is not forever. A word that hit ten comes back for one blind
   // write on the spacing ladder; when that falls due it is a working word
-  // again until he passes it, and a miss puts it back to zero.
+  // again until he passes it, and a miss puts it back to zero. Past the 20
+  // newest unfinished words, the older ones wait (see splitStuck).
   const nowIso = new Date().toISOString();
-  const needs = (w: string) => {
-    const c = state[w];
-    return !c || !isFinished(c) || checkDue(c, nowIso);
-  };
-  const working = words.filter(needs);
-  const finished = words.filter((w) => !needs(w));
+  const { working, waiting, finished } = splitStuck(words, state, nowIso);
   // Due checks first — each needs one write and then leaves the sitting —
   // then the words still being learned, which rotate for the rest of it.
   const checks = working.filter((w) => state[w] && checkDue(state[w], nowIso));
@@ -230,6 +226,25 @@ function StuckBoardInner({
             );
           })}
         </ul>
+      ) : null}
+
+      {waiting.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-sm font-bold" style={{ color: "var(--color-muted)" }}>
+            {waiting.length} waiting — they come in as you finish these
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {waiting.map((w) => (
+              <span
+                key={w}
+                className="rounded-full px-3 py-2 text-sm font-bold"
+                style={{ background: "var(--color-line)", color: "var(--color-muted)" }}
+              >
+                {w}
+              </span>
+            ))}
+          </div>
+        </details>
       ) : null}
 
       {finished.length > 0 ? (

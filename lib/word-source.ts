@@ -12,14 +12,17 @@
  *   getUnits()     — school lists only. The pool is not a unit; it must not
  *                    appear on the units strip or get a path to complete.
  *   getPractice()  — everything he can be tested on, pool included. This is
- *                    what review, the drill and the daily beats want.
+ *                    what review, the drill and the daily beats want. The
+ *                    pool comes without its waiting words (splitStuck).
  *   getPool()      — the pool itself, created on first use.
  *
  * Server-only: these touch Mongoose.
  */
 
 import { db } from "@/lib/db";
+import { settledStuck } from "@/lib/mastery";
 import { toClient, type ClientWordList } from "@/lib/models/WordList";
+import { fromRow, splitStuck, type ChainState } from "@/lib/spell-chain";
 
 /** The one pool document's name. Also what the parent sees it called. */
 export const POOL_NAME = "Stuck words";
@@ -44,10 +47,41 @@ export async function getPractice(): Promise<ClientWordList[]> {
   const { WordList } = await db();
   const docs = await WordList.find().sort({ updatedAt: -1 }).lean();
   const all = docs.map(toClient);
-  return [
-    ...all.filter((l) => l.kind === "pool"),
-    ...all.filter((l) => l.kind !== "pool"),
-  ];
+  const units = all.filter((l) => l.kind !== "pool");
+  const pools = await Promise.all(all.filter((l) => l.kind === "pool").map((p) => activePool(p, units)));
+  return [...pools, ...units];
+}
+
+/** The pool as practice sees it: fixed words gone, waiting words held back. */
+async function activePool(pool: ClientWordList, units: readonly ClientWordList[]): Promise<ClientWordList> {
+  const kept = await clearSettledStuck(pool, units);
+  const words = kept.words.map((w) => w.word);
+  if (words.length === 0) return kept;
+  const { SpellChain } = await db();
+  const rows = await SpellChain.find({ word: { $in: words } }).lean();
+  const chains: Record<string, ChainState> = {};
+  for (const word of words) chains[word] = fromRow(word, rows.find((r) => r.word === word));
+  const { waiting } = splitStuck(words, chains, new Date().toISOString());
+  return { ...kept, words: kept.words.filter((w) => !waiting.includes(w.word)) };
+}
+
+/**
+ * Take out of the pool every word he has since fixed on a unit list (see
+ * settledStuck), and return the pool without them. Its spelling chain stays:
+ * if he gets stuck on it again, it comes back with the run he had.
+ */
+export async function clearSettledStuck(
+  pool: ClientWordList,
+  units: readonly ClientWordList[]
+): Promise<ClientWordList> {
+  const settled = settledStuck(
+    pool.words.map((w) => w.word),
+    units.flatMap((l) => l.words)
+  );
+  if (settled.length === 0) return pool;
+  const { WordList } = await db();
+  await WordList.updateOne({ _id: pool._id }, { $pull: { words: { word: { $in: settled } } } });
+  return { ...pool, words: pool.words.filter((w) => !settled.includes(w.word)) };
 }
 
 /**

@@ -14,8 +14,6 @@ export type VocabDrillRunnerProps = {
   listId?: string;
   title: string;
   subtitle?: string;
-  /** Drill URL without a seed — "Again" adds a fresh one. */
-  againHref: string;
   /** Spelling test: list every word right or wrong at the end. */
   report?: boolean;
   emptyNote?: string;
@@ -23,7 +21,7 @@ export type VocabDrillRunnerProps = {
 
 /**
  * The drill runner: the lesson runner with a live counter, a streak flame and
- * an "Again" button that re-seeds the drill.
+ * a "Next drill" button that goes on to the suggested one.
  */
 export default function VocabDrillRunner({
   items,
@@ -31,7 +29,6 @@ export default function VocabDrillRunner({
   listId,
   title,
   subtitle,
-  againHref,
   report = false,
   emptyNote = "No words to drill yet.",
 }: VocabDrillRunnerProps) {
@@ -49,7 +46,7 @@ export default function VocabDrillRunner({
       accent="blue"
       title={title}
       subtitle={subtitle}
-      primary={{ label: "Again", onClick: () => router.push(`${againHref}&seed=${Date.now()}`) }}
+      primary={{ label: "Next drill", onClick: () => router.push("/drill/next") }}
       secondary={{ label: "All drills", href: "/drill" }}
       progressLabel="Drill progress"
       counter
