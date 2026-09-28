@@ -20,7 +20,7 @@ import Passage from "@/components/reading/Passage";
 import { judgeAnswer } from "@/lib/answer-check";
 import { todayKey } from "@/lib/day";
 import { gradeOn } from "@/lib/grade";
-import { postReadingDone, postSession, saveNote } from "@/lib/offline-queue";
+import { postReadingDone, postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import { scrollIntoViewIfNeeded } from "@/lib/scroll-into-view";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import {
@@ -45,6 +45,7 @@ import {
 import { readingProgress } from "@/lib/rewards";
 import type { PlanProgress } from "@/lib/daily-plan";
 import { sfx } from "@/lib/sfx";
+import type { SessionResult } from "@/lib/types";
 import type {
   ClientWordList,
   CurrentReading,
@@ -464,7 +465,7 @@ function ReadingRunnerInner({
       try {
         // The session first: postSession stores it on the phone before it
         // sends, so closing the app during a slow save can no longer lose it.
-        const posted = await postSession({
+        const result: SessionResult = {
           kind: "reading",
           // The passage's own time tells a new passage from a re-read of this one.
           ref: `read:${list._id}@${reading.generatedAt}`,
@@ -480,9 +481,10 @@ function ReadingRunnerInner({
             pct,
             wordsCount,
           },
-        });
+        };
+        const posted = await postSession(result);
+        setGainedXp(shownXp(posted, result));
         if (posted.saved) {
-          setGainedXp(posted.gained.xp);
           const after = readingProgress(posted.profile.reading);
           setLadderNote(
             after.level > level

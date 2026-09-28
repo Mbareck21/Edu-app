@@ -32,6 +32,7 @@ export function activityKind(ref: string): string {
   if (ref.startsWith("drill:vocab:")) return `word drill:${ref.split(":")[2]}`;
   if (ref.startsWith("drill:")) return `drill:${ref.split(":")[1]}`;
   if (ref.startsWith("tables:")) return "tables";
+  if (ref.startsWith("stuck:")) return "stuck words";
   // A unit step, "<listId>:<step>": kind by step. Its reading is reading.
   const step = ref.split(":")[1];
   if (step === "read") return "reading";

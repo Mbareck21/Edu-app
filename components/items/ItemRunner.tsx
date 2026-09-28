@@ -18,11 +18,11 @@ import { mulberry32 } from "@/lib/math/rng";
 import { insertRepeat, repeatsFor, SESSION_REPEAT_CAP } from "@/lib/repetition";
 import type { PlanProgress } from "@/lib/daily-plan";
 import type { Rng } from "@/lib/math/types";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import { clearProgress, saveProgress } from "@/lib/resume";
 import { useSavedRun } from "@/components/ui/useSavedRun";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
-import { XP, estimateXp, type Gained, type GainedBadge } from "@/lib/rewards";
+import { XP, type Gained, type GainedBadge } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import { stepById, type SessionResult, type StepId, type WordResult } from "@/lib/types";
 
@@ -312,12 +312,13 @@ function ItemRunnerInner({
       const results = payloads(post, all, ms);
       for (const result of results) {
         const res = await postSession(result);
+        // Offline, what the work is worth; refused, nothing (see shownXp).
+        sum.xp += shownXp(res, result);
         if (!res.saved) {
           saved = false;
           note = note ?? saveNote(res);
           continue;
         }
-        sum.xp += res.gained.xp;
         sum.streakExtended = sum.streakExtended || res.gained.streakExtended;
         sum.leveledUp = sum.leveledUp || res.gained.leveledUp;
         sum.goalMet = sum.goalMet || res.gained.goalMet;
@@ -325,9 +326,6 @@ function ItemRunnerInner({
         badges.push(...res.gained.newBadges);
       }
       sum.newBadges = badges;
-      // Offline the server never scored it. Show what the work is worth, the
-      // way the math runners already do, instead of a flat "+0".
-      if (!saved) sum.xp = results.reduce((xp, r) => xp + estimateXp(r), 0);
       setOutcome({
         gained: sum,
         saved,

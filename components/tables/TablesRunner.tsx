@@ -7,7 +7,7 @@ import FeedbackSheet, { type Feedback } from "@/components/ui/FeedbackSheet";
 import LessonComplete from "@/components/ui/LessonComplete";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import type { MathQuestion } from "@/lib/math";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import { clearProgress, saveProgress } from "@/lib/resume";
 import type { Gained } from "@/lib/rewards";
 import { sessionPerfect } from "@/lib/session-score";
@@ -65,6 +65,7 @@ export function isTablesSaved(v: unknown): v is TablesSaved {
 
 type Outcome = {
   gained: Gained | null;
+  xp: number;
   saved: boolean;
   note?: string;
   ms: number;
@@ -162,6 +163,7 @@ export default function TablesRunner({
     void postSession(result).then((res) => {
       setOutcome({
         gained: res.saved ? res.gained : null,
+        xp: shownXp(res, result),
         saved: res.saved,
         note: saveNote(res),
         ms,
@@ -238,7 +240,7 @@ export default function TablesRunner({
         <LessonComplete
           title={outcome.stars === 3 ? "Lightning fast!" : outcome.stars > 0 ? `${label} done!` : "Round done!"}
           subtitle={`${outcome.correct} of ${facts.length} on the first try. ${starLine}`}
-          xp={outcome.gained?.xp ?? 0}
+          xp={outcome.xp}
           ms={outcome.ms}
           accuracy={facts.length === 0 ? 0 : outcome.correct / facts.length}
           perfect={outcome.stars > 0}

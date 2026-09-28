@@ -9,7 +9,7 @@ import { fireConfetti } from "@/components/ui/Confetti";
 import LessonComplete from "@/components/ui/LessonComplete";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { mulberry32 } from "@/lib/math/rng";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import { FALL_START_MS, blanksFor, letterChoices, nextFallMs } from "@/lib/rescue";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
@@ -19,7 +19,7 @@ import type { SessionResult } from "@/lib/types";
 export type RescueWord = { word: string; clue: string; arabic: string };
 
 type Status = "ready" | "falling" | "saved" | "splash" | "done";
-type Outcome = { gained: Gained | null; ms: number; note?: string };
+type Outcome = { gained: Gained | null; xp: number; ms: number; note?: string };
 
 /** How long "Saved!" or "Splash!" stays before the next word. */
 const PAUSE_MS = 1_700;
@@ -125,7 +125,7 @@ export default function RescueRunner({
     };
     if (saved > 0) void fireConfetti(saved === puzzles.length ? "big" : "small");
     void postSession(result).then((res) =>
-      setOutcome({ gained: res.saved ? res.gained : null, ms, note: saveNote(res) })
+      setOutcome({ gained: res.saved ? res.gained : null, xp: shownXp(res, result), ms, note: saveNote(res) })
     );
   }, [status, puzzles.length, saved, clean, sessionRef, listId]);
 
@@ -185,7 +185,7 @@ export default function RescueRunner({
       <LessonComplete
         title={saved === puzzles.length ? "Every word rescued!" : "Rescue done!"}
         subtitle={`You saved ${saved} of ${puzzles.length} words.`}
-        xp={outcome.gained?.xp ?? 0}
+        xp={outcome.xp}
         ms={outcome.ms}
         accuracy={saved / puzzles.length}
         perfect={clean === puzzles.length}

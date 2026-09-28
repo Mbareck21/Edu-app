@@ -9,7 +9,7 @@ import LessonComplete from "@/components/ui/LessonComplete";
 import RunnerHeader from "@/components/ui/RunnerHeader";
 import { canListen, listenOnce } from "@/lib/listen";
 import { requeue } from "@/components/math/QuestionPad";
-import { postSession, saveNote } from "@/lib/offline-queue";
+import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import { judgeSpoken } from "@/lib/spoken-number";
@@ -24,7 +24,7 @@ import {
 } from "@/lib/voice";
 
 type Phase = "ready" | "asking" | "listening" | "checking" | "right" | "wrong" | "unclear" | "done";
-type Outcome = { gained: Gained | null; note?: string; ms: number; correct: number; stars: 0 | 1 | 2 | 3 };
+type Outcome = { gained: Gained | null; xp: number; note?: string; ms: number; correct: number; stars: 0 | 1 | 2 | 3 };
 
 /** Quiet after speech that ends a fallback recording. Short: answers are one number. */
 const FALLBACK_SILENCE_MS = 900;
@@ -232,6 +232,7 @@ export default function VoiceTablesRunner({
     void postSession(result).then((res) =>
       setOutcome({
         gained: res.saved ? res.gained : null,
+        xp: shownXp(res, result),
         note: saveNote(res),
         ms,
         correct,
@@ -256,7 +257,7 @@ export default function VoiceTablesRunner({
         <LessonComplete
           title={outcome.stars === 3 ? "Lightning voice!" : "Times tables said!"}
           subtitle={`${outcome.correct} of ${facts.length} right the first time. ${starLine}`}
-          xp={outcome.gained?.xp ?? 0}
+          xp={outcome.xp}
           ms={outcome.ms}
           accuracy={facts.length === 0 ? 0 : outcome.correct / facts.length}
           perfect={outcome.stars > 0}

@@ -51,6 +51,27 @@ export function settleThrough(
   return out;
 }
 
+/** Days a finished day stays open for sessions sent late from an offline phone. */
+export const SETTLE_GRACE_DAYS = 2;
+
+/**
+ * The rivalry to store, if anything moved, and the one to show. Every day
+ * through yesterday is shown, but a day is only stored once SETTLE_GRACE_DAYS
+ * have passed. Storing it the first time anyone looked after midnight fixed
+ * it before an offline phone had sent that day's sessions, and they never
+ * counted: the day went to the other boy.
+ */
+export function rivalryView(
+  stored: Rivalry,
+  today: string,
+  xpOn: (day: string) => Record<string, number>
+): { store: Rivalry | null; shown: Rivalry } {
+  const yesterday = addDays(today, -1);
+  const settleTo = addDays(yesterday, -SETTLE_GRACE_DAYS);
+  const store = stored.through < settleTo ? settleThrough(stored, settleTo, xpOn) : null;
+  return { store, shown: settleThrough(store ?? stored, yesterday, xpOn) };
+}
+
 /** Points shown for one child. */
 export function pointsOf(r: Rivalry, learner: string): number {
   return r.holder === learner ? r.points : 0;

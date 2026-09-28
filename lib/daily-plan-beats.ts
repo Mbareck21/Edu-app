@@ -68,6 +68,8 @@ export function planBeats({
   // Review only takes words he has met. Before the first one it was empty,
   // and Start sent him back to it every time.
   const met = lists.some((l) => l.words.some((w) => !isNewWord(asWord(w))));
+  // Every word met: the beat still practises, but it has no new words to promise.
+  const anyNew = lists.some((l) => l.words.some((w) => isNewWord(asWord(w))));
   const done = doneToday(activity, today);
   const skill = getSkill(mathSkillFor(today, mathLevels));
   const beats: Record<BeatId, Omit<PlanBeat, "id" | "done">> = {
@@ -88,7 +90,7 @@ export function planBeats({
     math: { name: "Math", blurb: skill.name, icon: "math", href: `/math/${skill.id}` },
     new: {
       name: "New words",
-      blurb: "Three new words",
+      blurb: anyNew ? "Three new words" : "Practise your words",
       icon: "sparkles",
       href: unit ? "/learn/today/new-words" : null,
     },
