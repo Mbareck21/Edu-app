@@ -20,5 +20,16 @@ export function newWordsList<L extends { words: readonly ClientWord[] }>(lists: 
 export function productionList<L extends { words: readonly ClientWord[]; kind: string }>(
   lists: readonly L[]
 ): L | undefined {
-  return newWordsList(lists.filter((l) => l.kind !== "pool"));
+  return newWordsList(unitLists(lists));
+}
+
+/**
+ * The school lists, without the Stuck-words pool. Review and New words run on
+ * these: a pool word is a second copy of a unit word, so reviewing both spent
+ * two of the day's review slots on one word and left the unit copy — the one
+ * that counts toward Known — short of reviews. The pool gets its own practice
+ * on the Words tab and in the drills.
+ */
+export function unitLists<L extends { kind: string }>(lists: readonly L[]): L[] {
+  return lists.filter((l) => l.kind !== "pool");
 }

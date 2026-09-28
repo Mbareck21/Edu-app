@@ -13,7 +13,7 @@ import {
 import { mulberry32 } from "@/lib/math/rng";
 import { resumeKey } from "@/lib/resume";
 import { type ClientWordList } from "@/lib/models/WordList";
-import { newWordsList, productionList } from "@/app/learn/today/new-words-list";
+import { newWordsList, productionList, unitLists } from "@/app/learn/today/new-words-list";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +50,8 @@ export default async function TodayBeatPage({
   const runKey = (await searchParams).r ?? "first";
 
   await connectDB();
-  // Pool first: the words he is stuck on get the slot, then the units.
-  const lists = (await getPractice()).filter((l) => l.words.length > 0);
+  // Units only: the Stuck-words pool has its own practice (see unitLists).
+  const lists = unitLists((await getPractice()).filter((l) => l.words.length > 0));
   const seed = requestSeed();
   const now = new Date(seed);
   const rng = mulberry32(seed % 2147483647);
