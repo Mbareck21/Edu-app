@@ -8,6 +8,7 @@ import {
   FAST_PAID,
   XP,
   applySession,
+  beatsDone,
   emptyProfile,
   estimateXp,
   timedPaid,
@@ -309,15 +310,32 @@ test("today's lesson count resets on a new day", () => {
   assert.deepEqual(p.today, { day: "2026-08-20", lessons: 1 });
 });
 
-test("goalMet fires once, on the session that reaches the goal", () => {
+test("goalMet fires once, on the session that reaches the goal's number of different beats", () => {
   let p: ProfileState = { ...emptyProfile(), dailyGoal: 2 };
-  const a = applySession(p, result(), now());
+  const a = applySession(p, result({ ref: "quest:review" }), now());
   assert.equal(a.gained.goalMet, false);
   p = a.profile;
-  const b = applySession(p, result(), now());
+  // The same beat again, or a drill, is not a second beat.
+  const again = applySession(p, result({ ref: "quest:review" }), now());
+  assert.equal(again.gained.goalMet, false);
+  const drills = applySession(again.profile, result({ ref: "drill:vocab:match" }), now());
+  assert.equal(drills.gained.goalMet, false);
+  const b = applySession(drills.profile, result({ ref: "quest:new" }), now());
   assert.equal(b.gained.goalMet, true);
-  const c = applySession(b.profile, result(), now());
+  const c = applySession(b.profile, result({ ref: "quest:production" }), now());
   assert.equal(c.gained.goalMet, false);
+});
+
+test("no single mode or type meets the goal: ten of one thing is one beat", () => {
+  let p: ProfileState = { ...emptyProfile(), dailyGoal: 2 };
+  let met = false;
+  for (let i = 0; i < 10; i++) {
+    const out = applySession(p, result({ ref: "drill:vocab:match" }), now());
+    met = met || out.gained.goalMet;
+    p = out.profile;
+  }
+  assert.equal(met, false);
+  assert.equal(beatsDone(p.activity, "2026-08-19"), 0);
 });
 
 // ── badges ────────────────────────────────────────────────────────────────

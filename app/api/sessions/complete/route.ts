@@ -18,7 +18,7 @@ import {
 } from "@/lib/models/Profile";
 import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
-import { applyReading, applySession, levelFor } from "@/lib/rewards";
+import { applyReading, applySession, beatsDone, goalBeats, levelFor } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
 
@@ -300,7 +300,7 @@ export async function POST(req: Request) {
         streakExtended: false,
         leveledUp: false,
         level: levelFor(before.xp).level,
-        goalMet: before.today.day === when.today && before.today.lessons >= before.dailyGoal,
+        goalMet: beatsDone(before.activity, when.today) >= goalBeats(before.dailyGoal),
       },
       profile: toClientProfile(before),
     });

@@ -55,10 +55,13 @@ export function mathLevelsUp(levels: readonly number[], today: string = todayKey
 
 export type PetMood = "sleepy" | "happy" | "proud";
 
-/** Sleepy until he plays today, happy once he has, proud when today's goal is met. */
-export function petMood(lessonsToday: number, dailyGoal: number): PetMood {
-  if (lessonsToday <= 0) return "sleepy";
-  return lessonsToday >= Math.max(1, dailyGoal) ? "proud" : "happy";
+/**
+ * Sleepy until he plays today, happy once he has, proud when today's goal is
+ * met: `dailyGoal` different quest beats, not that many sessions of anything.
+ */
+export function petMood(lessonsToday: number, beatsToday: number, dailyGoal: number): PetMood {
+  if (lessonsToday <= 0 && beatsToday <= 0) return "sleepy";
+  return beatsToday >= Math.max(1, dailyGoal) ? "proud" : "happy";
 }
 
 export type PetState = {

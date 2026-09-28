@@ -6,6 +6,7 @@ import { previousDay, todayKey } from "@/lib/day";
 import { isDrillRef } from "@/lib/drill-rank";
 import { gradeOn, type Grade } from "@/lib/grade";
 import { maxReadingLevel } from "@/lib/reading";
+import { doneToday, PLAN_ORDER } from "@/lib/daily-plan";
 import { activityKind } from "@/lib/scoreboard";
 import type {
   ActivityEntry,
@@ -196,7 +197,21 @@ export { STEP_PASS_PCT };
 /** Four beats of Today's quest. The /me editor allows MIN..MAX. */
 export const DEFAULT_DAILY_GOAL = 4;
 export const MIN_DAILY_GOAL = 2;
-export const MAX_DAILY_GOAL = 8;
+export const MAX_DAILY_GOAL = PLAN_ORDER.length;
+
+/**
+ * Different quest beats done on `day`: what the daily goal counts. It used to
+ * count sessions, so four runs of one drill met a goal meant to be four
+ * beats of the quest. One kind of thing, however often, is one.
+ */
+export function beatsDone(activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref">[], day: string): number {
+  return Object.values(doneToday(activity, day)).filter(Boolean).length;
+}
+
+/** The goal as beats: never more than the quest has. */
+export function goalBeats(dailyGoal: number): number {
+  return Math.min(Math.max(1, dailyGoal), PLAN_ORDER.length);
+}
 
 // ── Levels ────────────────────────────────────────────────────────────────
 // Level 1 starts at 0 XP. Going from level n to n+1 costs 100 * n XP.
@@ -806,7 +821,10 @@ export function applySession(
       streakExtended,
       leveledUp: after.level > before.level,
       level: after.level,
-      goalMet: !late && lessonsToday >= next.dailyGoal && lessonsBefore < next.dailyGoal,
+      goalMet:
+        !late &&
+        beatsDone(next.activity, now.today) >= goalBeats(next.dailyGoal) &&
+        beatsDone(profile.activity, now.today) < goalBeats(next.dailyGoal),
     },
   };
 }
