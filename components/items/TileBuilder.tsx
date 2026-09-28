@@ -104,7 +104,9 @@ export default function TileBuilder({
         color="green"
         size="lg"
         fullWidth
-        disabled={disabled || built.length === 0}
+        // Every tile is a letter of the word, so Check waits for all of them: an
+        // early tap used to spend his first try on half a word.
+        disabled={disabled || used.length < tiles.length}
         onClick={() => onSubmit(built)}
       >
         {checkLabel}

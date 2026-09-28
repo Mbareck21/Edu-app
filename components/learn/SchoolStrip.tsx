@@ -50,9 +50,9 @@ export default function SchoolStrip({ href }: { href: string }) {
       >
         At school now
       </p>
-      <div className="mt-1.5 space-y-1.5">
-        <Link href={href} className="flex items-start gap-2">
-          <span className="mt-0.5 shrink-0" style={{ color: "var(--color-green)" }}>
+      <div className="mt-1">
+        <Link href={href} className="flex min-h-11 items-center gap-2">
+          <span className="shrink-0" style={{ color: "var(--color-green)" }}>
             <Icon name="book" size={16} />
           </span>
           <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
@@ -63,8 +63,8 @@ export default function SchoolStrip({ href }: { href: string }) {
             {science ? ` · Science: ${science.title}` : ""}
           </span>
         </Link>
-        <Link href={href} className="flex items-start gap-2">
-          <span className="mt-0.5 shrink-0" style={{ color: "var(--color-green)" }}>
+        <Link href={href} className="flex min-h-11 items-center gap-2">
+          <span className="shrink-0" style={{ color: "var(--color-green)" }}>
             <Icon name="star" size={16} />
           </span>
           <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
@@ -73,8 +73,8 @@ export default function SchoolStrip({ href }: { href: string }) {
               : "Summer break. Keep reading."}
           </span>
         </Link>
-        <Link href="/math" className="flex items-start gap-2">
-          <span className="mt-0.5 shrink-0" style={{ color: "var(--color-purple)" }}>
+        <Link href="/math" className="flex min-h-11 items-center gap-2">
+          <span className="shrink-0" style={{ color: "var(--color-purple)" }}>
             <Icon name="math" size={16} />
           </span>
           <span className="min-w-0 flex-1 font-body text-[13px] leading-snug">
