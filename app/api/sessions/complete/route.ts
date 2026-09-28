@@ -376,8 +376,11 @@ export async function POST(req: Request) {
 
   // A retry of a session we already applied: report the current state, change
   // nothing. Must run before updateList/updateMath, not just before the rewards.
+  // `replay` tells the phone the XP was paid the first time, so the finish
+  // screen does not say +0 for it.
   if (body.sessionId && !(await reserveSession(body.sessionId))) {
     return NextResponse.json({
+      replay: true,
       gained: {
         xp: 0,
         newBadges: [],

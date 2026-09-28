@@ -7,7 +7,8 @@
 //   - an unknown list id    -> 400 or 404, never a 500
 //   - a child cannot delete a list the other child added (403)
 //   - list changes need the grown-ups unlock (403 without it)
-//   - sign-in: the right PIN works, wrong PINs are throttled
+//   - sign-in: the right PIN works, wrong PINs are throttled per phone and
+//     per home, and one phone's lockout leaves the other phone free
 // Routes that spend Groq tokens only ever get a body that cannot parse, so
 // the audit never reaches the model. Local runs use the test copy of the
 // database (lib/db.ts), so the writes here never touch the children's data.
@@ -177,15 +178,29 @@ console.log("-- sign-in");
     const r = await call("POST", "/api/auth", { raw });
     check(r.status >= 400 && r.status < 500, `POST /api/auth [${name}] -> 4xx`, `got ${r.status}`);
   }
+  // Per phone, then per home: one boy's misses must not lock his brother out.
+  const phoneA = "eduapp_device=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const phoneB = "eduapp_device=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   let throttled = false;
   for (let i = 0; i < 10; i++) {
-    const r = await call("POST", "/api/auth", { body: { pin: "0000000" } });
+    const r = await call("POST", "/api/auth", { cookie: phoneA, body: { pin: "0000000" } });
     if (r.status === 429) {
       throttled = true;
       break;
     }
   }
-  check(throttled, "wrong PINs are throttled within 10 tries");
+  check(throttled, "wrong PINs from one phone are throttled within 10 tries");
+  const other = await call("POST", "/api/auth", { cookie: phoneB, body: { pin: env.PARENT_PIN } });
+  check(other.status === 200, "the other phone on the same wifi still signs in", `got ${other.status}`);
+  let homeStop = false;
+  for (let i = 0; i < 30; i++) {
+    const r = await call("POST", "/api/auth", { body: { pin: "0000000" } });
+    if (r.status === 429) {
+      homeStop = true;
+      break;
+    }
+  }
+  check(homeStop, "guessing with no cookie is still stopped by the home limit within 30 tries");
 }
 
 console.log(`\n${broken} rule(s) broken`);

@@ -4,14 +4,21 @@ import { z } from "zod";
 
 import { ADULT_COOKIE, ADULT_MINUTES, signAdultToken } from "@/lib/adult";
 import { getClientIp } from "@/lib/groq";
+import {
+  DEVICE_COOKIE,
+  clearPinMisses,
+  deviceIdFrom,
+  pinWait,
+  recordPinMiss,
+  type PinFailures,
+} from "@/lib/pin-throttle";
 
 const Body = z.object({ pin: z.string().min(1).max(20) });
 
 // Wrong-PIN throttle, as on /api/auth: a child with time on their hands can
-// try every four-digit PIN, so failures are counted per address.
-const FAIL_WINDOW_MS = 10 * 60 * 1000;
-const FAIL_LIMIT = 8;
-const FAILURES = new Map<string, number[]>();
+// try every four-digit PIN. Per phone as well as per home, so a child missing
+// on purpose on his own phone no longer locks the parent out on theirs.
+const FAILURES: PinFailures = new Map();
 
 /** Unlock the grown-ups pages for ADULT_MINUTES. */
 export async function POST(req: Request) {
@@ -23,18 +30,31 @@ export async function POST(req: Request) {
 
   const ip = getClientIp(req);
   const now = Date.now();
-  const failures = (FAILURES.get(ip) ?? []).filter((t) => t > now - FAIL_WINDOW_MS);
-  if (failures.length >= FAIL_LIMIT) {
-    FAILURES.set(ip, failures);
-    return NextResponse.json({ error: "Too many tries. Wait a few minutes." }, { status: 429 });
+  const jar = await cookies();
+  const device = deviceIdFrom(jar.get(DEVICE_COOKIE)?.value);
+  if (device.isNew) {
+    jar.set(DEVICE_COOKIE, device.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+  const retryAfterSec = pinWait(FAILURES, device.id, ip, now);
+  if (retryAfterSec > 0) {
+    return NextResponse.json(
+      { error: "Too many tries. Wait a few minutes." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+    );
   }
   if (parsed.data.pin !== expected) {
-    FAILURES.set(ip, [...failures, now]);
+    recordPinMiss(FAILURES, device.id, ip, now);
     return NextResponse.json({ error: "wrong pin" }, { status: 403 });
   }
-  FAILURES.delete(ip);
+  clearPinMisses(FAILURES, device.id);
 
-  (await cookies()).set(ADULT_COOKIE, await signAdultToken(), {
+  jar.set(ADULT_COOKIE, await signAdultToken(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

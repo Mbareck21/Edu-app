@@ -26,7 +26,11 @@ const RETRY_LATER = new Set([408, 425, 429]);
  */
 const SEND_TIMEOUT_MS = 15_000;
 
-export type PostSessionOk = { saved: true; gained: Gained; profile: ClientProfile };
+/**
+ * `replay`: the server had already applied this session (the first send got
+ * through, its reply did not), so `gained` is empty although the XP was paid.
+ */
+export type PostSessionOk = { saved: true; gained: Gained; profile: ClientProfile; replay?: boolean };
 /**
  * Not saved on the server. Kept on the phone for a later flush, except
  * `invalid`: the server rejected it outright and it was dropped. `signedOut`
@@ -116,9 +120,9 @@ async function send(result: SessionResult, signal: AbortSignal): Promise<SendOut
     if (!res.ok) return TRANSIENT;
     const data: unknown = await res.json();
     if (!data || typeof data !== "object") return TRANSIENT;
-    const body = data as { gained?: Gained; profile?: ClientProfile };
+    const body = data as { gained?: Gained; profile?: ClientProfile; replay?: boolean };
     if (!body.gained || !body.profile) return TRANSIENT;
-    return { saved: true, gained: body.gained, profile: body.profile };
+    return { saved: true, gained: body.gained, profile: body.profile, ...(body.replay ? { replay: true } : {}) };
   } catch {
     // Offline, or the timeout fired.
     return TRANSIENT;
@@ -162,7 +166,9 @@ export async function postSession(result: SessionResult): Promise<PostSessionRes
 
     if (outcome.saved) {
       unqueue(sessionId);
-      return outcome;
+      // A replay reports 0 for XP the first send already paid. Every finish
+      // screen reads gained.xp, so the estimate goes there, once, for all.
+      return outcome.replay ? { ...outcome, gained: { ...outcome.gained, xp: estimateXp(payload) } } : outcome;
     }
     if (outcome.kind === "invalid") {
       unqueue(sessionId);

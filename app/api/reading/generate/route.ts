@@ -301,11 +301,11 @@ TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never 
 TEXT DIFFICULTY: about ${params.lexile}L. Match it with sentence length and word choice, not with padding.
 MAX SENTENCE WORDS: ${params.maxSentenceWords}
 PARAGRAPHS: ${params.paragraphs}
-UNKNOWN-WORD BUDGET: ${params.unknownBudget} (every one goes in "glossary")
+UNKNOWN-WORD BUDGET: ${params.unknownBudget} (hard words other than the STUDY WORDS, which he is taught before reading; topic words he may not know count; every one goes in "glossary")
 
 ${kindBlock}
 
-TOPIC WORDS (use 3-5 of them): ${topicWords.join(", ")}
+TOPIC WORDS (use 2-4 of them): ${topicWords.join(", ")}
 STUDY WORDS he has been learning (prefer these, use as many as fit naturally): ${studyWords.join(", ") || "none yet"}
 
 QUESTION PLAN — produce exactly these ${plan.length} questions, in this order:

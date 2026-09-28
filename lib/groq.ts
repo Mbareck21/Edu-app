@@ -228,7 +228,8 @@ questions, in that order, with those types and formats.
    "glossary". Everything else must be common Grade 2-3 English. This is the
    98%-known-words rule — do not smuggle in hard words and leave them unglossed.
 6. Use as many of the STUDY WORDS as fit naturally. Prefer them over inventing
-   new hard words. Then use 3-5 of the TOPIC WORDS.
+   new hard words. Then use 2-4 of the TOPIC WORDS; a hard one counts toward
+   the budget.
 7. Never inline Arabic, parentheses, glosses, or definitions inside the
    passage text. The passage is plain English prose only. No markdown, no
    bullet points, no headings inside paragraphs.

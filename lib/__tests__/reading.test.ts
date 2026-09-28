@@ -13,6 +13,7 @@ import {
   clampLevel,
   countWords,
   MAX_PASSAGE_PARAGRAPHS,
+  MAX_UNKNOWN_BUDGET,
   foldParagraphs,
   levelAtGrade,
   lexileForLevel,
@@ -54,6 +55,20 @@ test("level params follow the plan's formulas", () => {
   assert.equal(readingParams(0).level, 1);
   assert.equal(readingParams(99).level, 12);
   assert.equal(clampLevel(Number.NaN), 1);
+});
+
+test("the unknown-word budget keeps 98% of the passage known at every level", () => {
+  // A flat 6 was 94.5% known on a 110-word level 1 passage, below even the 95%
+  // floor. Two hard words at least, so a passage can still teach something.
+  assert.equal(readingParams(1).unknownBudget, 2);
+  assert.equal(readingParams(10).unknownBudget, 6);
+  for (let level = 1; level <= 12; level++) {
+    const p = readingParams(level);
+    assert.ok(p.unknownBudget >= 2 && p.unknownBudget <= MAX_UNKNOWN_BUDGET, `level ${level}`);
+    if (p.unknownBudget > 2) {
+      assert.ok(p.unknownBudget <= p.targetWords * 0.02, `level ${level}: ${p.unknownBudget} of ${p.targetWords}`);
+    }
+  }
 });
 
 test("question plan grows with the level and matches the passage kind", () => {
