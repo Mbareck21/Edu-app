@@ -172,8 +172,12 @@ export function shownXp(res: PostSessionResult, result: SessionResult): number {
   return res.invalid ? 0 : estimateXp(result);
 }
 
+/**
+ * The line under the finish screen's tiles: offline, where the session went;
+ * saved, the fair-play tip when a rule cut its XP (lib/rewards.ts).
+ */
 export function saveNote(res: PostSessionResult): string | undefined {
-  if (res.saved) return undefined;
+  if (res.saved) return res.gained.tip;
   if (res.invalid) return "I could not save that one. Tell Dad.";
   if (res.signedOut) return "Saved on this phone. Ask Dad to type the PIN again.";
   return "No internet. Saved on this phone for later.";

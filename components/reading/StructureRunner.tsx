@@ -194,7 +194,7 @@ function StructureRunnerInner({
         };
         const posted = await postSession(result);
         setGainedXp(shownXp(posted, result));
-        if (!posted.saved) setQueuedNote(saveNote(posted));
+        setQueuedNote(saveNote(posted));
       } finally {
         setSaving(false);
       }

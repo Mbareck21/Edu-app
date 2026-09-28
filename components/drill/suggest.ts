@@ -2,7 +2,13 @@
 // turning between words and math so free practice stays varied. The boys
 // still pick anything they like below it. Pure: no React, no Mongo.
 
-import { VOCAB_MODE_LABEL, mathHref, vocabHref, type VocabMode } from "@/components/drill/options";
+import {
+  VOCAB_MODE_LABEL,
+  mathHref,
+  vocabHref,
+  type DrillSource,
+  type VocabMode,
+} from "@/components/drill/options";
 import { todayKey } from "@/lib/day";
 import { MATH_SKILLS } from "@/lib/math";
 
@@ -64,11 +70,16 @@ function leastDrilledToday(skills: readonly SkillSeen[], todayRefs: readonly str
 }
 
 /**
- * Words when there are weak words and no word drill yet today, otherwise
- * math; after both, whichever was drilled less today.
+ * Words when there are words to drill and no word drill yet today, otherwise
+ * math; after both, whichever was drilled less today. The words are the weak
+ * ones, else the ones due, else the ones still to learn today: with no weak
+ * word it used to be math every time, and the words were never drilled.
  */
 export function suggestDrill(opts: {
   weakWords: number;
+  /** Words due for review now, and words still to do today (the All chip). */
+  dueWords?: number;
+  toGoWords?: number;
   /** Word drill types that can fix the weak words (modesFor). Default: all. */
   wordModes?: readonly VocabMode[];
   skills: readonly SkillSeen[];
@@ -79,16 +90,18 @@ export function suggestDrill(opts: {
   const wordDrills = opts.todayRefs.filter((r) => r.startsWith("drill:vocab")).length;
   const mathDrills = opts.todayRefs.filter((r) => r.startsWith("drill:math")).length;
   const math = weakestSkill(leastDrilledToday(opts.skills, opts.todayRefs));
-  const wordsFirst = opts.weakWords > 0 && (wordDrills === 0 || !math || wordDrills <= mathDrills);
+  const words = wordPick(opts);
+  const wordsFirst = words !== null && (wordDrills === 0 || !math || wordDrills <= mathDrills);
 
   if (wordsFirst || !math) {
-    if (opts.weakWords === 0) return null;
-    const mode = nextWordMode(opts.todayRefs, opts.wordModes);
+    if (!words) return null;
+    // The weak-skill types only fix weak words; due and new words get every type.
+    const mode = nextWordMode(opts.todayRefs, words.source.kind === "weak" ? opts.wordModes : undefined);
     return {
       kind: "words",
-      title: `Weak words · ${VOCAB_MODE_LABEL[mode]}`,
-      line: `${opts.weakWords} ${opts.weakWords === 1 ? "word needs" : "words need"} practice`,
-      href: vocabHref({ source: { kind: "weak" }, mode, count: 10, seed: opts.seed }),
+      title: `${words.title} · ${VOCAB_MODE_LABEL[mode]}`,
+      line: words.line,
+      href: vocabHref({ source: words.source, mode, count: 10, seed: opts.seed }),
     };
   }
   return {
@@ -99,12 +112,31 @@ export function suggestDrill(opts: {
   };
 }
 
+/** Which words the next word drill works on, or null when there are none. */
+function wordPick(opts: { weakWords: number; dueWords?: number; toGoWords?: number }): {
+  source: DrillSource;
+  title: string;
+  line: string;
+} | null {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (opts.weakWords > 0) {
+    return { source: { kind: "weak" }, title: "Weak words", line: `${plural(opts.weakWords, "word needs", "words need")} practice` };
+  }
+  const due = opts.dueWords ?? 0;
+  if (due > 0) return { source: { kind: "due" }, title: "Due words", line: `${plural(due, "word is", "words are")} due` };
+  const toGo = opts.toGoWords ?? 0;
+  if (toGo > 0) return { source: { kind: "all" }, title: "Your words", line: `${plural(toGo, "word", "words")} to go today` };
+  return null;
+}
+
 /**
  * The suggestion from what the pages hold: the Drill tab's card and
  * /drill/next, which every finished drill goes on to, must agree.
  */
 export function suggestionFor(opts: {
   weakWords: number;
+  dueWords?: number;
+  toGoWords?: number;
   wordModes?: readonly VocabMode[];
   /** Math progress rows, one per skill played. */
   played: readonly { skill: string; recentPcts: number[]; lastAt: string | null }[];
@@ -114,6 +146,8 @@ export function suggestionFor(opts: {
   const today = todayKey(opts.now);
   return suggestDrill({
     weakWords: opts.weakWords,
+    dueWords: opts.dueWords,
+    toGoWords: opts.toGoWords,
     wordModes: opts.wordModes,
     skills: MATH_SKILLS.map((s) => {
       const p = opts.played.find((x) => x.skill === s.id);

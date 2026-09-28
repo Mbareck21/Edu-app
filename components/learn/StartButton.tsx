@@ -13,7 +13,9 @@ import { sfx } from "@/lib/sfx";
 /**
  * The one big button on Home: it opens the next unfinished beat of today's
  * plan. Once every beat is done it turns into the day's celebration, with
- * the big confetti once a day on this device.
+ * the big confetti once a day on this device, and "Keep going" hands him to
+ * the drill driver: there is always a next best thing, never a pick-your-own
+ * to repeat.
  */
 export default function StartButton({
   next,
@@ -33,25 +35,32 @@ export default function StartButton({
   }, [allDone, today]);
 
   if (allDone) {
+    const keep = { color: "blue" as const, size: "lg" as const, fullWidth: true };
     return (
-      <div
-        className="flex items-center gap-3 rounded-card px-4 py-3"
-        style={{ background: "var(--color-gold-soft)" }}
-      >
-        <span
-          className="q-bounce-in flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-          style={{ background: "var(--color-gold)", color: "#fff" }}
+      <div className="space-y-3">
+        <div
+          className="flex items-center gap-3 rounded-card px-4 py-3"
+          style={{ background: "var(--color-gold-soft)" }}
         >
-          <Icon name="trophy" size={30} strokeWidth={2.2} />
-        </span>
-        <div className="min-w-0">
-          <p className="font-display text-xl font-bold" style={{ color: "var(--color-gold-ink)" }}>
-            All done today! 🎉
-          </p>
-          <p className="text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
-            Every beat, start to finish. So proud of you!
-          </p>
+          <span
+            className="q-bounce-in flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "var(--color-gold)", color: "#fff" }}
+          >
+            <Icon name="trophy" size={30} strokeWidth={2.2} />
+          </span>
+          <div className="min-w-0">
+            <p className="font-display text-xl font-bold" style={{ color: "var(--color-gold-ink)" }}>
+              All done today! 🎉
+            </p>
+            <p className="text-sm font-bold" style={{ color: "var(--color-gold-ink)" }}>
+              Every beat, start to finish. So proud of you!
+            </p>
+          </div>
         </div>
+        <Link href="/drill/next" className={buttonClass(keep)} style={buttonStyle(keep)}>
+          <Icon name="bolt" size={20} />
+          Keep going: next drill
+        </Link>
       </div>
     );
   }

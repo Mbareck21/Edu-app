@@ -28,6 +28,8 @@ export default async function NextDrillPage() {
   const counts = sourceCounts(lists, now);
   const suggestion = suggestionFor({
     weakWords: counts.weak,
+    dueWords: counts.due,
+    toGoWords: counts.all,
     wordModes: modesFor(counts.weakSkills),
     played: mathDocs.map((doc) => toClientMathProgress(doc)),
     activity: profile.activity,

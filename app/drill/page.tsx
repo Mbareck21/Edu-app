@@ -92,7 +92,7 @@ export default async function DrillPage() {
       </div>
 
       <SuggestedDrill
-        suggestion={suggestionFor({ weakWords: counts.weak, wordModes: modesFor(counts.weakSkills), played, activity: profile.activity, now })}
+        suggestion={suggestionFor({ weakWords: counts.weak, dueWords: counts.due, toGoWords: counts.all, wordModes: modesFor(counts.weakSkills), played, activity: profile.activity, now })}
       />
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />

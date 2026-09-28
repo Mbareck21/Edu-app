@@ -314,9 +314,9 @@ function ItemRunnerInner({
         const res = await postSession(result);
         // Offline, what the work is worth; refused, nothing (see shownXp).
         sum.xp += shownXp(res, result);
+        note = note ?? saveNote(res);
         if (!res.saved) {
           saved = false;
-          note = note ?? saveNote(res);
           continue;
         }
         sum.streakExtended = sum.streakExtended || res.gained.streakExtended;
