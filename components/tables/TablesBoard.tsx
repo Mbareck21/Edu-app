@@ -122,7 +122,9 @@ function TablesBoardInner({ facts, seed, saved }: TablesBoardProps & { saved: Ta
           label={running.label}
           sessionRef={running.sessionRef}
           saveKey={ROUND_KEY}
-          initial={saved}
+          // Only the round that was saved: after X and a new round, the old
+          // queue fed the new facts and the round could never finish.
+          initial={saved && running.facts === saved.facts ? saved : null}
           onClose={() => {
             // Left unfinished: forget the saved place, or the page would put
             // him straight back into this round.

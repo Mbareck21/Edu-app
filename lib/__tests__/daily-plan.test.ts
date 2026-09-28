@@ -113,8 +113,17 @@ test("done flags read today's activity the way Home always has", () => {
   assert.equal(doneToday([act("u1:read", "vocab")], DAY).read, true);
 });
 
+const metSkill = { correct: 1, wrong: 0, streak: 1, lastAt: AT, dueAt: AT };
+const metUnit = {
+  ...unit,
+  words: [
+    ...unit.words,
+    { word: "calm", skills: { recognize: metSkill, listen: blank, spell: blank, use: blank } },
+  ],
+} as unknown as ListSummary;
+
 test("the beats link straight into a lesson, math included", () => {
-  const b = planBeats({ activity: [], lists: [unit], mathLevels: {}, today: DAY });
+  const b = planBeats({ activity: [], lists: [metUnit], mathLevels: {}, today: DAY });
   assert.deepEqual(
     b.map((x) => x.id),
     [...PLAN_ORDER]
@@ -132,6 +141,22 @@ test("the beats link straight into a lesson, math included", () => {
     none.filter((x) => x.href).map((x) => x.id),
     ["math", "structure"]
   );
+  // A list with no words is no unit: its beats would open an empty lesson.
+  const empty = { ...unit, words: [] } as unknown as ListSummary;
+  assert.deepEqual(
+    planBeats({ activity: [], lists: [empty], mathLevels: {}, today: DAY })
+      .filter((x) => x.href)
+      .map((x) => x.id),
+    ["math", "structure"]
+  );
+});
+
+test("Review waits until he has met a word, so Start never lands on an empty one", () => {
+  const b = planBeats({ activity: [], lists: [unit], mathLevels: {}, today: DAY });
+  const review = b.find((x) => x.id === "review");
+  assert.equal(review?.href, null);
+  assert.equal(review?.lockedBlurb, "After New words");
+  assert.equal(nextBeat(b)?.id, "read");
 });
 
 test("math is the school lesson's skill in the year, a lowest-level skill after it", () => {

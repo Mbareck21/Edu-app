@@ -12,7 +12,7 @@ import FamilyScoreboard from "@/components/me/FamilyScoreboard";
 import ProfileSettings from "@/components/ProfileSettings";
 import ReadingProgressCard from "@/components/reading/ReadingProgressCard";
 import SignOutButton from "@/components/SignOutButton";
-import { lastSevenDays, todayKey } from "@/lib/day";
+import { lastSevenDays, previousDay, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { buildDigest } from "@/lib/digest";
 import { countKnowledge, uniqueWords } from "@/lib/mastery";
@@ -23,6 +23,7 @@ import { allFactKeys, factFromRow } from "@/lib/tables";
 import { currentLearner } from "@/lib/auth";
 import { LEARNER_NAMES } from "@/lib/learners";
 import { getFamilyProfiles, getProfile } from "@/lib/profile";
+import { settleDay } from "@/lib/rivalry";
 import { currentRivalry } from "@/lib/rivalry-store";
 import { raceClosed, raceXp } from "@/lib/scoreboard";
 import { BADGES, readingProgress, shownStreak } from "@/lib/rewards";
@@ -71,7 +72,15 @@ export default async function MePage() {
       .reduce((sum, a) => sum + Math.max(0, a.xp || 0), 0),
     isMe: learner === me,
   }));
-  const rivalry = await currentRivalry(family, now);
+  const settled = await currentRivalry(family, now);
+  // After 9:30 pm tonight's result is in, so show it counted. For display
+  // only: it is stored after midnight, like every day. Counting only through
+  // yesterday showed "2 days ahead, result is in" and 1 next morning.
+  const closed = raceClosed(now);
+  const rivalry =
+    closed && settled.through === previousDay(today)
+    ? settleDay(settled, today, Object.fromEntries(scoreRows.map((r) => [r.learner, r.xp])))
+    : settled;
 
   const earned = new Map(profile.badges.map((b) => [b.id, b.earnedAt]));
 
@@ -114,7 +123,7 @@ export default async function MePage() {
         </div>
       </Card>
 
-      <FamilyScoreboard rows={scoreRows} rivalry={rivalry} closed={raceClosed(now)} />
+      <FamilyScoreboard rows={scoreRows} rivalry={rivalry} closed={closed} />
 
       {/* Words breakdown */}
       <Card className="mt-3">

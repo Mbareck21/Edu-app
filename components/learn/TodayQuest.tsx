@@ -72,7 +72,7 @@ export default function TodayQuest({ beats, today }: { beats: PlanBeat[]; today:
                   className="truncate font-body text-xs"
                   style={{ color: "var(--color-muted)" }}
                 >
-                  {beat.href ? beat.blurb : "Add words first"}
+                  {beat.href ? beat.blurb : (beat.lockedBlurb ?? "Add words first")}
                 </span>
               </span>
               <span style={{ color: "var(--color-faint)" }}>

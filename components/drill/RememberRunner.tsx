@@ -73,7 +73,9 @@ export default function RememberRunner({
   useEffect(() => {
     if (phase !== "done" || posted.current) return;
     posted.current = true;
-    const ms = Date.now() - startedAt.current;
+    // The round is REMEMBER_SECONDS long. A locked phone pauses the timer,
+    // and the wall clock then said hours, which the server refuses.
+    const ms = Math.min(Date.now() - startedAt.current, REMEMBER_SECONDS * 1000);
     const wordResults: WordResult[] = words.map((w) => ({
       word: w,
       skill: "use",

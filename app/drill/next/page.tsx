@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { sourceCounts } from "@/components/drill/picks";
+import { modesFor, sourceCounts } from "@/components/drill/picks";
 import { suggestionFor } from "@/components/drill/suggest";
 import { db } from "@/lib/db";
 import { toClientMathProgress } from "@/lib/models/MathProgress";
@@ -25,8 +25,10 @@ export default async function NextDrillPage() {
   const lists = practice
     .filter((l) => l.words.length > 0)
     .map((l) => ({ listId: l._id, name: l.name, words: l.words }));
+  const counts = sourceCounts(lists, now);
   const suggestion = suggestionFor({
-    weakWords: sourceCounts(lists, now).weak,
+    weakWords: counts.weak,
+    wordModes: modesFor(counts.weakSkills),
     played: mathDocs.map((doc) => toClientMathProgress(doc)),
     activity: profile.activity,
     now,

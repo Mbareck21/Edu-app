@@ -19,7 +19,7 @@ import {
   rungFor,
   type ChainState,
 } from "@/lib/spell-chain";
-import { postSession } from "@/lib/offline-queue";
+import { postSession, saveNote } from "@/lib/offline-queue";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { estimateXp } from "@/lib/rewards";
 import type { SessionResult, StepId } from "@/lib/types";
@@ -181,7 +181,8 @@ function ChainRunnerInner({
   const [shake, setShake] = useState(false);
   const [done, setDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [xp, setXp] = useState(0);
+  /** What the post paid; null until it answers, so "Next drill" waits for it. */
+  const [outcome, setOutcome] = useState<{ xp: number; note?: string } | null>(null);
   const [hidden, setHidden] = useState(false);
 
   const watch = useRef<Stopwatch | null>(null);
@@ -298,7 +299,11 @@ function ChainRunnerInner({
             ms,
             perfect: false,
           };
-          void postSession(result).then((res) => setXp(res.saved ? res.gained.xp : estimateXp(result)));
+          // Next drill waits for this: tapped before the session landed, the
+          // suggestion would not see the sitting and dealt it again.
+          void postSession(result).then((res) =>
+            setOutcome({ xp: res.saved ? res.gained.xp : estimateXp(result), note: saveNote(res) })
+          );
         }
       } else {
         watch.current?.mark();
@@ -311,6 +316,16 @@ function ChainRunnerInner({
       setBusy(false);
     }
   }, [word, typed, afterMiss, busy, writeIndex, post, active, state]);
+
+  if (done && post && !outcome) {
+    return (
+      <div className="safe-top safe-bottom flex min-h-dvh items-center justify-center px-4">
+        <Card className="w-full text-center">
+          <p className="font-display text-lg font-bold">Saving your work…</p>
+        </Card>
+      </div>
+    );
+  }
 
   if (done) {
     const { checked, finished } = log;
@@ -329,8 +344,9 @@ function ChainRunnerInner({
             ? parts.join(" ")
             : `Your best run today: ${Math.max(0, ...best)} in a row.`
         }
-        xp={xp}
+        xp={outcome?.xp ?? 0}
         ms={elapsedMs}
+        note={outcome?.note}
         accuracy={null}
         perfect={wonNow}
         primary={

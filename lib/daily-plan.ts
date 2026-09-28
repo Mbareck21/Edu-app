@@ -24,6 +24,8 @@ export type PlanBeat = {
   blurb: string;
   icon: IconName;
   href: string | null;
+  /** Shown instead of the blurb while there is no href. Default: "Add words first". */
+  lockedBlurb?: string;
   done: boolean;
 };
 

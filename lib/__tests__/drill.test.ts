@@ -18,6 +18,10 @@ import {
   sourceCounts,
   isDoneForNow,
   isSettled,
+  MAX_PER_WORD,
+  modesFor,
+  weakSkills,
+  withFill,
   type DrillList,
 } from "@/components/drill/picks";
 import { mulberry32 } from "@/lib/math/rng";
@@ -285,4 +289,50 @@ test("a word he got right today stops counting as to go, until tomorrow", () => 
   assert.equal(isDoneForNow(rightToday, new Date(NOW.getTime() + 2 * DAY)), false);
   const counts = sourceCounts([{ listId: "l", name: "L", words: [rightToday, missedToday, fresh] }], NOW);
   assert.equal(counts.lists[0].toGo, 2);
+});
+
+test("a word missed early today is not done for now: the halved streak is a miss", () => {
+  const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+  // An early miss halves a streak of 2 to 1 and stamps dueAt === lastAt.
+  const missedEarly = word("slip", {
+    skills: skills({ spell: { streak: 1, correct: 2, wrong: 1, lastAt: earlier, dueAt: earlier } }),
+  });
+  assert.equal(isDoneForNow(missedEarly, NOW), false);
+  assert.equal(isWeak(missedEarly, NOW), true);
+  assert.deepEqual(weakSkills(missedEarly, NOW), ["spell"]);
+});
+
+test("the suggested word drill fixes the weak skill, not just any", () => {
+  assert.deepEqual(modesFor(["spell"]), ["spell", "flashcards", "write"]);
+  assert.deepEqual(modesFor(["recognize", "use"]), ["match", "use"]);
+  assert.equal(modesFor([]).length, 6, "nothing weak: every type");
+  const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+  const missed = word("crippled", { skills: skills({ spell: { wrong: 1, lastAt: earlier } }) });
+  assert.deepEqual(sourceCounts([{ listId: "l", name: "L", words: [missed, word("new")] }], NOW).weakSkills, ["spell"]);
+});
+
+test("a weak drill on few words is topped up so no word comes round more than 3 times", () => {
+  const earlier = new Date(NOW.getTime() - 60 * 60 * 1000).toISOString();
+  const weak = ["crippled", "criteria", "events"].map((w) =>
+    word(w, { skills: skills({ spell: { wrong: 1, lastAt: earlier } }) })
+  );
+  const others = ["alpha", "beta", "gamma", "delta"].map((w) => word(w));
+  const lists: DrillList[] = [
+    // The pool comes first; its copy of a weak word is the same word.
+    { listId: "p", name: "Stuck", words: [weak[0]] },
+    { listId: "l", name: "L", words: [...weak, ...others, strong("done")] },
+  ];
+  const picked = pickWords(lists, { kind: "weak" }, NOW);
+  const filled = withFill(picked, lists, 20, NOW, mulberry32(1));
+  const names = filled.map((p) => p.word.word);
+  assert.equal(new Set(names).size, names.length, "no word twice");
+  assert.equal(filled.length, Math.ceil(20 / MAX_PER_WORD));
+  assert.ok(!names.includes("done"), "never a settled word");
+  assert.equal(filled.find((p) => p.word.word === "crippled")?.pool.listId, "l", "the unit copy");
+  assert.equal(buildDrillItems({ picked: filled, mode: "match", count: 20, now: NOW, rng: mulberry32(1) }).length, 20);
+  // Enough words already: just the one copy of each.
+  assert.deepEqual(
+    withFill(picked, lists, 6, NOW, mulberry32(1)).map((p) => p.word.word).sort(),
+    ["crippled", "criteria", "events"]
+  );
 });

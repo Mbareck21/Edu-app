@@ -11,7 +11,7 @@ import {
   mixedAutoLevel,
   type MathMode,
 } from "@/components/drill/options";
-import { sourceCounts } from "@/components/drill/picks";
+import { modesFor, sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
 import { currentLearner } from "@/lib/auth";
@@ -92,7 +92,7 @@ export default async function DrillPage() {
       </div>
 
       <SuggestedDrill
-        suggestion={suggestionFor({ weakWords: counts.weak, played, activity: profile.activity, now })}
+        suggestion={suggestionFor({ weakWords: counts.weak, wordModes: modesFor(counts.weakSkills), played, activity: profile.activity, now })}
       />
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />
