@@ -27,6 +27,7 @@ import {
 } from "@/lib/lesson-builder";
 import { scheduleSkill, wordKnowledge } from "@/lib/mastery";
 import { mulberry32 } from "@/lib/math/rng";
+import { WORD_PACKS } from "@/lib/word-packs";
 import type { ClientWord, SkillState, WordSkills } from "@/lib/models/WordList";
 
 const NOW = new Date("2026-08-19T10:00:00.000Z");
@@ -227,6 +228,49 @@ test("no two items in a row drill the same word (outside the blocked set)", () =
     if (!lesson[i].word || !lesson[i - 1].word) continue;
     assert.notEqual(lesson[i].word, lesson[i - 1].word);
   }
+});
+
+/** The same question: kind, word, what is shown and the answer. Option and tile order do not count. */
+function questionKey(item: LessonItem): string {
+  const shown = item as { variant?: string; clue?: string; sentence?: string; audioText?: string; answer?: string };
+  return [item.kind, shown.variant, item.word, shown.clue ?? shown.sentence ?? shown.audioText, shown.answer].join("|");
+}
+
+test("a word below streak 2 does not get the same question again within four items", () => {
+  // Below streak 2 a word's two items are the same question. Built pair by
+  // pair, the copy came two items later in half of every Match, Listen and
+  // Spell lesson, and he copied the answer he had just tapped.
+  for (const step of ["match", "listen", "spell", "use", "challenge"] as const) {
+    for (let seedNum = 1; seedNum <= 200; seedNum++) {
+      const lesson = buildLesson({ words: SEEN_LIST, step, now: NOW, rng: mulberry32(seedNum) });
+      lesson.forEach((item, i) => {
+        if (!item.word) return;
+        for (let j = Math.max(0, i - 4); j < i; j++) {
+          assert.notEqual(
+            questionKey(lesson[j]),
+            questionKey(item),
+            `${step}/${seedNum}: items ${j} and ${i} are the same question`
+          );
+        }
+      });
+    }
+  }
+});
+
+test("spell tiles never come already in the word's order", () => {
+  // Three shuffled letters land on the word itself one time in six, and
+  // "odd" one time in three: the word was built before he touched a tile.
+  for (const name of ["odd", "sum", "gas"]) {
+    const w = seen(name);
+    for (let seedNum = 1; seedNum <= 2000; seedNum++) {
+      const item = makeSpell(w, { words: [w] }, mulberry32(seedNum));
+      assert.notEqual(item.tiles.join(""), name, `${name} came built on seed ${seedNum}`);
+      assert.deepEqual([...item.tiles].sort(), name.split("").sort());
+    }
+  }
+  // Every letter the same: there is no other order, and it must not hang.
+  const same = seen("aaa");
+  assert.deepEqual(makeSpell(same, { words: [same] }, mulberry32(1)).tiles, ["a", "a", "a"]);
 });
 
 test("review pulls due skills from every list and caps the size", () => {
@@ -503,4 +547,24 @@ test("a lesson with no words is empty, not broken", () => {
     rng: mulberry32(1),
   });
   assert.deepEqual(lesson, []);
+});
+
+test("a Use or Challenge lesson never deals the same word-part or joining question twice", () => {
+  // A pack's words, all started: the case where 1 lesson in 100 did.
+  const pack = WORD_PACKS.find((p) => p.id === "growing-plants");
+  assert.ok(pack);
+  const words = pack.words.map((w) => seen(w.word));
+  const key = (i: LessonItem) =>
+    JSON.stringify([i.kind, "answer" in i ? i.answer : "", "lead" in i ? i.lead : "", "first" in i ? i.first : ""]);
+  let dupes = 0;
+  for (const step of ["use", "challenge"] as const) {
+    for (let seedNum = 1; seedNum <= 2000; seedNum++) {
+      const lesson = buildLesson({ words, step, now: NOW, rng: mulberry32(seedNum * 13 + 1), listId: "g" });
+      const school = lesson.filter((i) =>
+        ["word-part-meaning", "word-part-build", "sentence-combine"].includes(i.kind)
+      );
+      if (new Set(school.map(key)).size < school.length) dupes++;
+    }
+  }
+  assert.equal(dupes, 0);
 });

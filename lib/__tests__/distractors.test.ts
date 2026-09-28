@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { makeCloze, makePickSentence, tooClose, wordDistractors } from "@/lib/items";
+import {
+  COMBINE_SEEDS,
+  makeCloze,
+  makePickSentence,
+  makeWordForm,
+  tooClose,
+  wordDistractors,
+} from "@/lib/items";
 import { mulberry32 } from "@/lib/math/rng";
 import { packById } from "@/lib/word-packs";
 import type { ClientWord } from "@/lib/models/WordList";
@@ -140,4 +147,95 @@ test("a word that is not a number keeps a plain blank", () => {
   const words = packWords("growing-plants").map((w) => ({ ...w, examples: [`The ${w.word} was in the garden.`] }));
   const item = makeCloze(by(words, "soil"), { words, listId: "g" }, mulberry32(1));
   assert.equal(item?.sentence, "The ____ was in the garden.");
+});
+
+test("word form: the answer is not always the base word, so not always the shortest", () => {
+  // help / helps / helped / helpful. When the base was always the answer it
+  // was also the one short option, and "pick the short one" won unread.
+  const help: ClientWord = {
+    ...packWords("growing-plants")[0],
+    word: "help",
+    clue: "to make a job easier for someone",
+    family: ["helps", "helped", "helpful"],
+    examples: [
+      "Can you help me carry this box?",
+      "She helped her brother with his math.",
+      "The map was very helpful on our trip.",
+    ],
+  };
+  const runs = 2000;
+  let base = 0;
+  let shortest = 0;
+  for (let seed = 1; seed <= runs; seed++) {
+    const item = makeWordForm(help, { words: [help] }, mulberry32(seed));
+    assert.ok(item);
+    assert.equal(item.options.length, 4);
+    assert.ok(item.options.includes(item.answer));
+    // The answer is the form the sentence really had in that blank.
+    const filled = item.sentence.replace("____", item.answer).toLowerCase();
+    assert.ok(help.examples.some((s) => s.toLowerCase() === filled), `${item.sentence} / ${item.answer}`);
+    if (item.answer === "help") base++;
+    if (item.options.every((o) => o === item.answer || o.length > item.answer.length)) shortest++;
+  }
+  assert.ok(base <= runs * 0.6, `the base word was the answer ${base} of ${runs} times`);
+  assert.ok(shortest <= runs * 0.4, `the answer was the shortest option ${shortest} of ${runs} times`);
+});
+
+/** How one option joins the two sentences: which comes first, and with what. */
+function joinShape(first: string, second: string, option: string) {
+  const a = first.replace(/\.$/, "").toLowerCase();
+  const b = second.replace(/\.$/, "").toLowerCase();
+  const text = option.toLowerCase();
+  const joiners = text.replace(a, " ").replace(b, " ").match(/[a-z]+/g) ?? [];
+  return { swapped: text.indexOf(b) < text.indexOf(a), splice: joiners.length === 0, joiners };
+}
+
+const CONJUNCTIONS = ["because", "but", "so", "although", "while", "when", "since", "unless", "and", "or"];
+
+test("sentence joining has to be read: no option can be thrown out by its shape", () => {
+  // The first bank had 8 items. In all 8 the comma splice and the swapped
+  // option were wrong, so both went unread, and "never pick although" then
+  // solved 6 of the 8.
+  const n = COMBINE_SEEDS.length;
+  assert.ok(n >= 24, `only ${n} items`);
+  for (const c of CONJUNCTIONS) {
+    assert.ok(COMBINE_SEEDS.some((s) => s.joiner === c), `"${c}" is never the right joiner`);
+  }
+  assert.ok(COMBINE_SEEDS.filter((s) => s.joiner === "although").length >= 3);
+
+  let oneLeft = 0;
+  let swappedRight = 0;
+  let commaRight = 0;
+  const solvedBy = new Map<string, number>();
+  for (const seed of COMBINE_SEEDS) {
+    const options = [seed.answer, ...seed.wrong];
+    assert.equal(new Set(options).size, 4, `${seed.answer}: an option is repeated`);
+    // Every option keeps both sentences word for word, or nothing below is measured.
+    for (const o of options) {
+      assert.ok(o.toLowerCase().includes(seed.first.replace(/\.$/, "").toLowerCase()), o);
+      assert.ok(o.toLowerCase().includes(seed.second.replace(/\.$/, "").toLowerCase()), o);
+    }
+    const shapes = options.map((o) => joinShape(seed.first, seed.second, o));
+    assert.deepEqual(shapes[0].joiners, [seed.joiner], seed.answer);
+    if (shapes[0].swapped) swappedRight++;
+    if (seed.answer.includes(",")) commaRight++;
+    const plain = options.filter((_, i) => !shapes[i].splice && !shapes[i].swapped);
+    if (plain.length === 1) oneLeft++;
+    // On top of that, drop doubled joiners and "never pick <c>".
+    for (const c of CONJUNCTIONS) {
+      const left = options.filter(
+        (_, i) =>
+          !shapes[i].splice && !shapes[i].swapped && shapes[i].joiners.length === 1 && shapes[i].joiners[0] !== c
+      );
+      if (left.length === 1 && left[0] === seed.answer) solvedBy.set(c, (solvedBy.get(c) ?? 0) + 1);
+    }
+  }
+  assert.ok(oneLeft * 2 <= n, `dropping the splice and the swapped options leaves one choice in ${oneLeft} of ${n}`);
+  // Neither shape is always wrong: plenty of right answers are swapped (or
+  // open with the joiner), and plenty have a comma.
+  assert.ok(swappedRight * 3 >= n, `only ${swappedRight} of ${n} right answers are swapped`);
+  assert.ok(commaRight * 3 >= n, `only ${commaRight} of ${n} right answers have a comma`);
+  for (const [c, solved] of solvedBy) {
+    assert.ok(solved * 5 <= n, `"never pick ${c}" solves ${solved} of ${n}`);
+  }
 });

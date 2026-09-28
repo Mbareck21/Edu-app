@@ -25,6 +25,7 @@ import {
   MAX_READ_MS,
   castFor,
   checkMcq,
+  longestAnswerWarning,
   OPENING_MOVES,
   STORY_NAMES,
   STORY_SETTINGS,
@@ -307,6 +308,33 @@ test("a multiple choice with two right options falls back to open text", () => {
   assert.equal(clean.options.length, 4);
   // Losing the answer to de-duplication, or ending with one option, is not an MCQ.
   assert.equal(checkMcq(["a", "a"], 1, ["a"]).answerIndex, -1);
+});
+
+test("a passage whose right options are mostly the longest is flagged for the log", () => {
+  const long = { options: ["a cat", "the big brown dog next door", "a bird"], answerIndex: 1 };
+  const short = { options: ["a cat", "the big brown dog next door", "a bird"], answerIndex: 0 };
+  // A tie for longest is not a tell; only strictly longer counts.
+  const tie = { options: ["patient", "worried", "angry"], answerIndex: 0 };
+  const typed = { options: [], answerIndex: -1 };
+  assert.match(longestAnswerWarning([long, long, short, typed]) ?? "", /2 of 3/);
+  assert.equal(longestAnswerWarning([long, short, tie, typed]), null);
+  assert.equal(longestAnswerWarning([typed]), null);
+});
+
+test("the writer is told, and shown, that the right option is not the longest", () => {
+  const prompt = readingSystemPrompt(4);
+  assert.match(prompt, /must NOT be the\s+longest/);
+  // The example questions in the prompt used to break the rule themselves.
+  const examples = [...prompt.matchAll(/"options": \[([^\]]*)\],\s*"answerIndex": (\d)/g)];
+  assert.ok(examples.length >= 2);
+  for (const [, list, index] of examples) {
+    const options = [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    const right = options[Number(index)];
+    assert.ok(
+      options.some((o) => o !== right && o.length >= right.length),
+      `"${right}" is the longest option in its example`
+    );
+  }
 });
 
 test("pickArchived serves the oldest passage not seen for a week, or nothing", () => {

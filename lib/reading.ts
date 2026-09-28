@@ -635,6 +635,25 @@ export function checkMcq(
   return { options: kept, answerIndex: secondRight ? -1 : answer };
 }
 
+/**
+ * A log line when the right option is strictly the longest in most of a
+ * passage's multiple-choice questions, or null. Shuffling already hides where
+ * the answer sits, but a writer that pads the right one with detail hands him
+ * "pick the longest" instead of reading. The prompt asks for even lengths;
+ * this only tells us when the writer ignores it. It never rejects a passage.
+ */
+export function longestAnswerWarning(
+  questions: readonly { options: readonly string[]; answerIndex: number }[]
+): string | null {
+  const mcq = questions.filter((q) => q.answerIndex >= 0 && q.options.length > 1);
+  const longest = mcq.filter((q) => {
+    const right = q.options[q.answerIndex]?.length ?? 0;
+    return q.options.every((o, i) => i === q.answerIndex || o.length < right);
+  }).length;
+  if (longest * 2 <= mcq.length) return null;
+  return `the right option is the longest in ${longest} of ${mcq.length} choice questions`;
+}
+
 /** Whole passages kept per list for the days the writer cannot be reached. */
 export const ARCHIVE_MAX = 8;
 

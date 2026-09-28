@@ -291,6 +291,11 @@ FORMAT "mcq" (tap one option):
   • Every wrong option must be plausible AND clearly wrong by the passage:
     something the passage says is not so, or says about something else.
     Never a wrong option the passage could also support.
+  • Keep the options about the same length. The right option must NOT be the
+    longest one — a child learns fast that "the long one with the most
+    detail" is right, and then he stops reading. Give a wrong option the
+    same amount of detail. For evidence questions, pick passage sentences
+    of about the same length.
 
 ⚠ No circular questions. A question the passage cannot really answer is worse
 than none.
@@ -349,7 +354,7 @@ Copy the SHAPE, not the values:
       "type": "inference",
       "format": "mcq",
       "acceptable": ["patient"],
-      "options": ["angry", "patient", "scared", "bored"],
+      "options": ["angry", "patient", "worried", "bored"],
       "answerIndex": 1,
       "hints": ["She does not shout; she waits and tries again",
                 "Waiting calmly means being patient"],
@@ -360,7 +365,7 @@ Copy the SHAPE, not the values:
       "type": "retell",
       "format": "mcq",
       "acceptable": ["Layla found a patient way to get her goat down."],
-      "options": ["The goat likes to eat leaves.",
+      "options": ["The goat climbed onto the roof to eat the leaves there.",
                   "Layla found a patient way to get her goat down.",
                   "Goats live on farms in the hills."],
       "answerIndex": 1,
