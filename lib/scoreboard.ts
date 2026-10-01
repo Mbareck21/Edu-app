@@ -108,7 +108,7 @@ export function questLeft(
  * race (from QUEST_RULE_FROM). The quest alone pays about 1,000 to 1,500, so
  * the rest comes from drills: a real day's practice, not six quick beats.
  */
-export const MIN_WIN_PTS = 2500;
+export const MIN_WIN_PTS = 1700;
 
 /**
  * The points that can win `day`: the race points, or 0 while he is not in
