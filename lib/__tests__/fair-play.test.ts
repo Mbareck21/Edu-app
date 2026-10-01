@@ -230,7 +230,7 @@ test("nobody wins the day without the whole quest done by 9:30 pm", () => {
   // The whole quest alone, under MIN_WIN_PTS, is not in the race either.
   const questOnly = log(Q, 200);
   assert.equal(questLeft(questOnly, "2026-09-28", "UTC"), 0);
-  assert.equal(winXp(questOnly, "2026-09-28", "UTC"), 0, "1,200 pts: drills needed to reach 2,500");
+  assert.equal(winXp(questOnly, "2026-09-28", "UTC"), 0, "1,200 pts: drills needed to reach 1,700");
   // The last beat after 9:30 pm is too late.
   const late = [...five, ...log(Q.slice(5), 100, 22)];
   assert.equal(questLeft(late, "2026-09-28", "UTC"), 1);
@@ -239,11 +239,11 @@ test("nobody wins the day without the whole quest done by 9:30 pm", () => {
   assert.equal(winXp(old, "2026-09-27", "UTC"), raceXp(old, "2026-09-27", "UTC"));
 });
 
-test("the nudge sends him to finish the quest, then to drill up to 2,500", () => {
+test("the nudge sends him to finish the quest, then to drill up to 1,700", () => {
   const nour = { name: "Nour", xp: 900, questLeft: 2 };
   const wissam = { name: "Wissam", xp: 1450, questLeft: 0 };
   assert.equal(nudge(nour, [nour, wissam]), "Finish today's quest to be in the race: 2 to go!");
-  assert.equal(nudge(wissam, [nour, wissam]), "Quest done! 1,050 more pts to be in the race: try a drill!");
+  assert.equal(nudge(wissam, [nour, wissam]), "Quest done! 250 more pts to be in the race: try a drill!");
   wissam.xp = 2600;
   assert.equal(nudge(wissam, [nour, wissam]), "You're in the race! Keep it up.");
   nour.questLeft = 0;
