@@ -16,11 +16,14 @@ export default function TodayQuest({
   beats,
   today,
   race,
+  locked = false,
 }: {
   beats: PlanBeat[];
   today: string;
   /** His race points today, and whether tonight's race has closed. */
   race?: { pts: number; closed: boolean };
+  /** A child: Start is the one way in, and the beats below are a checklist (lib/assigned.ts). */
+  locked?: boolean;
 }) {
   const done = beats.filter((b) => b.done).length;
   const next = nextBeat(beats);
@@ -93,7 +96,11 @@ export default function TodayQuest({
 
           return (
             <li key={beat.id}>
-              {beat.href && beat.id === "read" ? (
+              {locked ? (
+                <span className="flex min-h-[44px] items-center gap-2.5 rounded-tile bg-white px-3 py-2">
+                  {row}
+                </span>
+              ) : beat.href && beat.id === "read" ? (
                 <ContinueReadingLink
                   href={beat.href}
                   className="press-3d flex min-h-[44px] items-center gap-2.5 rounded-tile bg-white px-3 py-2"

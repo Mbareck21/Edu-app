@@ -35,19 +35,23 @@ export type StuckBoardProps = {
  */
 const STUCK_REF = "stuck:write";
 
-export default function StuckBoard(props: StuckBoardProps) {
+export default function StuckBoard(props: StuckBoardProps & { locked?: boolean }) {
   // A sitting that was under way when the page reloaded comes straight back.
   const saved = useSavedRun(chainResumeKey(STUCK_REF), isChainSaved);
-  return (
-    <StuckBoardInner key={saved ? "resumed" : "fresh"} {...props} resumed={saved?.words ?? null} />
-  );
+  const resumed = props.locked ? null : (saved?.words ?? null);
+  return <StuckBoardInner key={resumed ? "resumed" : "fresh"} {...props} resumed={resumed} />;
 }
 
 function StuckBoardInner({
   list,
   chains,
   resumed,
-}: StuckBoardProps & { resumed: string[] | null }) {
+  locked = false,
+}: StuckBoardProps & {
+  resumed: string[] | null;
+  /** A child: the words to fix, without a sitting of its own. The suggested drill writes them (lib/assigned.ts). */
+  locked?: boolean;
+}) {
   const [words, setWords] = useState(list.words.map((w) => w.word));
   const [senses, setSenses] = useState<Record<string, WordSense>>(() =>
     Object.fromEntries(list.words.map((w) => [w.word, { clue: w.clue, arabic: w.arabic }]))
@@ -160,7 +164,11 @@ function StuckBoardInner({
         {note ? <p className="mt-2 text-sm">{note}</p> : null}
       </Card>
 
-      {working.length > 0 ? (
+      {working.length > 0 && locked ? (
+        <p className="text-center text-base" style={{ color: "var(--color-muted)" }}>
+          Your suggested drill on the Drill tab practises these words.
+        </p>
+      ) : working.length > 0 ? (
         <div>
           <Button
             fullWidth

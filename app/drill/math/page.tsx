@@ -1,4 +1,5 @@
 import MathDrillRunner from "@/components/drill/MathDrillRunner";
+import KidGuard from "@/components/ui/KidGuard";
 import {
   MIXED_SKILL,
   mixedAutoLevel,
@@ -8,6 +9,7 @@ import {
 } from "@/components/drill/options";
 import { requestSeed } from "@/components/ui/time";
 import { todayKey } from "@/lib/day";
+import { requireSuggestedDrill } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { getSkill, isMathSkillId, type Level, type MathSkillId } from "@/lib/math";
 import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
@@ -39,6 +41,8 @@ async function autoLevel(skill: MathSkillId | "mixed"): Promise<Level> {
 
 export default async function MathDrillPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
+  // A child drills what the Drill tab suggests, not a skill and level he picks.
+  await requireSuggestedDrill("/drill/math", q);
   const skill: MathSkillId | "mixed" = q.skill && isMathSkillId(q.skill) ? q.skill : MIXED_SKILL;
   const choice = parseLevelChoice(q.level);
   const count = parseLength(q.n);
@@ -51,14 +55,17 @@ export default async function MathDrillPage({ searchParams }: { searchParams: Se
   const level = choice === "auto" ? await autoLevel(skill) : choice;
 
   return (
-    <MathDrillRunner
-      key={runKey}
-      skill={skill}
-      skillName={skill === MIXED_SKILL ? "Mixed" : getSkill(skill).name}
-      level={level}
-      count={count}
-      mode={mode}
-      seed={seed}
-    />
+    <>
+      <KidGuard />
+      <MathDrillRunner
+        key={runKey}
+        skill={skill}
+        skillName={skill === MIXED_SKILL ? "Mixed" : getSkill(skill).name}
+        level={level}
+        count={count}
+        mode={mode}
+        seed={seed}
+      />
+    </>
   );
 }

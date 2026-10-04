@@ -75,6 +75,8 @@ export type ReadingRunnerProps = {
   onDone?: () => void;
   /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
   dayPlan?: PlanProgress;
+  /** Offer "New reading" when done. Off for a child: another passage is the beat again for points. */
+  more?: boolean;
 };
 
 type Phase = "words" | "mode" | "read" | "questions" | "done";
@@ -177,6 +179,7 @@ function ReadingRunnerInner({
   spare = null,
   onDone,
   dayPlan,
+  more = true,
   saveKey,
   initial,
 }: ReadingRunnerProps & { saveKey: string; initial: ReadingSaved | null }) {
@@ -558,19 +561,23 @@ function ReadingRunnerInner({
             ? { label: "Continue", onClick: onDone }
             : { label: "Back to Learn", href: "/" }
         }
-        secondary={{
-          label: busy === "generating" ? "Writing…" : "New reading",
-          // Not while saving (the new passage would land on the list the save
-          // is writing), and once only: every tap is a paid call.
-          disabled: busy !== null,
-          onClick: () => {
-            void (async () => {
-              const fresh = await generate();
-              // A new passage opens on its words; installReading set that.
-              if (!fresh) return;
-            })();
-          },
-        }}
+        secondary={
+          more
+            ? {
+                label: busy === "generating" ? "Writing…" : "New reading",
+                // Not while saving (the new passage would land on the list the save
+                // is writing), and once only: every tap is a paid call.
+                disabled: busy !== null,
+                onClick: () => {
+                  void (async () => {
+                    const fresh = await generate();
+                    // A new passage opens on its words; installReading set that.
+                    if (!fresh) return;
+                  })();
+                },
+              }
+            : undefined
+        }
       />
     );
   }

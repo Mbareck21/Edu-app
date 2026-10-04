@@ -2,6 +2,7 @@ import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
 import TablesBoard from "@/components/tables/TablesBoard";
 import { requestSeed } from "@/components/ui/time";
+import { requireGrownUp } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { factFromRow, type FactState } from "@/lib/tables";
 
@@ -10,6 +11,8 @@ export const metadata = { title: "Times tables" };
 
 /** Tables 2 to 12 as a grid to fill in. See lib/tables.ts. */
 export default async function TablesPage() {
+  // Free practice: a child's tables come through the quest and the suggested drill.
+  await requireGrownUp("/math");
   const { TimesFact } = await db();
   const rows = await TimesFact.find().lean();
   const facts: Record<string, FactState> = {};

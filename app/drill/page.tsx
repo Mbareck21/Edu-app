@@ -14,6 +14,7 @@ import {
 import { modesFor, sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
+import { kidLocked } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { addDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -30,12 +31,13 @@ export const metadata = { title: "Drill" };
 
 export default async function DrillPage() {
   const { MathProgress } = await db();
-  const [practice, mathDocs, profile, me, family] = await Promise.all([
+  const [practice, mathDocs, profile, me, family, locked] = await Promise.all([
     getPractice(),
     MathProgress.find().lean(),
     getProfile(),
     currentLearner(),
     getFamilyProfiles(),
+    kidLocked(),
   ]);
 
   const now = new Date();
@@ -97,19 +99,25 @@ export default async function DrillPage() {
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />
 
-      <WordDrillCard
-        lists={counts.lists}
-        all={counts.all}
-        total={counts.total}
-        weak={counts.weak}
-        due={counts.due}
-      />
+      {/* Picking a drill is for grown-ups: a child drills what is suggested
+          (lib/assigned.ts), so one easy drill cannot be played for points. */}
+      {locked ? null : (
+        <>
+          <WordDrillCard
+            lists={counts.lists}
+            all={counts.all}
+            total={counts.total}
+            weak={counts.weak}
+            due={counts.due}
+          />
 
-      <MathDrillCard
-        skills={MATH_SKILLS.map((s) => ({ id: s.id, name: s.name }))}
-        bests={bests}
-        autoLevels={autoLevels}
-      />
+          <MathDrillCard
+            skills={MATH_SKILLS.map((s) => ({ id: s.id, name: s.name }))}
+            bests={bests}
+            autoLevels={autoLevels}
+          />
+        </>
+      )}
     </AppShell>
   );
 }

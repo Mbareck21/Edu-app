@@ -10,6 +10,7 @@ import { buttonClass, buttonStyle } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import TopBar from "@/components/ui/TopBar";
+import { kidLocked } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -27,11 +28,12 @@ export const metadata = { title: "Learn" };
 
 export default async function LearnPage() {
   const { MathProgress } = await db();
-  const [profile, lists, learner, mathRows] = await Promise.all([
+  const [profile, lists, learner, mathRows, locked] = await Promise.all([
     getProfile(),
     getListSummaries(),
     currentLearner(),
     MathProgress.find().select("skill level").lean(),
+    kidLocked(),
   ]);
 
   const unit = unitOf(lists);
@@ -76,8 +78,9 @@ export default async function LearnPage() {
           beats={beats}
           today={today}
           race={{ pts: raceXp(profile.activity, today), closed: raceClosed(new Date()) }}
+          locked={locked}
         />
-        <SchoolStrip href={unit ? `/learn/${unit._id}` : "/me/lists"} />
+        <SchoolStrip href={locked ? "/" : unit ? `/learn/${unit._id}` : "/me/lists"} />
 
         {lists.length === 0 ? (
           <Card className="space-y-3 text-center">
@@ -103,7 +106,7 @@ export default async function LearnPage() {
           <>
             <h2 className="pt-2 font-display text-lg font-bold">Your units</h2>
             {lists.slice(0, 3).map((list) => (
-              <UnitCard key={list._id} list={list} />
+              <UnitCard key={list._id} list={list} locked={locked} />
             ))}
             {lists.length > 3 ? (
               <details className="group">
@@ -115,7 +118,7 @@ export default async function LearnPage() {
                 </summary>
                 <div className="space-y-3">
                   {lists.slice(3).map((list) => (
-                    <UnitCard key={list._id} list={list} />
+                    <UnitCard key={list._id} list={list} locked={locked} />
                   ))}
                 </div>
               </details>

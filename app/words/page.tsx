@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import BottomNav from "@/components/ui/BottomNav";
 import StuckBoard from "@/components/stuck/StuckBoard";
+import { kidLocked } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { fromRow, type ChainState } from "@/lib/spell-chain";
 import { clearSettledStuck, getPool, getUnits } from "@/lib/word-source";
@@ -42,7 +43,7 @@ export default async function WordsPage() {
           Write each one ten times without a mistake.
         </p>
 
-        <StuckBoard list={pool} chains={chains} />
+        <StuckBoard list={pool} chains={chains} locked={await kidLocked()} />
 
         <p className="mt-7 text-center text-sm" style={{ color: "var(--color-muted)" }}>
           <Link href="/me/lists" className="inline-block py-3 font-bold underline underline-offset-4">

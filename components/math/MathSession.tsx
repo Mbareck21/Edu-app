@@ -29,6 +29,8 @@ export type MathSessionProps = {
   seed: number;
   /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
   dayPlan?: PlanProgress;
+  /** Offer "Play again" when done. Off for a child: the same lesson again is points again. */
+  again?: boolean;
 };
 
 type Run = { seed: number; queue: number[] };
@@ -86,6 +88,7 @@ function MathSessionInner({
   level,
   seed,
   dayPlan,
+  again = true,
   saveKey,
   initial,
 }: MathSessionProps & { saveKey: string; initial: Saved | null }) {
@@ -308,7 +311,7 @@ function MathSessionInner({
         leveledUp={outcome.gained?.leveledUp ?? false}
         newBadges={outcome.gained?.newBadges ?? []}
         primary={{ label: "All skills", href: "/math" }}
-        secondary={{ label: "Play again", onClick: playAgain }}
+        secondary={again ? { label: "Play again", onClick: playAgain } : undefined}
         note={outcome.note}
         plan={dayPlan}
       />
