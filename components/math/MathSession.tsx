@@ -226,6 +226,15 @@ function MathSessionInner({
     setHinted(false);
     setFlash("wrong");
     setShakeKey((k) => k + 1);
+    // The answer is about to show: kept as the requeue Got it leads to, so a
+    // reload neither hands him this question with the answer just seen nor
+    // drops its comeback.
+    saveProgress(saveKey, {
+      seed: run.seed,
+      queue: requeue(queue),
+      firstTry: firstTryRef.current,
+      ms: watch.current?.read() ?? 0,
+    });
     // Encouragement first, the answer and the steps under it.
     setFeedback({
       state: "wrong",

@@ -361,7 +361,10 @@ export async function POST(req: Request) {
 
   // Played by the other child, before a switch on this phone. 409 keeps it
   // queued there until that child signs in again.
-  if (body.learner && body.learner !== (await currentLearner())) {
+  // Read once, before anything is written: read after the save, a failure
+  // there answered 500 for a session already stored.
+  const learner = await currentLearner();
+  if (body.learner && body.learner !== learner) {
     return NextResponse.json({ error: "other learner" }, { status: 409 });
   }
 
@@ -421,7 +424,6 @@ export async function POST(req: Request) {
 
     // The parent's competition record (lib/tracker.ts), after the reply: a
     // failure there must never cost him the session.
-    const learner = await currentLearner();
     after(() => trackActivity(learner, saved.activity).then(() => undefined, () => undefined));
 
     return NextResponse.json({

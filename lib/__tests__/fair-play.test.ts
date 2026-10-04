@@ -118,7 +118,7 @@ test("correctness: tapping through (under half right) earns no lesson bonus", ()
     applySession(emptyProfile(), drill({ correct: n }), at(15)).gained.xp - XP.streakDay;
   const perRight = XP.mathCorrect;
   // 5 of 10 is a real attempt: the answers and the bonus.
-  assert.equal(rightXp(5), Math.round(5 * perRight * accuracyFactor(50)) + XP.lessonDone);
+  assert.equal(rightXp(5), Math.round((5 * perRight + XP.lessonDone) * accuracyFactor(50)));
   // 4 of 10 is under BONUS_MIN_PCT: the answers only.
   assert.ok(BONUS_MIN_PCT === 50);
   assert.equal(rightXp(4), Math.round(4 * perRight * accuracyFactor(40)));
@@ -159,7 +159,50 @@ test("accuracy: a reading pays by how many he got right, and 5 XP with all of th
     reading: { level: 4, pct: correct * 25, wordsCount: 200 },
   });
   const xp = [0, 1, 2, 3, 4].map((n) => play([reading(n)])[0] - XP.streakDay);
-  assert.deepEqual(xp, [5, 50, 220, 470, 650]);
+  assert.deepEqual(xp, [5, 50, 213, 470, 650]);
+});
+
+test("accuracy: still counts on a quick run, where the pace cap is the limit", () => {
+  // A passage done in a minute: the cap (200) binds at 2, 3 and 4 right.
+  const quick = (correct: number): SessionResult => ({
+    kind: "reading",
+    ref: "read:l1@2026-09-28T10:00:00.000Z",
+    answered: 4,
+    correct,
+    fastCount: 0,
+    ms: 60_000,
+    perfect: correct === 4,
+    reading: { level: 4, pct: correct * 25, wordsCount: 200 },
+  });
+  const xp = [2, 3, 4].map((n) => play([quick(n)])[0] - XP.streakDay);
+  assert.ok(xp[0] < xp[2], `a lucky 2 of 4 paid ${xp[0]}, 4 of 4 paid ${xp[2]}`);
+  assert.equal(xp[1], xp[2], "3 of 4 is full pay");
+});
+
+test("accuracy: a short timed run is judged on the answers given, not the floor", () => {
+  const timed = (answered: number, correct: number) =>
+    applySession(
+      emptyProfile(),
+      drill({ ref: "drill:math:fractions:t60#x", timed: true, answered, correct, ms: 60_000 }),
+      at(15)
+    ).gained;
+  const three = timed(3, 3);
+  assert.equal(three.xp - XP.streakDay, Math.round(3 * (XP.mathCorrect / 2)) + XP.lessonDone, "3 of 3: every one in full");
+  assert.notEqual(three.tip, "Get 3 out of 4 right for full XP on every answer.");
+});
+
+test("accuracy: Write what you remember has nothing to guess, so it is not cut", () => {
+  const remember = (correct: number): SessionResult => ({
+    kind: "vocab",
+    ref: "drill:vocab:remember",
+    answered: 20,
+    correct,
+    fastCount: 0,
+    ms: 90_000,
+    perfect: false,
+  });
+  assert.equal(play([remember(5)])[0] - XP.streakDay, 5 * XP.correct);
+  assert.equal(estimateXp(remember(5)), 5 * XP.correct);
 });
 
 test("accuracy: guessing pays a fraction of what careful work pays, in any section", () => {

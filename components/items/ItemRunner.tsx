@@ -95,6 +95,8 @@ type Saved = {
   round: number;
   plans: [string, { left: number; index: number }][];
   repeatsScheduled: number;
+  /** The item at the head whose miss is on screen: its returns are owed on Continue. */
+  missed?: string;
   /** Time on task banked before a reload. */
   ms?: number;
 };
@@ -111,6 +113,7 @@ function isSaved(v: unknown): v is Saved {
     typeof o.round === "number" &&
     Array.isArray(o.plans) &&
     typeof o.repeatsScheduled === "number" &&
+    (o.missed === undefined || typeof o.missed === "string") &&
     (o.ms === undefined || typeof o.ms === "number")
   );
 }
@@ -247,6 +250,9 @@ function ItemRunnerInner({
     new Map(initial?.plans ?? [])
   );
   const repeatsScheduled = useRef(initial?.repeatsScheduled ?? 0);
+  // A miss saved with its answer on screen, before Continue scheduled its
+  // returns: a reload must still owe them, or the word never came back.
+  const pendingMiss = useRef<string | null>(initial?.missed ?? null);
 
   const total = items.length;
   const remaining = new Set(queue.map((i) => i.id)).size;
@@ -351,6 +357,7 @@ function ItemRunnerInner({
       round: roundNow,
       plans: [...repeatPlans.current.entries()],
       repeatsScheduled: repeatsScheduled.current,
+      ...(pendingMiss.current ? { missed: pendingMiss.current } : {}),
       ms: watch.current?.read() ?? 0,
     });
   }
@@ -376,11 +383,12 @@ function ItemRunnerInner({
         fast,
         listId: current.listId,
       });
-      // Kept now, not on Continue: a reload with the answer on screen came
-      // back to this item unanswered, and typing what it had just shown was
-      // a right first try.
-      persist(queue, right ? streak + 1 : 0, round);
     }
+    // Kept now, not on Continue: a reload with the answer on screen came back
+    // to this item unanswered, and typing what it had just shown was a right
+    // first try. A miss is kept as owing its returns.
+    if (!right) pendingMiss.current = current.id;
+    if (firstTry || !right) persist(queue, right ? streak + 1 : 0, round);
     setStreak((s) => (right ? s + 1 : 0));
 
     if (right) {
@@ -407,8 +415,11 @@ function ItemRunnerInner({
     }
   }
 
-  function advance(wrong: boolean) {
+  function advance(answeredWrong: boolean) {
     const [head, ...rest] = queue;
+    // Missed before a reload, it is still a miss, whatever the answer after.
+    const wrong = answeredWrong || (head !== undefined && pendingMiss.current === head.id);
+    pendingMiss.current = null;
     const roll = rng.current ?? mulberry32(Date.now() % 2147483647);
     rng.current = roll;
     let next = rest;
