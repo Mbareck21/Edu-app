@@ -89,9 +89,14 @@ export function listenOnce(opts: {
   }, opts.maxMs ?? 8000);
 
   rec.onresult = (e) => {
+    // While he speaks, Chrome can split what it has heard so far into several
+    // results: the settled words, then the rest. A guess is the whole of it,
+    // so a count up to the answer ("50 51 … 56") is never just its "56".
+    let before = "";
+    for (let i = 0; i < e.results.length - 1; i++) before += `${e.results[i][0].transcript} `;
     const last = e.results[e.results.length - 1];
     for (let i = 0; i < last.length; i++) {
-      const t = last[i].transcript;
+      const t = (before + last[i].transcript).trim();
       if (t && !heard.includes(t)) heard.push(t);
       if (t && last.isFinal && !final.includes(t)) final.push(t);
     }
