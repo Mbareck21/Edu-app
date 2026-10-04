@@ -19,7 +19,7 @@ import {
 } from "@/lib/models/Profile";
 import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
-import { applyReading, applySession, beatsDone, goalBeats, levelFor } from "@/lib/rewards";
+import { applyReading, applySession, beatsDone, goalBeats, levelFor, readTooFast } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
 
@@ -409,7 +409,9 @@ export async function POST(req: Request) {
     const { changed, saved } = await updateProfile((current) => {
       const applied = applySession(current, result, when);
       return {
-        profile: body.reading ? applyReading(applied.profile, body.reading, when) : applied.profile,
+        // A passage finished faster than it can be read leaves the ladder alone.
+        profile:
+          body.reading && !readTooFast(body) ? applyReading(applied.profile, body.reading, when) : applied.profile,
         gained: applied.gained,
       };
     });

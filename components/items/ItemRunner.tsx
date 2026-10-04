@@ -339,6 +339,22 @@ function ItemRunnerInner({
     })();
   }, [done, chest, post, report, resumeKey]);
 
+  /** Where he is, for a reload. */
+  function persist(next: LessonItem[], streakNow: number, roundNow: number) {
+    if (!resumeKey) return;
+    saveProgress(resumeKey, {
+      items,
+      queueIds: next.map((i) => i.id),
+      attempts: attempts.current,
+      answeredIds: [...answeredIds.current],
+      streak: streakNow,
+      round: roundNow,
+      plans: [...repeatPlans.current.entries()],
+      repeatsScheduled: repeatsScheduled.current,
+      ms: watch.current?.read() ?? 0,
+    });
+  }
+
   function onAnswer(given: string) {
     if (!current || feedback || current.kind === "learn-card") return;
     const grade = gradeItem(current, given, almost);
@@ -360,6 +376,10 @@ function ItemRunnerInner({
         fast,
         listId: current.listId,
       });
+      // Kept now, not on Continue: a reload with the answer on screen came
+      // back to this item unanswered, and typing what it had just shown was
+      // a right first try.
+      persist(queue, right ? streak + 1 : 0, round);
     }
     setStreak((s) => (right ? s + 1 : 0));
 
@@ -433,20 +453,9 @@ function ItemRunnerInner({
     watch.current?.mark();
     itemStartedAt.current = Date.now();
     // Where he is, so a reload lands here and not on the first card.
-    if (resumeKey) {
-      saveProgress(resumeKey, {
-        items,
-        queueIds: next.map((i) => i.id),
-        attempts: attempts.current,
-        answeredIds: [...answeredIds.current],
-        streak,
-        round: round + 1,
-        plans: [...repeatPlans.current.entries()],
-        repeatsScheduled: repeatsScheduled.current,
-        ms: watch.current?.read() ?? 0,
-      });
-    }
+    persist(next, streak, round + 1);
   }
+
 
   if (items.length === 0) {
     return (

@@ -88,6 +88,8 @@ export type ChainSaved = {
   writeIndex: number;
   log: { checked: string[]; finished: string[] };
   correct: number;
+  /** Repair writes so far: copies after a miss, not scored. */
+  repairs?: number;
   /** Time on task banked before a reload. */
   ms?: number;
 };
@@ -108,6 +110,7 @@ export function isChainSaved(v: unknown): v is ChainSaved {
     strings(o.log.checked) &&
     strings(o.log.finished) &&
     typeof o.correct === "number" &&
+    (o.repairs === undefined || typeof o.repairs === "number") &&
     (o.ms === undefined || typeof o.ms === "number")
   );
 }
@@ -192,6 +195,10 @@ function ChainRunnerInner({
   const watch = useRef<Stopwatch | null>(null);
   const postedRef = useRef(false);
   const correctRef = useRef(initial?.correct ?? 0);
+  // The write after a miss is a copy with the spelling on screen: practice,
+  // not a test. Scored, miss-then-copy over and over was half right and paid
+  // the finish bonus.
+  const repairsRef = useRef(initial?.repairs ?? 0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Before the save below: effects run in order, and the first save reads it.
@@ -211,6 +218,7 @@ function ChainRunnerInner({
         writeIndex,
         log,
         correct: correctRef.current,
+        repairs: repairsRef.current,
         ms: watch.current?.read() ?? 0,
       });
   }, [done, words, active, turn, writeIndex, log, saveKey]);
@@ -257,8 +265,9 @@ function ChainRunnerInner({
       const after: ChainState = data.state;
       setState((s) => ({ ...s, [word]: after }));
       let remaining = active;
+      if (afterMiss) repairsRef.current += 1;
       if (data.correct) {
-        correctRef.current += 1;
+        if (!afterMiss) correctRef.current += 1;
         sfx.correct();
         setMissed(null);
         setAfterMiss(false);
@@ -297,11 +306,11 @@ function ChainRunnerInner({
             ref: post.ref,
             listId: post.listId,
             step: post.step,
-            answered: next,
+            answered: next - repairsRef.current,
             correct: correctRef.current,
             fastCount: 0,
             ms,
-            perfect: false,
+            perfect: correctRef.current === next - repairsRef.current,
           };
           // Next drill waits for this: tapped before the session landed, the
           // suggestion would not see the sitting and dealt it again.

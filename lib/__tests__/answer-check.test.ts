@@ -167,3 +167,15 @@ for (const [answer, acceptable, question, want] of CASES) {
     assert.equal(j.verdict === "wrong" ? "wrong" : "right", want);
   });
 }
+
+test("the whole passage pasted into the box is not an answer", () => {
+  const passage =
+    "Layla planted tomato seeds in the garden. Every morning she gave them water. " +
+    "After two weeks small green shoots came up. Her brother Sami built a fence so the rabbits " +
+    "could not eat them. By summer the plants were taller than Layla, and the family ate tomatoes every day.";
+  const q = "What did Layla plant in the garden?";
+  assert.equal(judgeAnswer(passage, ["tomato seeds"], q, passage).verdict, "wrong");
+  // A long sentence of his own still counts.
+  const own = "Layla planted some tomato seeds in her garden because her family wanted to eat fresh tomatoes";
+  assert.notEqual(judgeAnswer(own, ["tomato seeds"], q, passage).verdict, "wrong");
+});

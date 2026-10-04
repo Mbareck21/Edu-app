@@ -195,7 +195,17 @@ function MathSessionInner({
     if (!question || !input || flash || feedback) return;
     const index = queue[0];
     const { correct } = gradeAnswer(question, input);
-    if (firstTryRef.current[index] === undefined) firstTryRef.current[index] = correct;
+    if (firstTryRef.current[index] === undefined) {
+      firstTryRef.current[index] = correct;
+      // Kept now: a reload after the hint or the answer came back to this
+      // question with no first try marked, and the retry counted as one.
+      saveProgress(saveKey, {
+        seed: run.seed,
+        queue,
+        firstTry: firstTryRef.current,
+        ms: watch.current?.read() ?? 0,
+      });
+    }
 
     if (correct) {
       sfx.correct();
@@ -222,7 +232,7 @@ function MathSessionInner({
       title: "Good try!",
       line: `The answer is ${question.answer.toLocaleString("en-US")}. ${question.how}`,
     });
-  }, [advance, feedback, flash, hinted, input, queue, question]);
+  }, [advance, feedback, flash, hinted, input, queue, question, run.seed, saveKey]);
 
   /** Back to the same question after a hint, with the box cleared. */
   const tryAgain = useCallback(() => {

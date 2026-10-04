@@ -384,6 +384,12 @@ function judgeAgainst(
 }
 
 /**
+ * Longest typed answer judged, in words, or twice the longest accepted one if
+ * that is more. A whole sentence of his own fits well inside it.
+ */
+export const MAX_ANSWER_WORDS = 25;
+
+/**
  * Judges a typed answer against every acceptable phrasing and reports the
  * best outcome. Order-blind and extra-word-blind: producing the expected
  * content words is what counts, however he arranged or padded them.
@@ -398,6 +404,12 @@ export function judgeAnswer(
 ): AnswerJudgement {
   const answerWords = tokens(answer);
   if (answerWords.length === 0) return { verdict: "wrong", matched: "", coverage: 0 };
+  // Extra words are forgiven, but not without end: the whole passage pasted
+  // into the box named every answer in it and was marked right.
+  const longest = Math.max(0, ...acceptable.map((a) => tokens(a).length));
+  if (answerWords.length > Math.max(MAX_ANSWER_WORDS, 2 * longest)) {
+    return { verdict: "wrong", matched: "", coverage: 0 };
+  }
   const passageWords = new Set(tokens(passage));
 
   let best: AnswerJudgement = { verdict: "wrong", matched: "", coverage: 0 };
