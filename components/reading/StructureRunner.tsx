@@ -33,6 +33,8 @@ export type StructureRunnerProps = {
   learner: string;
   /** Set when this run is a beat of today's plan: its finish screen goes on to the next beat. */
   dayPlan?: PlanProgress;
+  /** Offer "Again" when done. Off for a child: the beat again is points again (lib/assigned.ts). */
+  again?: boolean;
 };
 
 /**
@@ -125,6 +127,7 @@ function StructureRunnerInner({
   seed: freshSeed,
   learner,
   dayPlan,
+  again = true,
   saveKey,
   initial,
 }: StructureRunnerProps & { saveKey: string; initial: Saved | null }) {
@@ -260,7 +263,7 @@ function StructureRunnerInner({
         primary={{ label: "Back to Learn", href: "/" }}
         // This visit's seed, not the resumed run's: that one is already the
         // page's ?r after an Again, and the same key would not remount.
-        secondary={{ label: "Again", href: `/learn/structure?r=${freshSeed}` }}
+        secondary={again ? { label: "Again", href: `/learn/structure?r=${freshSeed}` } : undefined}
       />
     );
   }

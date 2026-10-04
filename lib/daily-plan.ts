@@ -39,25 +39,38 @@ export type PlanProgress = {
   next: { id: BeatId | null; label: string; href: string };
 };
 
+/** The quest beat a session is, by its kind and ref, or null for anything else. */
+export function beatOfSession(a: Pick<ActivityEntry, "kind" | "ref">): BeatId | null {
+  if (a.ref === "quest:review") return "review";
+  if (a.ref === "quest:new") return "new";
+  if (a.ref === "quest:production") return "production";
+  if (a.ref === "read:structure") return "structure";
+  if (a.kind === "reading" || a.ref.endsWith(":read")) return "read";
+  // A whole math lesson (any skill), not a quick drill or a tables round:
+  // two answers in a drill used to tick the beat.
+  if (a.kind === "math" && isMathLesson(a.ref)) return "math";
+  return null;
+}
+
 /** Which beats are done on `today`, from the activity log. */
 export function doneToday(
   activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref">[],
   today: string
 ): Record<BeatId, boolean> {
-  const day = activity.filter((a) => todayKey(new Date(a.at)) === today);
-  const did = (ref: string) => day.some((a) => a.ref === ref);
-  return {
-    review: did("quest:review"),
-    read: day.some(
-      (a) => (a.kind === "reading" && a.ref !== "read:structure") || a.ref.endsWith(":read")
-    ),
-    // A whole math lesson (any skill), not a quick drill or a tables round:
-    // two answers in a drill used to tick the beat.
-    math: day.some((a) => a.kind === "math" && isMathLesson(a.ref)),
-    new: did("quest:new"),
-    structure: did("read:structure"),
-    production: did("quest:production"),
+  const done: Record<BeatId, boolean> = {
+    review: false,
+    read: false,
+    math: false,
+    new: false,
+    structure: false,
+    production: false,
   };
+  for (const a of activity) {
+    if (todayKey(new Date(a.at)) !== today) continue;
+    const beat = beatOfSession(a);
+    if (beat) done[beat] = true;
+  }
+  return done;
 }
 
 /** The first beat in plan order not done yet and open to him, skipping `current`. */

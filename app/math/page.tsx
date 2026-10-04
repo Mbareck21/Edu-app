@@ -8,6 +8,7 @@ import Icon from "@/components/ui/Icon";
 import Pill from "@/components/ui/Pill";
 import { SCHOOL_YEAR_END } from "@/lib/curriculum";
 import { todayKey } from "@/lib/day";
+import { kidLocked } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import {
   MATH_SKILLS,
@@ -61,7 +62,18 @@ function Stars({ level }: { level: number }) {
   );
 }
 
-function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; school?: boolean }) {
+function SkillCard({
+  skill,
+  stat,
+  school,
+  playable = true,
+}: {
+  skill: MathSkill;
+  stat: Stat;
+  school?: boolean;
+  /** Off for a child: math lessons come as the quest's Math beat (lib/assigned.ts). */
+  playable?: boolean;
+}) {
   return (
     <Card className="mt-2">
       <div className="flex items-center gap-3">
@@ -102,13 +114,15 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
             </p>
           ) : null}
         </div>
-        <Link
-          href={`/math/${skill.id}`}
-          className={buttonClass({ color: "purple", size: "md" })}
-          style={buttonStyle({ color: "purple" })}
-        >
-          Play
-        </Link>
+        {playable ? (
+          <Link
+            href={`/math/${skill.id}`}
+            className={buttonClass({ color: "purple", size: "md" })}
+            style={buttonStyle({ color: "purple" })}
+          >
+            Play
+          </Link>
+        ) : null}
       </div>
     </Card>
   );
@@ -116,7 +130,7 @@ function SkillCard({ skill, stat, school }: { skill: MathSkill; stat: Stat; scho
 
 export default async function MathPage() {
   const { MathProgress, TimesFact } = await db();
-  const [docs, factRows] = await Promise.all([MathProgress.find().lean(), TimesFact.find().lean()]);
+  const [docs, factRows, locked] = await Promise.all([MathProgress.find().lean(), TimesFact.find().lean(), kidLocked()]);
   // Lit, not known: the grid lights a cell on the first right answer, so this
   // card said "Light up the grid" to a boy who had lit nearly all of it.
   const tablesLit = factRows.filter((r) => isLit(factFromRow(r.key, r))).length;
@@ -183,11 +197,13 @@ export default async function MathPage() {
             <p className="mt-2 font-display text-base font-bold">
               Lesson {lesson.lesson}: {lesson.title}
             </p>
-            <p className="mt-1 text-sm">Play these first. They match your class.</p>
+            <p className="mt-1 text-sm">
+              {locked ? "Your Math beat in Today's quest picks from these." : "Play these first. They match your class."}
+            </p>
           </Card>
 
           {unitSkills.map((skill) => (
-            <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} school />
+            <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} school playable={!locked} />
           ))}
         </>
       )}
@@ -206,13 +222,15 @@ export default async function MathPage() {
                   : `${tablesLit} of ${tablesTotal} facts lit`}
             </p>
           </div>
-          <Link
-            href="/math/tables"
-            className={buttonClass({ color: "purple", size: "md" })}
-            style={buttonStyle({ color: "purple" })}
-          >
-            {tablesLit === 0 ? "Start" : "Go on"}
-          </Link>
+          {locked ? null : (
+            <Link
+              href="/math/tables"
+              className={buttonClass({ color: "purple", size: "md" })}
+              style={buttonStyle({ color: "purple" })}
+            >
+              {tablesLit === 0 ? "Start" : "Go on"}
+            </Link>
+          )}
         </div>
       </Card>
 
@@ -231,7 +249,7 @@ export default async function MathPage() {
                 </span>
               </div>
               {skills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} />
+                <SkillCard key={skill.id} skill={skill} stat={statFor(skill.id)} playable={!locked} />
               ))}
             </section>
           );

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 
 import ItemRunner from "@/components/items/ItemRunner";
+import KidGuard from "@/components/ui/KidGuard";
 import { requestSeed } from "@/components/ui/time";
+import { kidLocked, requireQuestBeat } from "@/lib/assigned-data";
 import { connectDB } from "@/lib/db";
 import { loadPlanProgress } from "@/lib/daily-plan-data";
 import { getPractice } from "@/lib/word-source";
@@ -45,6 +47,9 @@ export default async function TodayBeatPage({
 }) {
   const { beat } = await params;
   if (!isBeat(beat)) notFound();
+  // Only a beat not done today; done, "Again" would be the same beat for points.
+  await requireQuestBeat(`/learn/today/${beat}`);
+  const locked = await kidLocked();
   // See the note in app/learn/[listId]/[step]/page.tsx — "Again" only changes
   // ?r, so the runner needs a key or it keeps its finished state.
   const runKey = (await searchParams).r ?? "first";
@@ -62,7 +67,7 @@ export default async function TodayBeatPage({
   const shared = {
     exitHref: "/",
     primary: { label: "Back to Learn", href: "/" },
-    secondary: { label: "Again", href: `/learn/today/${beat}?r=${seed}` },
+    secondary: locked ? undefined : { label: "Again", href: `/learn/today/${beat}?r=${seed}` },
     fillExamples: fill.length > 0 ? fill : undefined,
     emptyNote: "Add a word list first, then come back.",
     dayPlan,
@@ -75,19 +80,22 @@ export default async function TodayBeatPage({
       rng,
     });
     return (
-      <ItemRunner
-        key={runKey}
-        {...shared}
-        items={items}
-        post={{ ref: "quest:review" }}
-        resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
-        accent="green"
-        // Review only takes words he has met, so with lists but nothing met
-        // yet it is empty; "Add a word list first" was wrong there.
-        emptyNote={lists.length > 0 ? "Nothing to review yet. Start with New words!" : shared.emptyNote}
-        title={TITLE.review}
-        subtitle="Everything that was due today."
-      />
+      <>
+        <KidGuard />
+        <ItemRunner
+          key={runKey}
+          {...shared}
+          items={items}
+          post={{ ref: "quest:review" }}
+          resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
+          accent="green"
+          // Review only takes words he has met, so with lists but nothing met
+          // yet it is empty; "Add a word list first" was wrong there.
+          emptyNote={lists.length > 0 ? "Nothing to review yet. Start with New words!" : shared.emptyNote}
+          title={TITLE.review}
+          subtitle="Everything that was due today."
+        />
+      </>
     );
   }
 
@@ -104,16 +112,19 @@ export default async function TodayBeatPage({
         })
       : [];
     return (
-      <ItemRunner
-        key={runKey}
-        {...shared}
-        items={items}
-        post={{ ref: "quest:new", listId: fresh?._id }}
-        resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
-        accent="blue"
-        title={TITLE["new-words"]}
-        subtitle={fresh?.name}
-      />
+      <>
+        <KidGuard />
+        <ItemRunner
+          key={runKey}
+          {...shared}
+          items={items}
+          post={{ ref: "quest:new", listId: fresh?._id }}
+          resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
+          accent="blue"
+          title={TITLE["new-words"]}
+          subtitle={fresh?.name}
+        />
+      </>
     );
   }
 
@@ -121,16 +132,19 @@ export default async function TodayBeatPage({
     ? buildProductionSession({ words: unit.words, now, rng, listId: unit._id })
     : [];
   return (
-    <ItemRunner
-      key={runKey}
-      {...shared}
-      items={items}
-      post={{ ref: "quest:production", listId: unit?._id }}
-      resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
-      accent="purple"
-      title={TITLE.production}
-      subtitle={unit?.name}
-    />
+    <>
+      <KidGuard />
+      <ItemRunner
+        key={runKey}
+        {...shared}
+        items={items}
+        post={{ ref: "quest:production", listId: unit?._id }}
+        resumeKey={resumeKey("items", `quest:${beat}`, runKey)}
+        accent="purple"
+        title={TITLE.production}
+        subtitle={unit?.name}
+      />
+    </>
   );
 }
 

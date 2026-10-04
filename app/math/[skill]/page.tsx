@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 
 import MathSession from "@/components/math/MathSession";
+import KidGuard from "@/components/ui/KidGuard";
 import { requestSeed } from "@/components/ui/time";
 import { todayKey } from "@/lib/day";
 import { loadPlanProgress } from "@/lib/daily-plan-data";
+import { kidLocked, requireQuestBeat } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { getSkill, isMathSkillId } from "@/lib/math";
 import { servedLevel, toClientMathProgress } from "@/lib/models/MathProgress";
@@ -20,6 +22,8 @@ export async function generateMetadata({ params }: Params) {
 export default async function MathSkillPage({ params }: Params) {
   const { skill } = await params;
   if (!isMathSkillId(skill)) notFound();
+  // A child plays a math lesson only as the day's Math beat.
+  await requireQuestBeat(`/math/${skill}`);
 
   const { MathProgress } = await db();
   const doc = await MathProgress.findOne({ skill }).lean();
@@ -27,11 +31,15 @@ export default async function MathSkillPage({ params }: Params) {
   const level = servedLevel(doc ? toClientMathProgress(doc) : null, todayKey());
 
   return (
-    <MathSession
-      skillId={skill}
-      level={level}
-      seed={requestSeed()}
-      dayPlan={await loadPlanProgress("math")}
-    />
+    <>
+      <KidGuard />
+      <MathSession
+        skillId={skill}
+        level={level}
+        seed={requestSeed()}
+        dayPlan={await loadPlanProgress("math")}
+        again={!(await kidLocked())}
+      />
+    </>
   );
 }

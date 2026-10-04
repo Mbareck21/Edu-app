@@ -4,6 +4,7 @@
 // app can be swiped away mid-save; the next load flushes whatever is left.
 
 import { learnerFromCookie, type LearnerId } from "@/lib/learners";
+import { takePageTicket } from "@/lib/page-ticket";
 import type { ClientProfile, SessionResult } from "@/lib/types";
 import { estimateXp, type Gained } from "@/lib/rewards";
 
@@ -150,7 +151,9 @@ const sending = new Set<string>();
 export async function postSession(result: SessionResult): Promise<PostSessionResult> {
   // The retry and the stored copy must carry the same id so the server can
   // tell a re-send from a second session.
-  const sessionId = result.sessionId ?? newSessionId();
+  // A locked page's ticket (lib/page-ticket.ts) is the id: the server pays a
+  // child only for a ticketed session, and only once per ticket.
+  const sessionId = result.sessionId ?? takePageTicket() ?? newSessionId();
   const learner =
     result.learner ?? (typeof document === "undefined" ? null : learnerFromCookie(document.cookie));
   const payload: SessionResult = {

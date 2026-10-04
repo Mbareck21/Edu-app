@@ -7,6 +7,7 @@ import AppShell from "@/components/ui/AppShell";
 import Card from "@/components/ui/Card";
 import Icon from "@/components/ui/Icon";
 import ProgressBar from "@/components/ui/ProgressBar";
+import { requireGrownUp } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { countKnowledge } from "@/lib/mastery";
 import { toClient } from "@/lib/models/WordList";
@@ -21,6 +22,9 @@ export default async function PathPage({
 }) {
   const { listId } = await params;
   if (!mongoose.isValidObjectId(listId)) notFound();
+  // Every step on a unit's path is a single item to replay: a child's way in
+  // is the quest's Start.
+  await requireGrownUp("/");
 
   const { WordList } = await db();
   const doc = await WordList.findById(listId).lean();

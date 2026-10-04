@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { ADULT_COOKIE } from "@/lib/adult";
 import { issueSessionCookie, clearSessionCookie } from "@/lib/auth";
 import { getClientIp } from "@/lib/groq";
 import { learnerForPin } from "@/lib/learners";
@@ -64,10 +65,14 @@ export async function POST(req: Request) {
   }
   clearPinMisses(FAILURES, device.id);
   await issueSessionCookie(learner);
+  // A grown-up's unlock is not handed on to the child who signs in next: it
+  // opened every free choice for up to half an hour (2026-10-04 audit).
+  jar.delete(ADULT_COOKIE);
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE() {
   await clearSessionCookie();
+  (await cookies()).delete(ADULT_COOKIE);
   return NextResponse.json({ ok: true });
 }

@@ -5,7 +5,9 @@ import ItemRunner from "@/components/items/ItemRunner";
 import ChainRunner from "@/components/stuck/ChainRunner";
 import ReadingRunner from "@/components/reading/ReadingRunner";
 import ExitBar from "@/components/ui/ExitBar";
+import KidGuard from "@/components/ui/KidGuard";
 import { requestSeed } from "@/components/ui/time";
+import { kidLocked, requireQuestBeat } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/day";
 import { loadPlanProgress } from "@/lib/daily-plan-data";
@@ -29,6 +31,9 @@ export default async function StepPage({
 }) {
   const { listId, step } = await params;
   if (!isStepId(step) || !mongoose.isValidObjectId(listId)) notFound();
+  // A child opens a unit's step only as the day's Reading beat (lib/assigned.ts).
+  await requireQuestBeat(`/learn/${listId}/${step}`);
+  const locked = await kidLocked();
   // Remount key. "Again" links back to this same route with a new ?r, and
   // React keeps a same-type component's state across that soft navigation —
   // without a changing key the finished screen just re-renders itself.
@@ -69,6 +74,7 @@ export default async function StepPage({
     const chosen = writeItWords(list.words, chains, new Date(seed), mulberry32(seed % 2147483647));
     return (
       <>
+        <KidGuard />
         <ExitBar href={pathHref} label="Back to path" />
         <ChainRunner
           key={runKey}
@@ -131,6 +137,7 @@ export default async function StepPage({
 
     return (
       <>
+        <KidGuard />
         <ExitBar />
         <ReadingRunner
           key={runKey}
@@ -139,6 +146,7 @@ export default async function StepPage({
           stale={stale}
           spare={spare}
           dayPlan={await loadPlanProgress("read")}
+          more={!locked}
         />
       </>
     );
@@ -153,22 +161,25 @@ export default async function StepPage({
     listId: list._id,
   });
   return (
-    <ItemRunner
-      key={runKey}
-      items={items}
-      post={{ ref: `${list._id}:${step}`, listId: list._id, step }}
-      resumeKey={resumeKey("items", `${list._id}:${step}`, runKey)}
-      exitHref={pathHref}
-      accent={info.accent}
-      title={info.doneTitle}
-      subtitle={list.name}
-      primary={{ label: "Back to path", href: pathHref }}
-      secondary={{ label: "Again", href: `${pathHref}/${step}?r=${seed}` }}
-      showTimer={info.timed}
-      chest={info.chest}
-      fillExamples={needsExamples ? [list._id] : undefined}
-      emptyNote={`Add words to ${list.name} first.`}
-    />
+    <>
+      <KidGuard />
+      <ItemRunner
+        key={runKey}
+        items={items}
+        post={{ ref: `${list._id}:${step}`, listId: list._id, step }}
+        resumeKey={resumeKey("items", `${list._id}:${step}`, runKey)}
+        exitHref={pathHref}
+        accent={info.accent}
+        title={info.doneTitle}
+        subtitle={list.name}
+        primary={{ label: "Back to path", href: pathHref }}
+        secondary={locked ? undefined : { label: "Again", href: `${pathHref}/${step}?r=${seed}` }}
+        showTimer={info.timed}
+        chest={info.chest}
+        fillExamples={needsExamples ? [list._id] : undefined}
+        emptyNote={`Add words to ${list.name} first.`}
+      />
+    </>
   );
 }
 

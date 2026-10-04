@@ -11,9 +11,11 @@ import {
 } from "@/components/drill/options";
 import { buildDrillItems, orderWords, pickWords, withFill, type DrillList } from "@/components/drill/picks";
 import ExitBar from "@/components/ui/ExitBar";
+import KidGuard from "@/components/ui/KidGuard";
 import { requestSeed } from "@/components/ui/time";
 import { mulberry32 } from "@/lib/math/rng";
 import { ROTATE_WIDTH, fromRow, type ChainState } from "@/lib/spell-chain";
+import { requireSuggestedDrill } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { rescuable } from "@/lib/rescue";
 import { getPractice } from "@/lib/word-source";
@@ -38,6 +40,8 @@ type Search = Promise<{ src?: string; mode?: string; n?: string; seed?: string }
 
 export default async function VocabDrillPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
+  // A child drills what the Drill tab suggests, not words and a type he picks.
+  await requireSuggestedDrill("/drill/vocab", q);
   const source = parseSource(q.src);
   const mode: VocabMode = q.mode && isVocabMode(q.mode) ? q.mode : "mixed";
   const count = parseLength(q.n);
@@ -62,13 +66,16 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   if (mode === "remember") {
     const list = lists.find((l) => l.listId === listId) ?? lists[0];
     return (
-      <RememberRunner
-        key={runKey}
-        listId={list?.listId}
-        listName={list?.name ?? "your words"}
-        words={list ? list.words.map((w) => w.word) : []}
-        sessionRef={sessionRef}
-      />
+      <>
+        <KidGuard />
+        <RememberRunner
+          key={runKey}
+          listId={list?.listId}
+          listName={list?.name ?? "your words"}
+          words={list ? list.words.map((w) => w.word) : []}
+          sessionRef={sessionRef}
+        />
+      </>
     );
   }
 
@@ -83,13 +90,16 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
       .slice(0, count)
       .map((w) => ({ word: w.word, clue: w.clue, arabic: w.arabic }));
     return (
-      <RescueRunner
-        key={runKey}
-        words={words}
-        seed={seed}
-        sessionRef={sessionRef}
-        listId={listId}
-      />
+      <>
+        <KidGuard />
+        <RescueRunner
+          key={runKey}
+          words={words}
+          seed={seed}
+          sessionRef={sessionRef}
+          listId={listId}
+        />
+      </>
     );
   }
 
@@ -115,6 +125,7 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
     }
     return (
       <>
+        <KidGuard />
         <ExitBar href="/drill" label="Drill" />
         <ChainRunner
           key={runKey}
@@ -139,15 +150,18 @@ export default async function VocabDrillPage({ searchParams }: { searchParams: S
   const items = buildDrillItems({ picked: dealt, mode, count, now, rng });
 
   return (
-    <VocabDrillRunner
-      key={runKey}
-      items={items}
-      sessionRef={sessionRef}
-      listId={listId}
-      title={DONE_TITLE[mode]}
-      subtitle={`${VOCAB_MODE_LABEL[mode]} drill`}
-      report={mode === "write"}
-      emptyNote="No words match that pick. Try another one."
-    />
+    <>
+      <KidGuard />
+      <VocabDrillRunner
+        key={runKey}
+        items={items}
+        sessionRef={sessionRef}
+        listId={listId}
+        title={DONE_TITLE[mode]}
+        subtitle={`${VOCAB_MODE_LABEL[mode]} drill`}
+        report={mode === "write"}
+        emptyNote="No words match that pick. Try another one."
+      />
+    </>
   );
 }
