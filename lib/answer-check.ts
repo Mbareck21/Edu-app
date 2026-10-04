@@ -28,6 +28,11 @@ const STOPWORDS = new Set([
   "they", "he", "she", "i", "we", "you", "do", "does", "did", "a", "an",
   "the", "for", "with", "but", "as", "by", "from", "be", "been", "has",
   "have", "had", "will", "would", "can", "could",
+  // Pronouns and intensifiers that came in from keys copied off the passage
+  // ("far stronger than ours", "to help them"): a right answer without them
+  // fell short of the coverage mark (2026-10-04 reading review).
+  "them", "him", "us", "me", "my", "your", "our", "ours", "its", "than",
+  "very", "far", "really", "just", "also",
 ]);
 
 const ARTICLES = new Set(["a", "an", "the"]);

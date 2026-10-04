@@ -227,7 +227,9 @@ questions, in that order, with those types and formats.
    UNKNOWN-WORD BUDGET given in the request. Every one of them goes in
    "glossary". Everything else must be common Grade 2-3 English. This is the
    98%-known-words rule — do not smuggle in hard words and leave them unglossed.
-6. Use as many of the STUDY WORDS as fit naturally; he knows them. NEW STUDY
+6. Use as many of the STUDY WORDS as fit naturally; he knows them. Never bend
+   a sentence to fit one in: every sentence must read as plain, natural
+   English, so leave a word out rather than force it. NEW STUDY
    WORDS are his to learn: prefer them over inventing new hard words, but each
    one counts toward the budget. Then use 2-4 of the TOPIC WORDS; a hard one
    counts toward the budget too.
@@ -282,6 +284,10 @@ FORMAT "text" (free typing):
   • "acceptable": 4-6 answers he might TYPE. Include the shortest valid answer
     (1-2 words), one full-sentence answer, and variants with and without a
     leading article. All lowercase, no punctuation.
+    At least two must say the answer in a Grade 3 child's own everyday words,
+    not copied from the passage: passage "She copied Ella's answers despite
+    the pressure" → "she copied ella", "she cheated", "copied her friend".
+    A right answer in his own words must find a match here.
   • "options": [] and "answerIndex": -1.
 
 FORMAT "mcq" (tap one option):

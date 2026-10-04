@@ -46,7 +46,7 @@ import {
   getClientIp,
 } from "@/lib/groq";
 import { sampleWords, shuffle } from "@/lib/session-sample";
-import { circularReason, shownAnswer } from "@/lib/circular-question";
+import { circularReason, shownAnswer, unanswerableReason } from "@/lib/circular-question";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -121,6 +121,32 @@ function circularQuestions(
     if (why) out.set(i, why);
   });
   return out;
+}
+
+/**
+ * Why each question cannot be answered from the passage, by index; see
+ * unanswerableReason. `needSource` asks for a source sentence too: on the
+ * writer's first try, not when deciding what to serve.
+ */
+function unanswerableQuestions(
+  questions: { q: string; type: string; source?: string }[],
+  passage: string,
+  needSource: boolean
+): Map<number, string> {
+  const out = new Map<number, string>();
+  questions.forEach((q, i) => {
+    const why = unanswerableReason(q, passage, needSource);
+    if (why) out.set(i, why);
+  });
+  return out;
+}
+
+/** What is not served: questions that answer themselves or cannot be answered. */
+function droppedQuestions(
+  questions: Parameters<typeof circularQuestions>[0],
+  passage: string
+): Map<number, string> {
+  return new Map([...unanswerableQuestions(questions, passage, false), ...circularQuestions(questions, passage)]);
 }
 
 /** A passage he has already been given, from the profile-wide memory. */
@@ -413,12 +439,13 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       const rambling = longest > params.maxSentenceWords + 3;
       const wrongCount = validated.data.questions.length !== plan.length;
       const circular = circularQuestions(validated.data.questions, passage);
+      const unanswerable = unanswerableQuestions(validated.data.questions, passage, true);
       // More glossed words than the level allows: the passage is too hard, and
       // dropping glosses would only hide the extra words, not remove them.
       const glossed = dedupeGlosses(validated.data.glossary).length;
       const tooHard = glossed > params.maxGlossary;
 
-      if (attempt === 1 && (short || rambling || wrongCount || circular.size > 0 || tooHard)) {
+      if (attempt === 1 && (short || rambling || wrongCount || circular.size > 0 || unanswerable.size > 0 || tooHard)) {
         const fixes: string[] = ["\n\nYour previous attempt fell short. Fix this:"];
         if (short) {
           fixes.push(
@@ -443,6 +470,12 @@ Your last answer was not valid JSON — it ran out of room before the closing br
         for (const [i, why] of circular) {
           fixes.push(
             `- Question ${i + 1} ("${validated.data.questions[i].q}") answers itself: ${why}. Ask about a reason or fact the passage states in words, and give an answer that adds something the question does not already say.`
+          );
+        }
+        for (const [i, why] of unanswerable) {
+          if (circular.has(i)) continue;
+          fixes.push(
+            `- Question ${i + 1} ("${validated.data.questions[i].q}") cannot be answered from the passage: ${why}. Ask only about what the passage says, and copy its "source" sentence from the passage character for character.`
           );
         }
         correction = fixes.join("\n");
@@ -493,11 +526,14 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     // questions screen.
     const servable = (a: Archived) => {
       const questions = Array.isArray(a.questions) ? a.questions : [];
-      const circular = circularQuestions(questions, String(a.paragraph ?? ""));
-      return questions.filter((_, i) => !circular.has(i));
+      const dropped = droppedQuestions(questions, String(a.paragraph ?? ""));
+      return questions.filter((_, i) => !dropped.has(i));
     };
+    // Three questions or more first: three of Nour's readings came back from
+    // here with two, too few for the finish bonus or the reading to count.
+    const full = archive.filter((a) => servable(a).length >= 3);
     const old = pickArchived(
-      archive.filter((a) => servable(a).length > 0),
+      full.length > 0 ? full : archive.filter((a) => servable(a).length > 0),
       Date.now()
     );
     if (old) {
@@ -590,13 +626,14 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     };
   });
 
-  // A question that still answers itself after the retry is not served. It is
-  // dropped after the plan has set formats and types, so the rest keep theirs.
-  const circular = circularQuestions(questions, passage);
-  if (circular.size > 0) {
-    console.warn(`[reading/generate] dropped ${circular.size} circular question(s): ${[...circular.values()].join("; ")}`);
+  // A question that still answers itself, or asks about a word the passage
+  // does not have, after the retry is not served. It is dropped after the
+  // plan has set formats and types, so the rest keep theirs.
+  const dropped = droppedQuestions(questions, passage);
+  if (dropped.size > 0) {
+    console.warn(`[reading/generate] dropped ${dropped.size} question(s): ${[...dropped.values()].join("; ")}`);
   }
-  const served = questions.filter((_, i) => !circular.has(i));
+  const served = questions.filter((_, i) => !dropped.has(i));
   // A passage with nothing left to ask is not a reading.
   if (served.length === 0) {
     return NextResponse.json({ error: "The story did not come out right. Tap it again." }, { status: 502 });

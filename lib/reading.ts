@@ -159,6 +159,9 @@ export function studyWordsFor(
 
 export type QuestionFormat = "text" | "mcq";
 
+/** The level from which "why" questions are typed; below it they are multiple choice. */
+export const TYPED_WHY_LEVEL = 4;
+
 export type QuestionSpec = {
   type: ReadingQuestionType;
   format: QuestionFormat;
@@ -210,7 +213,8 @@ export function planQuarter(dayKey: string): Quarter["id"] | "summer" {
  * The question set for one passage, asked the way his school's reading tests
  * ask: mostly four-option multiple choice ("According to the passage…",
  * "What does the word … mean in this passage?", "How does … feel…?",
- * "Which sentence from the story shows…?") and one short written answer.
+ * "Which sentence from the story shows…?") and, from TYPED_WHY_LEVEL, one
+ * short written answer.
  * These replaced two open "what is the writer telling us" prompts that looked
  * nothing like what he is graded on. Tapping an option also spares a slow
  * speller from typing every answer.
@@ -267,12 +271,24 @@ export function questionPlan(
           brief:
             '"What is this passage mostly about?" Four options: the main idea, one single detail, one idea too big for the passage, one thing it does not say.',
         },
-    {
-      type: "cause_effect",
-      format: "text",
-      brief:
-        `A short written answer, like the school's short response: "Why did …?". Ask only about a reason the passage states in words ("because", "so", "to …"); the answer is that reason, never the question said again. He types it in a few words.`,
-    },
+    // Typed from level 4. Below it, "why" was the one typed question, and both
+    // boys got a quarter of them right at level 1 (2026-10-04 review): a right
+    // reason in their own words ("to find moths") missed a key copied from the
+    // passage ("to locate insects"), so the ladder could not move off level 1.
+    level >= TYPED_WHY_LEVEL
+      ? {
+          type: "cause_effect",
+          format: "text",
+          brief:
+            `A short written answer, like the school's short response: "Why did …?". Ask only about a reason the passage states in words ("because", "so", "to …"); the answer is that reason, never the question said again. He types it in a few words.`,
+        }
+      : {
+          type: "cause_effect",
+          format: "mcq",
+          options: 4,
+          brief:
+            `A "why" question in school-test wording: "According to the passage, why did …?". Ask only about a reason the passage states in words ("because", "so", "to …"). Four options: that reason in easy words, and three reasons that sound possible but the passage does not give.`,
+        },
   ];
 
   if (open("retell", 4)) {

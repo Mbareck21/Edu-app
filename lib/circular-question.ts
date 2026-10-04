@@ -131,3 +131,52 @@ export function shownAnswer(q: {
   const opt = q.options && q.answerIndex !== undefined && q.answerIndex >= 0 ? q.options[q.answerIndex] : undefined;
   return opt ?? q.acceptable?.[0] ?? "";
 }
+
+/** The word a vocab question asks about: What does the word "X" mean …? */
+export function askedWord(question: string): string | null {
+  const m = /\bwords?\s+["“'‘]([^"”'’]+)["”'’]/i.exec(question) ?? /["“]([^"”]+)["”]/.exec(question);
+  return m ? m[1].trim().toLowerCase() : null;
+}
+
+/**
+ * Whether the passage has this word, in any form: "carry" is in "carried",
+ * "habitat" in "habitats". Every word of a phrase has to be there.
+ */
+export function passageHas(word: string, passage: string): boolean {
+  const tokens = passage.toLowerCase().split(/[^a-z']+/).filter(Boolean);
+  const stems = new Set(tokens.map(stem));
+  return word
+    .toLowerCase()
+    .split(/[^a-z']+/)
+    .filter(Boolean)
+    .every((w) => {
+      if (stems.has(stem(w))) return true;
+      if (w.length <= 4) return false;
+      const head = w.slice(0, w.length - 1);
+      return tokens.some((t) => t.startsWith(head));
+    });
+}
+
+/**
+ * Why a question cannot be answered from its passage, or null. The 2026-10-04
+ * review of both boys' readings found vocab questions on a word the passage
+ * did not have (2 of 42) and questions with no sentence in the passage to
+ * answer them from (two of one bats passage's four). `source` is only asked
+ * for when `needSource`: a source the writer copied a little wrong does not
+ * make a question unanswerable, so the served set does not drop for it.
+ */
+export function unanswerableReason(
+  item: { q: string; type: string; source?: string },
+  passage: string,
+  needSource = true
+): string | null {
+  if (item.type === "vocab") {
+    const word = askedWord(item.q);
+    if (word && !passageHas(word, passage)) return `it asks about "${word}", which is not in the passage`;
+  }
+  if (needSource) {
+    const source = (item.source ?? "").trim();
+    if (!source || !passage.includes(source)) return "its source is not a sentence copied from the passage";
+  }
+  return null;
+}

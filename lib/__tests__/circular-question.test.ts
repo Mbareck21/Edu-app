@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { circularReason, hasCausalMarker, shownAnswer } from "@/lib/circular-question";
+import {
+  askedWord,
+  circularReason,
+  hasCausalMarker,
+  passageHas,
+  shownAnswer,
+  unanswerableReason,
+} from "@/lib/circular-question";
 
 test("the screenshot question is flagged: a sentence turned into a why", () => {
   const why = circularReason({
@@ -131,4 +138,22 @@ test("causal markers: reasons count, a place after 'to' does not", () => {
 test("shownAnswer is the right option, else the first acceptable", () => {
   assert.equal(shownAnswer({ options: ["a", "b"], answerIndex: 1, acceptable: ["b"] }), "b");
   assert.equal(shownAnswer({ options: [], answerIndex: -1, acceptable: ["x", "y"] }), "x");
+});
+
+test("a question the passage cannot answer is caught", () => {
+  const passage = "Bats hunt at night. They carried their pups and used sound to locate insects.";
+  assert.equal(askedWord('What does the word "locate" mean in this passage?'), "locate");
+  assert.equal(askedWord("What does the word “carry” mean in this passage?"), "carry");
+  assert.ok(passageHas("carry", passage), "carried");
+  assert.ok(passageHas("insect", passage), "insects");
+  assert.ok(!passageHas("echo", passage));
+  // A vocab question on a word the passage does not have.
+  const vocab = { q: 'What does the word "echo" mean in this passage?', type: "vocab", source: "Bats hunt at night." };
+  assert.match(unanswerableReason(vocab, passage) ?? "", /not in the passage/);
+  assert.match(unanswerableReason(vocab, passage, false) ?? "", /not in the passage/, "dropped when served too");
+  // No source sentence from the passage: asked again, but still served.
+  const noSource = { q: "Why do bats hunt at night?", type: "cause_effect", source: "Bats like the dark." };
+  assert.match(unanswerableReason(noSource, passage) ?? "", /source/);
+  assert.equal(unanswerableReason(noSource, passage, false), null);
+  assert.equal(unanswerableReason({ ...noSource, source: "Bats hunt at night." }, passage), null);
 });
