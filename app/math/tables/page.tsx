@@ -1,5 +1,6 @@
 import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
+import KidGuard from "@/components/ui/KidGuard";
 import TablesBoard from "@/components/tables/TablesBoard";
 import { requestSeed } from "@/components/ui/time";
 import { requireGrownUp } from "@/lib/assigned-data";
@@ -33,6 +34,7 @@ export default async function TablesPage() {
         Two to twelve. Light up the grid.
       </p>
       <TablesBoard facts={facts} seed={requestSeed()} />
+      <KidGuard ticketOnly />
     </AppShell>
   );
 }

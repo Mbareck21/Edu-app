@@ -8,7 +8,9 @@ process.env.AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 
 import {
   DRILL_MARK_MS,
+  TICKETS_FROM,
   UNPAID_DONE_TODAY,
+  UNPAID_DRILL_USED,
   UNPAID_NOT_HANDED,
   drillKey,
   drillMarkValid,
@@ -54,18 +56,31 @@ test("drill mark: good until a drill is played, and only for a while", () => {
   assert.equal(drillMarkValid(issued, before, issued + DRILL_MARK_MS + 1), false, "too old");
 });
 
-test("pay: a child is paid only for what he was handed, and a beat once a day", () => {
-  const day = "2026-10-04";
-  const done = [{ at: "2026-10-04T15:00:00.000Z", kind: "vocab" as const, ref: "quest:review" }];
+test("pay: a child is paid only for what he was handed, a beat once a day, a drill link once", () => {
+  const day = "2026-10-06";
+  const played = Date.parse("2026-10-06T16:00:00.000Z");
+  const issued = Date.parse("2026-10-06T15:58:00.000Z");
+  const done = [{ at: "2026-10-06T15:00:00.000Z", kind: "vocab" as const, ref: "quest:review" }];
   const review = { kind: "vocab" as const, ref: "quest:review" };
   const drill = { kind: "math" as const, ref: "drill:math:fractions:relaxed" };
-  assert.equal(unpaidReason({ locked: false, ticketed: false, activity: done, session: review, day }), undefined, "a grown-up");
-  assert.equal(unpaidReason({ locked: true, ticketed: false, activity: [], session: drill, day }), UNPAID_NOT_HANDED);
-  assert.equal(unpaidReason({ locked: true, ticketed: true, activity: done, session: review, day }), UNPAID_DONE_TODAY);
-  assert.equal(unpaidReason({ locked: true, ticketed: true, activity: [], session: review, day }), undefined);
-  assert.equal(unpaidReason({ locked: true, ticketed: true, activity: done, session: drill, day }), undefined, "drills turn by variety");
+  const base = { locked: true, ticketIssuedAt: issued, playedAt: played, day };
+  assert.equal(unpaidReason({ ...base, locked: false, ticketIssuedAt: null, activity: done, session: review }), undefined, "a grown-up");
+  assert.equal(unpaidReason({ ...base, ticketIssuedAt: null, activity: [], session: drill }), UNPAID_NOT_HANDED);
+  assert.equal(unpaidReason({ ...base, activity: done, session: review }), UNPAID_DONE_TODAY);
+  assert.equal(unpaidReason({ ...base, activity: [], session: review }), undefined);
+  assert.equal(unpaidReason({ ...base, activity: done, session: drill }), undefined, "an earlier quest beat does not use a drill link");
   // Tomorrow the beat is new again.
-  assert.equal(unpaidReason({ locked: true, ticketed: true, activity: done, session: review, day: "2026-10-05" }), undefined);
+  assert.equal(unpaidReason({ ...base, activity: done, session: review, day: "2026-10-07" }), undefined);
+  // The same drill link in a second window: one drill since the page was served.
+  const since = [{ at: "2026-10-06T15:59:00.000Z", kind: "math" as const, ref: "drill:vocab:spell" }];
+  assert.equal(unpaidReason({ ...base, activity: since, session: drill }), UNPAID_DRILL_USED);
+  const before = [{ at: "2026-10-06T15:50:00.000Z", kind: "math" as const, ref: "drill:vocab:spell" }];
+  assert.equal(unpaidReason({ ...base, activity: before, session: drill }), undefined, "the drill before it");
+  // Played before the tickets went live: queued on a phone, it still pays.
+  assert.equal(
+    unpaidReason({ ...base, ticketIssuedAt: null, playedAt: TICKETS_FROM - 1, activity: [], session: drill }),
+    undefined
+  );
 });
 
 test("pay: an unpaid session earns no work XP, says why, and still counts", () => {

@@ -63,27 +63,48 @@ export function isAssigned(path: string, search: URLSearchParams, assigned: Assi
 /** Why a child's session pays no XP; see unpaidReason. Read out on his finish screen. */
 export const UNPAID_NOT_HANDED = "Start from Today's quest or the Drill tab to earn XP.";
 export const UNPAID_DONE_TODAY = "You did this one today already, so it is practice: no XP.";
+export const UNPAID_DRILL_USED = "That drill was played already, so this one is practice: no XP.";
+
+/**
+ * Sessions played before this have no ticket to show: queued on a phone, or
+ * sent by a page still running the code from before the tickets. Midnight in
+ * Chicago after they went live.
+ */
+export const TICKETS_FROM = Date.parse("2026-10-05T05:00:00.000Z");
 
 /**
  * Why a session a child played pays no XP, checked when it is paid, not only
- * when the page opened (2026-10-04 audit): a page replayed from the phone, or
- * the same beat posted twice (two tabs, a send that timed out and was redone),
- * got past the page's check. Unlocked (a grown-up, or no ADULT_PIN), all pays.
+ * when the page opened (2026-10-04 audits): a page replayed from the phone, or
+ * the same beat or drill link posted twice (two windows, a send that timed out
+ * and was redone), got past the page's check. Unlocked (a grown-up, or no
+ * ADULT_PIN), all pays.
  *
- * `ticketed`: the session id is a ticket minted with a page handed to him
- * (lib/ticket.ts). `activity` is his log before this session.
+ * `ticketIssuedAt`: when the page behind the session's ticket was served
+ * (lib/ticket.ts), or null with no valid ticket. `activity` is his log before
+ * this session.
  */
 export function unpaidReason(o: {
   locked: boolean;
-  ticketed: boolean;
+  ticketIssuedAt: number | null;
+  playedAt: number;
   activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref">[];
   session: Pick<ActivityEntry, "kind" | "ref">;
   day: string;
 }): string | undefined {
   if (!o.locked) return undefined;
-  if (!o.ticketed) return UNPAID_NOT_HANDED;
+  if (o.ticketIssuedAt === null && o.playedAt >= TICKETS_FROM) return UNPAID_NOT_HANDED;
   const beat = beatOfSession(o.session);
   if (beat && doneToday(o.activity, o.day)[beat]) return UNPAID_DONE_TODAY;
+  // A drill page is good for one drill: one played since it was served means
+  // this is the same link again, in a second window.
+  const issued = o.ticketIssuedAt;
+  if (
+    issued !== null &&
+    o.session.ref.startsWith("drill:") &&
+    o.activity.some((a) => a.ref.startsWith("drill:") && new Date(a.at).getTime() >= issued)
+  ) {
+    return UNPAID_DRILL_USED;
+  }
   return undefined;
 }
 

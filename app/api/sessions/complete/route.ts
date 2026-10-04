@@ -426,7 +426,8 @@ export async function POST(req: Request) {
     const { changed, saved } = await updateProfile((current) => {
       const unpaid = unpaidReason({
         locked,
-        ticketed: ticket !== null,
+        ticketIssuedAt: ticket?.issuedAt ?? null,
+        playedAt: now.getTime(),
         activity: current.activity,
         session: body,
         day: when.today,

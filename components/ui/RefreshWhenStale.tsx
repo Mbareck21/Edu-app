@@ -23,7 +23,17 @@ import { useCallback, useEffect, useRef } from "react";
  * out when the network comes back, and a stamp is asked about once, which
  * also stops the loop on wifi that is connected but has no internet.
  */
-export default function RefreshWhenStale({ renderedAt }: { renderedAt: number }) {
+export default function RefreshWhenStale({
+  renderedAt,
+  onlyReplays = false,
+}: {
+  renderedAt: number;
+  /**
+   * Only a replayed copy, not a return after a minute away: on a lesson the
+   * refresh re-ran its gate, and a finished beat's screen was taken from him.
+   */
+  onlyReplays?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const waiting = useRef(false);
@@ -54,7 +64,7 @@ export default function RefreshWhenStale({ renderedAt }: { renderedAt: number })
     let hiddenAt = 0;
     const onVisibility = () => {
       if (document.hidden) hiddenAt = Date.now();
-      else if (hiddenAt > 0 && Date.now() - hiddenAt > 60_000) refresh();
+      else if (!onlyReplays && hiddenAt > 0 && Date.now() - hiddenAt > 60_000) refresh();
     };
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) refresh();
@@ -72,7 +82,7 @@ export default function RefreshWhenStale({ renderedAt }: { renderedAt: number })
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("online", onOnline);
     };
-  }, [refresh, router]);
+  }, [refresh, router, onlyReplays]);
 
   return null;
 }

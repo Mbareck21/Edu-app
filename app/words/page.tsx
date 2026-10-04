@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import BottomNav from "@/components/ui/BottomNav";
 import StuckBoard from "@/components/stuck/StuckBoard";
+import KidGuard from "@/components/ui/KidGuard";
 import { kidLocked } from "@/lib/assigned-data";
 import { db } from "@/lib/db";
 import { fromRow, type ChainState } from "@/lib/spell-chain";
@@ -44,6 +45,7 @@ export default async function WordsPage() {
         </p>
 
         <StuckBoard list={pool} chains={chains} locked={await kidLocked()} />
+        <KidGuard ticketOnly />
 
         <p className="mt-7 text-center text-sm" style={{ color: "var(--color-muted)" }}>
           <Link href="/me/lists" className="inline-block py-3 font-bold underline underline-offset-4">

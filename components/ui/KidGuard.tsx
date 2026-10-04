@@ -1,6 +1,7 @@
 import RefreshWhenStale from "@/components/ui/RefreshWhenStale";
 import SessionTicket from "@/components/ui/SessionTicket";
 import { requestSeed } from "@/components/ui/time";
+import { adultLockOn } from "@/lib/adult";
 import { kidLocked } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { mintTicket } from "@/lib/ticket";
@@ -12,12 +13,17 @@ import { mintTicket } from "@/lib/ticket";
  * points. A replayed copy asks the server again, and the gate sends him on;
  * offline, its session carries this page's ticket, already used, and pays
  * nothing (lib/ticket.ts).
+ *
+ * The ticket goes on whenever the lock is set up, unlocked or not: a lesson
+ * opened during a grown-up's unlock and finished after it ran out was paid
+ * nothing. `ticketOnly` is for a page whose AppShell already checks replays.
  */
-export default async function KidGuard() {
-  if (!(await kidLocked())) return null;
+export default async function KidGuard({ ticketOnly = false }: { ticketOnly?: boolean }) {
+  if (!adultLockOn()) return null;
+  const replays = !ticketOnly && (await kidLocked());
   return (
     <>
-      <RefreshWhenStale renderedAt={requestSeed()} />
+      {replays ? <RefreshWhenStale renderedAt={requestSeed()} onlyReplays /> : null}
       <SessionTicket ticket={mintTicket(await currentLearner())} />
     </>
   );
