@@ -58,7 +58,8 @@ export default function SchoolStrip({ href }: { href: string }) {
           <span className="min-w-0 flex-1 font-body text-sm leading-snug">
             {ela.length > 0
               ? `Reading: ${ela.map((s) => shortPlain(s.plain)).join(" · ")}`
-              : "Summer break. Keep reading."}
+              : // Between quarters (fall and winter break); after the year the strip is gone.
+                "No school today. Keep reading."}
           </span>
         </Link>
         <Link href="/math" className="flex min-h-11 items-center gap-2">

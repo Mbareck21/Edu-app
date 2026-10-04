@@ -22,11 +22,16 @@ export function freshRivalry(): Rivalry {
   return { through: addDays(RIVALRY_START, -1), holder: null, points: 0 };
 }
 
-/** One finished day, given each child's XP that day. */
-export function settleDay(r: Rivalry, day: string, xp: Record<string, number>): Rivalry {
+/** Who won a day, given each child's XP that day: most, above 0, no tie. */
+export function dayWinner(xp: Record<string, number>): string | null {
   const ranked = Object.entries(xp).sort((a, b) => b[1] - a[1]);
   const [first, second] = ranked;
-  const winner = first && (!second || first[1] > second[1]) && first[1] > 0 ? first[0] : null;
+  return first && (!second || first[1] > second[1]) && first[1] > 0 ? first[0] : null;
+}
+
+/** One finished day, given each child's XP that day. */
+export function settleDay(r: Rivalry, day: string, xp: Record<string, number>): Rivalry {
+  const winner = dayWinner(xp);
   if (!winner) return { ...r, through: day };
   if (r.points === 0 || r.holder === winner) {
     return { through: day, holder: winner, points: r.points + 1 };

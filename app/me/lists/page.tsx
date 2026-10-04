@@ -126,6 +126,25 @@ export default async function WordsPage() {
       </header>
 
       <div className="space-y-6">
+        <Link
+          href="/me/report"
+          className="press-3d flex min-h-11 items-center gap-3 rounded-card border bg-white p-4"
+          style={{ borderColor: "var(--color-line)", ["--btn-shade" as string]: "var(--color-line)" }}
+        >
+          <span style={{ color: "var(--color-gold-ink)" }}>
+            <Icon name="trophy" size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg font-bold leading-tight">Competition report</span>
+            <span className="block text-sm" style={{ color: "var(--color-muted)" }}>
+              How each child is doing, every section, since the race began.
+            </span>
+          </span>
+          <span style={{ color: "var(--color-faint)" }}>
+            <Icon name="arrowRight" size={24} />
+          </span>
+        </Link>
+
         <NewListForm />
 
         <section className="space-y-3">

@@ -119,7 +119,9 @@ export default function RescueRunner({
       kind: "vocab",
       ref: sessionRef,
       answered: puzzles.length,
-      correct: saved,
+      // Right first time, as in every other runner. Saved counted a word won
+      // by tapping all four letters at each gap: mashing paid 170 of 200.
+      correct: clean,
       fastCount: 0,
       ms,
       perfect: puzzles.length > 0 && clean === puzzles.length,
@@ -196,7 +198,7 @@ export default function RescueRunner({
         subtitle={`You saved ${saved} of ${puzzles.length} words.`}
         xp={outcome.xp}
         ms={outcome.ms}
-        accuracy={saved / puzzles.length}
+        accuracy={clean / puzzles.length}
         perfect={clean === puzzles.length}
         leveledUp={outcome.gained?.leveledUp}
         newBadges={outcome.gained?.newBadges ?? []}

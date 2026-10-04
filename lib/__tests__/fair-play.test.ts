@@ -6,10 +6,15 @@ import test from "node:test";
 
 import {
   BONUS_MIN_PCT,
+  FULL_PAY_PCT,
+  MAX_READ_WPM,
   PACE_CAP,
   XP,
+  accuracyFactor,
   applySession,
   emptyProfile,
+  estimateXp,
+  readTooFast,
   varietyFactor,
 } from "@/lib/rewards";
 import { nudge, questLeft, raceXp, winXp } from "@/lib/scoreboard";
@@ -113,10 +118,120 @@ test("correctness: tapping through (under half right) earns no lesson bonus", ()
     applySession(emptyProfile(), drill({ correct: n }), at(15)).gained.xp - XP.streakDay;
   const perRight = XP.mathCorrect;
   // 5 of 10 is a real attempt: the answers and the bonus.
-  assert.equal(rightXp(5), Math.round(5 * perRight) + XP.lessonDone);
+  assert.equal(rightXp(5), Math.round(5 * perRight * accuracyFactor(50)) + XP.lessonDone);
   // 4 of 10 is under BONUS_MIN_PCT: the answers only.
   assert.ok(BONUS_MIN_PCT === 50);
-  assert.equal(rightXp(4), Math.round(4 * perRight));
+  assert.equal(rightXp(4), Math.round(4 * perRight * accuracyFactor(40)));
+});
+
+// ── 4. Accuracy: pay slides with the share right ──────────────────────────
+
+test("accuracy: from every answer wrong to every one right, pay only ever rises", () => {
+  const pay = (n: number) => applySession(emptyProfile(), drill({ correct: n, perfect: n === 10 }), at(15)).gained.xp - XP.streakDay;
+  const xp = Array.from({ length: 11 }, (_, n) => pay(n));
+  for (let n = 1; n <= 10; n++) assert.ok(xp[n] >= xp[n - 1], `${n} right paid less than ${n - 1}: ${xp}`);
+  // Every answer wrong pays the finish only; every one right pays the most.
+  assert.equal(xp[0], XP.finished);
+  assert.equal(Math.max(...xp), xp[10]);
+  assert.ok(xp[10] > xp[9] && xp[9] > xp[5] && xp[5] > xp[2]);
+});
+
+test("accuracy: 3 of 4 right pays each answer in full, fewer pays each one less", () => {
+  assert.equal(FULL_PAY_PCT, 75);
+  assert.equal(accuracyFactor(100), 1);
+  assert.equal(accuracyFactor(75), 1);
+  assert.equal(accuracyFactor(50), 50 / 75);
+  assert.equal(accuracyFactor(0), 0);
+  // 8 of 10 in a drill: each right answer in full, as before.
+  const [eight] = play([drill({ correct: 8 })]);
+  assert.equal(eight, 8 * XP.mathCorrect + XP.lessonDone + XP.streakDay);
+});
+
+test("accuracy: a reading pays by how many he got right, and 5 XP with all of them wrong", () => {
+  const reading = (correct: number): SessionResult => ({
+    kind: "reading",
+    ref: "read:l1@2026-09-28T10:00:00.000Z",
+    answered: 4,
+    correct,
+    fastCount: 0,
+    ms: 8 * 60_000,
+    perfect: correct === 4,
+    reading: { level: 4, pct: correct * 25, wordsCount: 200 },
+  });
+  const xp = [0, 1, 2, 3, 4].map((n) => play([reading(n)])[0] - XP.streakDay);
+  assert.deepEqual(xp, [5, 50, 220, 470, 650]);
+});
+
+test("accuracy: guessing pays a fraction of what careful work pays, in any section", () => {
+  // A four-choice reading tapped at random gets about one in four right.
+  const careful = applySession(emptyProfile(), drill({ correct: 10, perfect: true }), at(15)).gained.xp;
+  const guessed = applySession(emptyProfile(), drill({ correct: 3 }), at(15)).gained.xp;
+  assert.ok(guessed - XP.streakDay < (careful - XP.streakDay) / 8, `guessed ${guessed}, careful ${careful}`);
+  // A timed drill sprayed with guesses: 80 answers, 20 right, in a minute.
+  const timed = (answered: number, correct: number) =>
+    applySession(
+      emptyProfile(),
+      drill({ ref: "drill:math:fractions:t60#x", timed: true, answered, correct, ms: 60_000 }),
+      at(15)
+    ).gained.xp - XP.streakDay;
+  assert.ok(timed(80, 20) < timed(20, 20) / 3, `sprayed ${timed(80, 20)}, honest ${timed(20, 20)}`);
+});
+
+test("accuracy: the 5 XP for finishing needs a real session, not one or two taps", () => {
+  const [one] = play([drill({ answered: 1, correct: 0 })]);
+  assert.equal(one, XP.streakDay, "one wrong answer: only the day");
+  const [three] = play([drill({ answered: 3, correct: 0 })]);
+  assert.equal(three, XP.finished + XP.streakDay);
+  assert.equal(estimateXp(drill({ answered: 3, correct: 0 })), XP.finished);
+});
+
+test("accuracy: the finish screen says why a so-so run paid less", () => {
+  const tip = applySession(emptyProfile(), drill({ correct: 6 }), at(15)).gained.tip;
+  assert.equal(tip, "Get 3 out of 4 right for full XP on every answer.");
+  assert.equal(applySession(emptyProfile(), drill({ correct: 8 }), at(15)).gained.tip, undefined);
+});
+
+// ── A passage finished faster than it can be read ─────────────────────────
+
+test("a passage finished faster than it can be read does not count as a reading", () => {
+  const passage = (ms: number): SessionResult => ({
+    kind: "reading",
+    ref: "read:l1@2026-09-28T10:00:00.000Z",
+    answered: 4,
+    correct: 0,
+    fastCount: 0,
+    ms,
+    perfect: false,
+    reading: { level: 4, pct: 0, wordsCount: 300 },
+  });
+  // 300 words at MAX_READ_WPM is a minute.
+  assert.equal(MAX_READ_WPM, 300);
+  assert.equal(readTooFast(passage(59_000)), true);
+  assert.equal(readTooFast(passage(61_000)), false);
+  assert.equal(readTooFast(passage(0)), false, "no time is not too fast");
+  assert.equal(readTooFast({ ms: 5_000 }), false, "not a passage");
+  const skimmed = applySession(emptyProfile(), passage(20_000), at(15)).gained;
+  assert.equal(skimmed.tip, "Read the whole story first: a reading that fast does not count.");
+  assert.equal(skimmed.xp, XP.finished + XP.streakDay);
+
+  // Two good readings at level 4; a third, guessed right but skimmed, would
+  // have stepped him up to 5 (and found the Book Buddy badge).
+  const good = { level: 4, pct: 100, wordsCount: 300 };
+  const start: ProfileState = {
+    ...emptyProfile(),
+    reading: {
+      level: 4,
+      since: "2026-09-27T10:00:00.000Z",
+      recent: [
+        { at: "2026-09-28T09:00:00.000Z", ...good },
+        { at: "2026-09-27T12:00:00.000Z", ...good },
+      ],
+    },
+  };
+  const lucky = (ms: number): SessionResult => ({ ...passage(ms), correct: 4, perfect: true, reading: good });
+  const badgesOf = (ms: number) => applySession(start, lucky(ms), at(15)).gained.newBadges.map((b) => b.id);
+  assert.ok(!badgesOf(20_000).includes("reading-5"), "skimmed: no level, no badge");
+  assert.ok(badgesOf(5 * 60_000).includes("reading-5"), "read: up a level");
 });
 
 test("correctness: a perfect run earns the perfect bonus, nine of ten does not", () => {

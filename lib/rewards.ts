@@ -40,6 +40,11 @@ import { allFactKeys } from "@/lib/tables";
 //   Vocab lesson, 10 items, all fast ..... 10 x 15 + 25 + 50        = 225
 //   A word reaching known +50, mastered +100, in the session that does it.
 // Under 3 answers pays no lesson or perfect bonus; 0 answers changes nothing.
+// Pay slides with the share right, in every section and drill. Under
+// FULL_PAY_PCT each right answer pays less (accuracyFactor), and a finished
+// session of BONUS_MIN_ANSWERED or more answers pays at least XP.finished:
+//   Reading passage, first today ......... 4/4 650 · 3/4 470 · 2/4 220 · 1/4 50 · 0/4 5
+//   Math lesson L1, 10 questions ......... 10/10 120 · 8/10 76 · 5/10 43 · 2/10 5 · 0/10 5
 export const XP = {
   /** Per right word answer (vocab: lessons, review, word drills). */
   correct: 15,
@@ -58,6 +63,12 @@ export const XP = {
   /** A word that reaches known in this session, and one that reaches mastered. */
   wordKnown: 50,
   wordMastered: 100,
+  /**
+   * The least a finished session pays, every answer wrong included: he did
+   * it, and that is all it pays (the parent's call, 2026-10-04). Only from
+   * BONUS_MIN_ANSWERED answers, so one-answer runs cannot farm it.
+   */
+  finished: 5,
 } as const;
 
 /** Most fast answers paid in one session: speed cannot stack past this. */
@@ -79,7 +90,7 @@ export function timedPaid(ref: string): number {
 export const BONUS_MIN_ANSWERED = 3;
 
 // ── Fair play ─────────────────────────────────────────────────────────────
-// Three rules so that XP follows learning, not a pattern that farms it
+// Four rules so that XP follows learning, not a pattern that farms it
 // (2026-09-27: nine memorised Text structure rounds in eight minutes paid
 // 2,430). Each has its own tests in lib/__tests__/fair-play.test.ts.
 //
@@ -94,12 +105,48 @@ export const BONUS_MIN_ANSWERED = 3;
 //    he actually spent on it, with room above honest work: that peaked
 //    near 300 a minute (ten listening items in 42 s); memorised taps ran
 //    at 600.
+// 4. Accuracy. Below FULL_PAY_PCT right, each right answer pays less, in
+//    step with the share right. Paid only per right answer, guessing still
+//    earned: tapping at random through a four-choice reading paid a quarter
+//    of a careful one, and a timed drill sprayed with guesses paid its full
+//    twenty right a minute. Now a quarter right pays a twelfth.
 //
 // Word-known and word-mastered bonuses and the day's streak are never cut:
 // they are the learning itself.
 
 /** The lesson bonus is for a real attempt: at least this share right. */
 export const BONUS_MIN_PCT = 50;
+
+/**
+ * At least this share right and each right answer pays in full: 3 of 4, the
+ * mark of a good reading (READING_UP_PCT), so a steady reader loses nothing.
+ */
+export const FULL_PAY_PCT = 75;
+
+/** What each right answer is worth, 0..1, at this share right. */
+export function accuracyFactor(pct: number): number {
+  return Math.min(1, Math.max(0, Number(pct) || 0) / FULL_PAY_PCT);
+}
+
+/**
+ * Faster than this, in words a minute, and the passage was not read. Adults
+ * read silently at about 240 (Brysbaert, 2019); a Grade 4 reader going past
+ * 300 tapped through to the questions.
+ */
+export const MAX_READ_WPM = 300;
+
+/**
+ * A passage finished faster than it can be read. It does not move his
+ * reading level: two rushed ones used to step him down to easier passages,
+ * which pay the same, and lucky guesses could step him up. No time (0) is
+ * not too fast.
+ */
+export function readTooFast(result: Pick<SessionResult, "ms" | "reading">): boolean {
+  if (!result.reading) return false;
+  const ms = Math.max(0, Math.floor(result.ms) || 0);
+  const words = Math.max(0, Math.floor(result.reading.wordsCount) || 0);
+  return ms > 0 && ms < (words / MAX_READ_WPM) * 60_000;
+}
 
 /** Most work XP one active minute can earn, by kind of session. */
 export const PACE_CAP = { vocab: 360, math: 240, reading: 200 } as const;
@@ -175,9 +222,14 @@ export function estimateXp(result: SessionResult): number {
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
+  const pct = sessionPct({ answered, correct, timed: result.timed });
   // Offline the phone does not know what else he played today, so this is
   // the pay of the first of its kind; a repeat pays less (variety).
-  return paced(Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast, result);
+  const work = paced(
+    Math.round((paidRight * rightXp(result, false) + Math.min(fast, FAST_PAID) * XP.fast) * accuracyFactor(pct)),
+    result
+  );
+  return answered >= BONUS_MIN_ANSWERED ? Math.max(XP.finished, work) : work;
 }
 
 /**
@@ -507,7 +559,7 @@ function wholeGrid(r: SessionResult, count: "factsLit" | "factsKnown" | "factsGo
  * ahead. Only the level is read.
  */
 function readingLevelAfter(p: ProfileState, r: SessionResult): number {
-  if (!r.reading) return p.reading.level;
+  if (!r.reading || readTooFast(r)) return p.reading.level;
   // At the time the API stores it (applySession sets playedAt): logged as now,
   // a reading sent late counted here though the stored one did not, and a
   // badge could land for a level he never reached.
@@ -541,13 +593,24 @@ function ordinal(n: number): string {
  * One line for the finish screen when a fair-play rule cut the XP, so he
  * learns the rules by playing: mix it up, take your time, get them right.
  */
-export function fairPlayTip(s: { factor: number; nth: number; rushed: boolean; tried: boolean }): string | undefined {
+export function fairPlayTip(s: {
+  factor: number;
+  nth: number;
+  rushed: boolean;
+  tried: boolean;
+  /** FULL_PAY_PCT or better: every right answer paid in full. Default true. */
+  accurate?: boolean;
+  /** A passage finished faster than it can be read (readTooFast). */
+  skimmed?: boolean;
+}): string | undefined {
+  if (s.skimmed) return "Read the whole story first: a reading that fast does not count.";
   if (s.factor < 1) {
     const nth = ordinal(s.nth);
     return `${nth} time today: ${s.factor === 0.5 ? "half" : "a quarter of the"} XP. Switch to something new for full XP!`;
   }
   if (s.rushed) return "Take your time: rushing earns less XP.";
   if (!s.tried) return "Get at least half right to earn the finish bonus.";
+  if (s.accurate === false) return "Get 3 out of 4 right for full XP on every answer.";
   return undefined;
 }
 
@@ -770,23 +833,33 @@ export function applySession(
   const bonuses = answered >= BONUS_MIN_ANSWERED;
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
   // Fair play (see the rules above BONUS_MIN_PCT): correctness gates the
-  // lesson bonus, the pace cap limits the work to the time it took, and the
-  // variety factor cuts a third session of the same kind today.
-  const tried = sessionPct({ answered, correct, timed: result.timed }) >= BONUS_MIN_PCT;
+  // lesson bonus, accuracy sets what each right answer is worth, the pace cap
+  // limits the work to the time it took, and the variety factor cuts a third
+  // session of the same kind today.
+  const pct = sessionPct({ answered, correct, timed: result.timed });
+  const tried = pct >= BONUS_MIN_PCT;
   const kind = activityKind(result.ref);
   const sameKindToday = profile.activity.filter(
     (a) => todayKey(new Date(a.at)) === now.today && activityKind(a.ref) === kind
   ).length;
   const earned =
-    Math.round(paidRight * rightXp(result, firstToday)) +
-    Math.min(fast, FAST_PAID) * XP.fast +
+    Math.round((paidRight * rightXp(result, firstToday) + Math.min(fast, FAST_PAID) * XP.fast) * accuracyFactor(pct)) +
     (bonuses && firstToday && tried ? XP.lessonDone : 0) +
     (bonuses && perfect ? XP.perfect : 0);
   const work = paced(earned, result);
   const factor = varietyFactor(sameKindToday, fullPerKind(kind));
-  const tip = fairPlayTip({ factor, nth: sameKindToday + 1, rushed: work < earned, tried: tried || !bonuses });
+  const tip = fairPlayTip({
+    factor,
+    nth: sameKindToday + 1,
+    rushed: work < earned,
+    tried: tried || !bonuses,
+    accurate: accuracyFactor(pct) >= 1,
+    skimmed: readTooFast(result),
+  });
+  // A finished session pays at least XP.finished, however it went.
+  const paid = Math.round(work * factor);
   const xpGained =
-    Math.round(work * factor) +
+    (bonuses ? Math.max(XP.finished, paid) : paid) +
     (streakExtended || lateNewDay ? XP.streakDay : 0) +
     Math.max(0, Math.floor(result.wordsKnownUp ?? 0)) * XP.wordKnown +
     Math.max(0, Math.floor(result.wordsMasteredUp ?? 0)) * XP.wordMastered;
@@ -799,7 +872,7 @@ export function applySession(
     at: now.at.toISOString(),
     kind: result.kind,
     ref: result.ref,
-    pct: sessionPct({ answered, correct, timed: result.timed }),
+    pct,
     xp: xpGained,
     ms,
   };

@@ -649,7 +649,9 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
 export function scienceUnitForWeek(dateISO: string): ScienceUnit | null {
   const n = dayNum(dateISO);
   if (n < dayNum(SCHOOL_YEAR_START) || n > dayNum(SCHOOL_YEAR_END)) return null;
-  const week = Math.min(36, Math.floor((n - dayNum(SCHOOL_YEAR_START)) / 7) + 1);
+  // Weeks run Monday to Sunday. Counted from Aug 11, a Tuesday, every Monday
+  // still showed the week before's unit.
+  const week = Math.min(36, Math.floor((mondayOf(n) - mondayOf(dayNum(SCHOOL_YEAR_START))) / 7) + 1);
   const matches = SCIENCE_UNITS.filter((u) => week >= u.weekStart && week <= u.weekEnd);
   if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0];

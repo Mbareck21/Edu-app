@@ -13,6 +13,7 @@ import { postSession, saveNote, shownXp } from "@/lib/offline-queue";
 import type { Gained } from "@/lib/rewards";
 import { sfx } from "@/lib/sfx";
 import { judgeSpoken } from "@/lib/spoken-number";
+import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
 import { FAST_MS, roundStars, type Fact } from "@/lib/tables";
 import type { SessionResult } from "@/lib/types";
 import {
@@ -65,6 +66,12 @@ export default function VoiceTablesRunner({
   /** Facts already graded this round. A skip is not graded: he never saw the answer. */
   const graded = useRef(new Set<number>());
   const answerMs = useRef(0);
+  /**
+   * Time on task for the server's pace rule. answerMs is only how fast he
+   * answered (the stars); it left out every fact being read out, so an
+   * honest round was paid as a rushed one.
+   */
+  const watch = useRef<Stopwatch | null>(null);
   const unclear = useRef(0);
   const alive = useRef(true);
   const playback = useRef<Playback | null>(null);
@@ -176,7 +183,8 @@ export default function VoiceTablesRunner({
         unclear.current += 1;
         setPhase("unclear");
         if (unclear.current <= 2) {
-          setTimeout(() => live() && void askRef.current(index, true), 900);
+          // Nothing was judged: asked again, it is still his first try.
+          setTimeout(() => live() && void askRef.current(index), 900);
         } else {
           setStuck(true);
         }
@@ -185,6 +193,7 @@ export default function VoiceTablesRunner({
       unclear.current = 0;
       if (firstTry.current[index] === undefined) firstTry.current[index] = correct && !repeat;
       answerMs.current += got.ms;
+      watch.current?.mark();
 
       // The server grades it and moves the grid, as for a typed answer. Graded
       // before means a miss said the answer out loud, so this is a retry.
@@ -230,7 +239,7 @@ export default function VoiceTablesRunner({
       answered: facts.length,
       correct,
       fastCount: 0,
-      ms,
+      ms: Math.max(ms, Math.round(watch.current?.read() ?? 0)),
       perfect: correct === facts.length,
     };
     if (correct > 0) void fireConfetti(correct === facts.length ? "big" : "small");
@@ -378,6 +387,7 @@ export default function VoiceTablesRunner({
             color="purple"
             onClick={() => {
               sfx.tap();
+              watch.current ??= startStopwatch();
               void ask(head);
             }}
           >
@@ -394,7 +404,9 @@ export default function VoiceTablesRunner({
               onClick={() => {
                 stopListening.current?.();
                 unclear.current = 0;
-                void ask(head, true);
+                // Stopped while it listened, a second go is a retry; after
+                // "I didn't catch that" nothing was judged, so it is not.
+                void ask(head, phase === "listening" || phase === "checking");
               }}
             >
               Say it again

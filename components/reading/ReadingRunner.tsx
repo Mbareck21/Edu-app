@@ -822,8 +822,15 @@ function ReadingRunnerInner({
             setShowArabic(false);
           }}
           start={echoAt}
-          onProgress={setEchoAt}
+          onProgress={(p) => {
+            // Each sentence read back is work: unmarked, a whole passage read
+            // after the robot counted as two minutes at most (IDLE_GAP_MS),
+            // and an honest slow reading was paid as a rushed one.
+            watch.current?.mark();
+            setEchoAt(p);
+          }}
           onFinish={(summary) => {
+            watch.current?.mark();
             setEcho(summary);
             setPhase("questions");
           }}
@@ -888,7 +895,15 @@ function ReadingRunnerInner({
         />
         <div className="mt-5 flex items-center gap-3">
           <AudioButton text={parts[seenPart]} size={56} color="green" label="Hear this part" />
-          <Button size="lg" color="green" className="flex-1" onClick={() => setSeenPart(seenPart + 1)}>
+          <Button
+            size="lg"
+            color="green"
+            className="flex-1"
+            onClick={() => {
+              watch.current?.mark();
+              setSeenPart(seenPart + 1);
+            }}
+          >
             Next part
           </Button>
         </div>

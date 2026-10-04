@@ -247,7 +247,11 @@ function MathDrillRunnerInner({
     }
 
     const index = queue[0];
-    if (firstTry.current[index] === undefined) firstTry.current[index] = correct;
+    if (firstTry.current[index] === undefined) {
+      firstTry.current[index] = correct;
+      // Kept now: a reload with the answer on screen made the retry a first try.
+      saveProgress(saveKey, { queue, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
+    }
     if (correct) {
       sfx.correct();
       setFlash("correct");

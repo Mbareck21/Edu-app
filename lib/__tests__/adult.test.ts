@@ -13,6 +13,7 @@ test("the list manager and editors are grown-up pages; flashcards are not", () =
   assert.equal(isAdultPage("/me/lists/abc123"), true);
   assert.equal(isAdultPage("/lists/abc123"), true);
   assert.equal(isAdultPage("/lists/abc123/flashcards"), false);
+  assert.equal(isAdultPage("/me/report"), true, "the competition report is for grown-ups");
   assert.equal(isAdultPage("/me"), false);
   assert.equal(isAdultPage("/"), false);
 });

@@ -189,7 +189,12 @@ export default function TablesRunner({
     const ms = Math.min(MAX_ANSWER_MS, Math.max(0, Date.now() - askedAt.current));
     // Answered before in this round: he has seen the answer since the miss.
     const retry = firstTry.current[index] !== undefined;
-    if (!retry) firstTry.current[index] = correct;
+    if (!retry) {
+      firstTry.current[index] = correct;
+      // Kept now, not when the queue moves: a reload with the answer on
+      // screen came back to this fact as a first try.
+      saveProgress(saveKey, { facts, label, sessionRef, queue, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
+    }
 
     // The server grades and moves the grid. Fire and forget: the screen has
     // already decided from the same rule, and a lost post costs one answer
@@ -216,7 +221,7 @@ export default function TablesRunner({
     setShakeKey((k) => k + 1);
     // Encouragement first; the fact itself ("7 × 8 = 56 (7 groups of 8)") under it.
     setFeedback({ state: "wrong", title: "Good try!", line: question.how });
-  }, [advance, fact, feedback, flash, index, input, question]);
+  }, [advance, fact, facts, feedback, flash, index, input, label, question, queue, saveKey, sessionRef]);
 
   const afterWrong = useCallback(() => {
     watch.current?.mark();
