@@ -233,4 +233,4 @@ Reused unchanged: `recognize`, `listen`, `spell`, `use` (cloze / pick-correct-se
 
 Tests: `lib/__tests__/curriculum.test.ts`. Run with `npm test` (already wired to `tsx --test lib/__tests__/*.test.ts`), or a single file with `npx tsx --test lib/__tests__/curriculum.test.ts`.
 
-**Caveats to keep in mind.** FPS unit plans are behind a school login, so unit-level pacing is inferred, not published. The science week counter runs straight through breaks, so week 36 lands in mid-April and the last weeks of the year stay on the engineering unit. Spring break is not in the public Year-at-a-Glance and is not modelled.
+**Caveats to keep in mind.** FPS unit plans are behind a school login, so unit-level pacing is inferred, not published. The science week counter runs Monday to Sunday straight through breaks, so week 36 lands in mid-April and the last weeks of the year stay on the engineering unit. Days off inside a quarter, spring break included, are in `FPS_DAYS_OFF` and move the math unit dates, not the science weeks.

@@ -247,10 +247,12 @@ function MathDrillRunnerInner({
     }
 
     const index = queue[0];
-    if (firstTry.current[index] === undefined) {
-      firstTry.current[index] = correct;
-      // Kept now: a reload with the answer on screen made the retry a first try.
-      saveProgress(saveKey, { queue, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
+    const first = firstTry.current[index] === undefined;
+    if (first) firstTry.current[index] = correct;
+    // Kept now: a reload with the answer on screen made the retry a first try.
+    // A miss is kept as the requeue it leads to, so the question comes back.
+    if (first || !correct) {
+      saveProgress(saveKey, { queue: correct ? queue : requeue(queue), firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
     }
     if (correct) {
       sfx.correct();

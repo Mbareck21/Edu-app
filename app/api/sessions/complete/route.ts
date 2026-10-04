@@ -20,7 +20,7 @@ import {
 import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
 import { trackActivity } from "@/lib/tracker-store";
-import { applyReading, applySession, beatsDone, goalBeats, levelFor, readTooFast } from "@/lib/rewards";
+import { applyReading, applySession, beatsDone, goalBeats, levelFor, paidXp, readTooFast } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
 
@@ -361,7 +361,10 @@ export async function POST(req: Request) {
 
   // Played by the other child, before a switch on this phone. 409 keeps it
   // queued there until that child signs in again.
-  if (body.learner && body.learner !== (await currentLearner())) {
+  // Read once, before anything is written: read after the save, a failure
+  // there answered 500 for a session already stored.
+  const learner = await currentLearner();
+  if (body.learner && body.learner !== learner) {
     return NextResponse.json({ error: "other learner" }, { status: 409 });
   }
 
@@ -377,11 +380,13 @@ export async function POST(req: Request) {
 
   // A retry of a session we already applied: report the current state, change
   // nothing. Must run before updateList/updateMath, not just before the rewards.
-  // `replay` tells the phone the XP was paid the first time, so the finish
-  // screen does not say +0 for it.
+  // `replay` tells the phone the session was applied before, and `paidXp`
+  // what that paid, so the finish screen shows it and not +0 (or an
+  // estimate, for a session whose XP was lost).
   if (body.sessionId && !(await reserveSession(body.sessionId))) {
     return NextResponse.json({
       replay: true,
+      paidXp: paidXp(before.activity, body.ref, now),
       gained: {
         xp: 0,
         newBadges: [],
@@ -419,7 +424,6 @@ export async function POST(req: Request) {
 
     // The parent's competition record (lib/tracker.ts), after the reply: a
     // failure there must never cost him the session.
-    const learner = await currentLearner();
     after(() => trackActivity(learner, saved.activity).then(() => undefined, () => undefined));
 
     return NextResponse.json({

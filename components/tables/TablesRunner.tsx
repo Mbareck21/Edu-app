@@ -189,11 +189,13 @@ export default function TablesRunner({
     const ms = Math.min(MAX_ANSWER_MS, Math.max(0, Date.now() - askedAt.current));
     // Answered before in this round: he has seen the answer since the miss.
     const retry = firstTry.current[index] !== undefined;
-    if (!retry) {
-      firstTry.current[index] = correct;
-      // Kept now, not when the queue moves: a reload with the answer on
-      // screen came back to this fact as a first try.
-      saveProgress(saveKey, { facts, label, sessionRef, queue, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
+    if (!retry) firstTry.current[index] = correct;
+    // Kept now, not when the queue moves: a reload with the answer on screen
+    // came back to this fact as a first try. A miss is kept as the requeue it
+    // leads to, so the fact still comes round again after a reload.
+    if (!retry || !correct) {
+      const kept = correct ? queue : requeue(queue);
+      saveProgress(saveKey, { facts, label, sessionRef, queue: kept, firstTry: firstTry.current, ms: watch.current?.read() ?? 0 });
     }
 
     // The server grades and moves the grid. Fire and forget: the screen has

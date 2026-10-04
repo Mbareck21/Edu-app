@@ -44,6 +44,8 @@ Target: move reading, vocabulary and comprehension from Grade 3 to Grade 4 in ~1
 
 Practical rules: immediate feedback with the correct answer shown, a visible word map showing which words are at which rung, streak counted by session completed rather than accuracy, no leaderboard, no lives, no timed penalty.
 
+**What the app does instead (the parent's calls).** The brothers race daily on a family scoreboard, and since 2026-10-04 XP follows accuracy: under 3 of 4 right each right answer pays less, and a session with every answer wrong pays 5 XP (`lib/rewards.ts`, fair-play rule 4). Finishing still counts for the streak and the day's quest, so effort is not punished; guessing just earns little. The research above is why the hard items stay worth doing: a miss costs nothing but the points it did not earn.
+
 ## 4. Daily session recipe (25 minutes)
 
 1. **Review, 5 min.** All due items, interleaved across word rungs and skills. Expect 20-30 items.
@@ -73,6 +75,6 @@ Mastery ladder for one word: **recognise** (meaning from 4 options) → **listen
 | Repeated reading | Same passage 2-3 times, chart WCPM weekly | Chang & Millett 2015 |
 | Arabic gloss | On tap, hidden by default, off once word reaches "recall" | Kim, Lee & Lee 2024 |
 | Comprehension questions | 2 QtA prompts + 1 inference + 1 retell per passage | McKeown, Beck & Blake 2009 |
-| Gamification | Streak on completion, XP on effort, mastery map visible. No lives, no leaderboard, no timer | Huang et al. 2023; Hadi Mogavi et al. 2022 |
+| Gamification | Streak on completion, XP on accuracy (parent's call, 2026-10-04), mastery map visible. No lives, no timer; a daily family race (parent's call) | Huang et al. 2023; Hadi Mogavi et al. 2022 |
 
 One honest caveat on the 3-month goal. 180 explicitly taught words will not by itself close a full grade level, since typical children add roughly 3,000 words a year mostly from reading. The explicit list is the high-value core; the daily reading at 98% coverage is what carries the rest. Comprehension and fluency should move faster than raw vocabulary size, and those are what a Grade 4 assessment actually measures.

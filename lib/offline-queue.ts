@@ -28,9 +28,10 @@ const SEND_TIMEOUT_MS = 15_000;
 
 /**
  * `replay`: the server had already applied this session (the first send got
- * through, its reply did not), so `gained` is empty although the XP was paid.
+ * through, its reply did not), so `gained` is empty; `paidXp` is what the
+ * first send paid, from the server's log.
  */
-export type PostSessionOk = { saved: true; gained: Gained; profile: ClientProfile; replay?: boolean };
+export type PostSessionOk = { saved: true; gained: Gained; profile: ClientProfile; replay?: boolean; paidXp?: number };
 /**
  * Not saved on the server. Kept on the phone for a later flush, except
  * `invalid`: the server rejected it outright and it was dropped. `signedOut`
@@ -120,9 +121,15 @@ async function send(result: SessionResult, signal: AbortSignal): Promise<SendOut
     if (!res.ok) return TRANSIENT;
     const data: unknown = await res.json();
     if (!data || typeof data !== "object") return TRANSIENT;
-    const body = data as { gained?: Gained; profile?: ClientProfile; replay?: boolean };
+    const body = data as { gained?: Gained; profile?: ClientProfile; replay?: boolean; paidXp?: unknown };
     if (!body.gained || !body.profile) return TRANSIENT;
-    return { saved: true, gained: body.gained, profile: body.profile, ...(body.replay ? { replay: true } : {}) };
+    return {
+      saved: true,
+      gained: body.gained,
+      profile: body.profile,
+      ...(body.replay ? { replay: true } : {}),
+      ...(typeof body.paidXp === "number" ? { paidXp: body.paidXp } : {}),
+    };
   } catch {
     // Offline, or the timeout fired.
     return TRANSIENT;
@@ -166,9 +173,12 @@ export async function postSession(result: SessionResult): Promise<PostSessionRes
 
     if (outcome.saved) {
       unqueue(sessionId);
-      // A replay reports 0 for XP the first send already paid. Every finish
-      // screen reads gained.xp, so the estimate goes there, once, for all.
-      return outcome.replay ? { ...outcome, gained: { ...outcome.gained, xp: estimateXp(payload) } } : outcome;
+      // A replay reports 0 in gained.xp. Every finish screen reads gained.xp,
+      // so what the first send paid goes there, once, for all; a server that
+      // does not say gets the estimate.
+      return outcome.replay
+        ? { ...outcome, gained: { ...outcome.gained, xp: outcome.paidXp ?? estimateXp(payload) } }
+        : outcome;
     }
     if (outcome.kind === "invalid") {
       unqueue(sessionId);

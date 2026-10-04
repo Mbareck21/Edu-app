@@ -45,7 +45,8 @@ export async function isAdultToken(token: string | undefined): Promise<boolean> 
 export function isAdultPage(pathname: string): boolean {
   if (pathname === "/me/lists" || pathname.startsWith("/me/lists/")) return true;
   if (pathname === "/me/report" || pathname.startsWith("/me/report/")) return true;
-  // /lists/<id> is the old editor; /lists/<id>/flashcards stays open.
+  // /lists/<id> only redirects to /me/lists/<id> now; kept locked for old
+  // links. /lists/<id>/flashcards redirects to the unit's path and stays open.
   return /^\/lists\/[^/]+\/?$/.test(pathname);
 }
 

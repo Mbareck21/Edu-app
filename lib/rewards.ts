@@ -43,8 +43,8 @@ import { allFactKeys } from "@/lib/tables";
 // Pay slides with the share right, in every section and drill. Under
 // FULL_PAY_PCT each right answer pays less (accuracyFactor), and a finished
 // session of BONUS_MIN_ANSWERED or more answers pays at least XP.finished:
-//   Reading passage, first today ......... 4/4 650 · 3/4 470 · 2/4 220 · 1/4 50 · 0/4 5
-//   Math lesson L1, 10 questions ......... 10/10 120 · 8/10 76 · 5/10 43 · 2/10 5 · 0/10 5
+//   Reading passage, first today ......... 4/4 650 · 3/4 470 · 2/4 213 · 1/4 50 · 0/4 5
+//   Math lesson L1, 10 questions ......... 10/10 120 · 8/10 76 · 5/10 37 · 2/10 5 · 0/10 5
 export const XP = {
   /** Per right word answer (vocab: lessons, review, word drills). */
   correct: 15,
@@ -128,6 +128,20 @@ export function accuracyFactor(pct: number): number {
   return Math.min(1, Math.max(0, Number(pct) || 0) / FULL_PAY_PCT);
 }
 
+/** Write what you remember: every word he writes is one he recalled, so there is no guess to cut. */
+const FREE_RECALL_REF = "drill:vocab:remember";
+
+/**
+ * The accuracy factor for a session: right out of the answers he gave. Not
+ * out of a timed run's floor (sessionPct): 3 of 3 in a minute is every one
+ * right, and was paid at 80% with the 3-of-4 tip. Free recall counts the whole
+ * list as answered, so it pays per word remembered, uncut.
+ */
+export function sessionAccuracy(result: Pick<SessionResult, "ref">, answered: number, correct: number): number {
+  if (result.ref === FREE_RECALL_REF || answered <= 0) return 1;
+  return accuracyFactor((Math.min(correct, answered) / answered) * 100);
+}
+
 /**
  * Faster than this, in words a minute, and the passage was not read. Adults
  * read silently at about 240 (Brysbaert, 2019); a Grade 4 reader going past
@@ -136,7 +150,9 @@ export function accuracyFactor(pct: number): number {
 export const MAX_READ_WPM = 300;
 
 /**
- * A passage finished faster than it can be read. It does not move his
+ * A passage finished faster than it can be read: the whole session, questions
+ * included, took less time than the passage alone takes at MAX_READ_WPM. A
+ * floor, so it only catches tapping straight through. It does not move his
  * reading level: two rushed ones used to step him down to easier passages,
  * which pay the same, and lucky guesses could step him up. No time (0) is
  * not too fast.
@@ -222,14 +238,37 @@ export function estimateXp(result: SessionResult): number {
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
   const fast = Math.min(correct, Math.max(0, Math.floor(result.fastCount) || 0));
   const paidRight = result.timed ? Math.min(correct, timedPaid(result.ref)) : correct;
-  const pct = sessionPct({ answered, correct, timed: result.timed });
   // Offline the phone does not know what else he played today, so this is
   // the pay of the first of its kind; a repeat pays less (variety).
-  const work = paced(
-    Math.round((paidRight * rightXp(result, false) + Math.min(fast, FAST_PAID) * XP.fast) * accuracyFactor(pct)),
-    result
+  const work = Math.round(
+    paced(Math.round(paidRight * rightXp(result, false)) + Math.min(fast, FAST_PAID) * XP.fast, result) *
+      sessionAccuracy(result, answered, correct)
   );
   return answered >= BONUS_MIN_ANSWERED ? Math.max(XP.finished, work) : work;
+}
+
+/** How far apart a session and its resend may be logged and still be one session. */
+export const REPLAY_MATCH_MS = 2 * 60_000;
+
+/**
+ * What the first send of a resent session paid, read off the log: the entry
+ * with its ref nearest `at`, within REPLAY_MATCH_MS. 0 when there is none: the
+ * first send failed after a progress write and before the profile, and its XP
+ * was lost (see reserveSession in the sessions route). The phone used to show
+ * an estimate either way, so a lost session still said +N.
+ */
+export function paidXp(activity: readonly Pick<ActivityEntry, "at" | "ref" | "xp">[], ref: string, at: Date): number {
+  let best: number | null = null;
+  let gap = Infinity;
+  for (const a of activity) {
+    if (a.ref !== ref) continue;
+    const d = Math.abs(new Date(a.at).getTime() - at.getTime());
+    if (d <= REPLAY_MATCH_MS && d < gap) {
+      gap = d;
+      best = a.xp;
+    }
+  }
+  return Math.max(0, best ?? 0);
 }
 
 /**
@@ -843,17 +882,22 @@ export function applySession(
     (a) => todayKey(new Date(a.at)) === now.today && activityKind(a.ref) === kind
   ).length;
   const earned =
-    Math.round((paidRight * rightXp(result, firstToday) + Math.min(fast, FAST_PAID) * XP.fast) * accuracyFactor(pct)) +
+    Math.round(paidRight * rightXp(result, firstToday)) +
+    Math.min(fast, FAST_PAID) * XP.fast +
     (bonuses && firstToday && tried ? XP.lessonDone : 0) +
     (bonuses && perfect ? XP.perfect : 0);
-  const work = paced(earned, result);
+  const capped = paced(earned, result);
+  // Accuracy after the pace cap, not before: on a quick run the cap was the
+  // limit, and a lucky 2 of 4 in a minute paid what 4 of 4 did.
+  const accuracy = sessionAccuracy(result, answered, correct);
+  const work = Math.round(capped * accuracy);
   const factor = varietyFactor(sameKindToday, fullPerKind(kind));
   const tip = fairPlayTip({
     factor,
     nth: sameKindToday + 1,
-    rushed: work < earned,
+    rushed: capped < earned,
     tried: tried || !bonuses,
-    accurate: accuracyFactor(pct) >= 1,
+    accurate: accuracy >= 1,
     skimmed: readTooFast(result),
   });
   // A finished session pays at least XP.finished, however it went.
