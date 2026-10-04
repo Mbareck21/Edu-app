@@ -277,3 +277,17 @@ test("a session already saved, whose first reply was lost, still shows its XP", 
   assert.ok(estimateXp(session) > 0);
   assert.equal(queueSize(), 0, "it is saved, so it leaves the phone");
 });
+
+test("a resent session shows what the server says it paid, 0 when it was lost", async () => {
+  for (const paid of [212, 0]) {
+    respondWith(
+      () =>
+        new Response(
+          JSON.stringify({ replay: true, paidXp: paid, gained: { xp: 0, newBadges: [] }, profile: { xp: 500 } }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+    );
+    const res = await postSession(session);
+    assert.equal(shownXp(res, session), paid);
+  }
+});

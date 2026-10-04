@@ -232,6 +232,30 @@ export function estimateXp(result: SessionResult): number {
   return answered >= BONUS_MIN_ANSWERED ? Math.max(XP.finished, work) : work;
 }
 
+/** How far apart a session and its resend may be logged and still be one session. */
+export const REPLAY_MATCH_MS = 2 * 60_000;
+
+/**
+ * What the first send of a resent session paid, read off the log: the entry
+ * with its ref nearest `at`, within REPLAY_MATCH_MS. 0 when there is none: the
+ * first send failed after a progress write and before the profile, and its XP
+ * was lost (see reserveSession in the sessions route). The phone used to show
+ * an estimate either way, so a lost session still said +N.
+ */
+export function paidXp(activity: readonly Pick<ActivityEntry, "at" | "ref" | "xp">[], ref: string, at: Date): number {
+  let best: number | null = null;
+  let gap = Infinity;
+  for (const a of activity) {
+    if (a.ref !== ref) continue;
+    const d = Math.abs(new Date(a.at).getTime() - at.getTime());
+    if (d <= REPLAY_MATCH_MS && d < gap) {
+      gap = d;
+      best = a.xp;
+    }
+  }
+  return Math.max(0, best ?? 0);
+}
+
 /**
  * The log is the only record behind the race, the rivalry, the drill duel and
  * last week's champion (13 days back). At 200, a 31-session day like

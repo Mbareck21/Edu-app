@@ -8,11 +8,13 @@ import test from "node:test";
 import { modesFor } from "@/components/drill/picks";
 import { todayKey } from "@/lib/day";
 import {
+  REPLAY_MATCH_MS,
   XP,
   applyReading,
   applySession,
   emptyProfile,
   fairPlayTip,
+  paidXp,
   readingProgress,
 } from "@/lib/rewards";
 import { nudge } from "@/lib/scoreboard";
@@ -214,4 +216,18 @@ test("a word weak on spelling is not sent to Write it, which grades no skill", (
   const modes = modesFor(["spell"]);
   assert.equal(modes.includes("flashcards"), false);
   assert.ok(modes.includes("spell") && modes.includes("write"));
+});
+
+test("a resend reads what its first send paid off the log, and 0 when it never landed", () => {
+  const at = new Date("2026-10-04T15:00:00.000Z");
+  const log = [
+    { at: "2026-10-04T14:00:00.000Z", ref: "quest:review", xp: 90 },
+    { at: at.toISOString(), ref: "quest:review", xp: 240 },
+    { at: at.toISOString(), ref: "math:fractions", xp: 120 },
+  ];
+  assert.equal(paidXp(log, "quest:review", at), 240);
+  // The phone's clock ahead of the server: logged at arrival, a few seconds off.
+  assert.equal(paidXp(log, "quest:review", new Date(at.getTime() + 20_000)), 240);
+  assert.equal(paidXp(log, "quest:review", new Date(at.getTime() + REPLAY_MATCH_MS + 1)), 0);
+  assert.equal(paidXp(log, "drill:vocab:spell", at), 0, "lost before the profile was written");
 });
