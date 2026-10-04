@@ -91,4 +91,73 @@ test("\"one forty four\" is how a hundred and forty four is often said", () => {
   // A real number stays itself.
   assert.equal(lastNumber("forty four"), 44);
   assert.equal(lastNumber("one hundred forty four"), 144);
+  // The "one" of "twenty one" said twice is not a hundred.
+  assert.equal(lastNumber("twenty one twenty one"), 21);
+});
+
+test("counting up to the answer in one go is not knowing it", () => {
+  // Said for 7 × 8. Every guess the recogniser makes on the way holds the
+  // numbers before 56, so none of them counts.
+  const upTo56 = [50, 51, 52, 53, 54, 55, 56];
+  const growing = upTo56.map((_, i) => upTo56.slice(0, i + 1).join(" "));
+  for (const said of [
+    growing,
+    ["50, 51, 52, 53, 54, 55, 56"],
+    [upTo56.map(toWords).join(" ")],
+    ["seven times eight is fifty fifty one fifty two fifty three fifty four fifty five fifty six"],
+    ["59 58 57 56"],
+    ["fifty five fifty six"],
+  ]) {
+    const judged = judgeSpoken(said, 56, [7, 8]);
+    assert.equal(judged.correct, false, said.join(" | "));
+    // What goes to the server as typed must not be the answer either.
+    assert.notEqual(judged.heard, 56, said.join(" | "));
+  }
+  assert.deepEqual(judgeSpoken(growing, 56, [7, 8]), { heard: 50, correct: false });
+  // Past the answer is as wrong, even when the answer came first.
+  assert.deepEqual(judgeSpoken(["70 71 72"], 70, [7, 10]), { heard: 71, correct: false });
+});
+
+test("one answer said honestly is still right, the fact's own numbers and all", () => {
+  for (const a of TABLES) {
+    for (let b = 2; b <= 12; b++) {
+      const answer = a * b;
+      const [wa, wb, w] = [toWords(a), toWords(b), toWords(answer)];
+      for (const said of [
+        String(answer),
+        w,
+        `${a} times ${b} is ${answer}`,
+        `${a} x ${b} = ${answer}`,
+        `${wa} times ${wb} is ${w}`,
+        `${wa} times ${wb} ${w}`,
+        `${wa} times ${wb} is equal to ${w}`,
+        `${wa} times ${wb} equals two ${w}`,
+        `${wa} by ${wb} is ${w}`,
+        `${wa} time ${wb} is ${w}`,
+        `${wb} ${w}`,
+        `${w} ${w}`,
+        `um it's ${w}`,
+      ]) {
+        assert.deepEqual(judgeSpoken([said], answer, [a, b]), { heard: answer, correct: true }, said);
+      }
+    }
+  }
+  for (const [said, answer, a, b] of [
+    ["two fifty six", 56, 7, 8],
+    ["um two twenty four", 24, 4, 6],
+    ["one forty four", 144, 12, 12],
+    ["twelve times twelve is one forty four", 144, 12, 12],
+    ["eleven times twelve one thirty two", 132, 11, 12],
+    ["one hundred and forty four", 144, 12, 12],
+    ["two times two four", 4, 2, 2],
+    ["floor", 4, 2, 2],
+  ] as const) {
+    assert.equal(judgeSpoken([said], answer, [a, b]).correct, true, said);
+  }
+});
+
+test("the recogniser's different spellings of one answer still pass", () => {
+  assert.deepEqual(judgeSpoken(["56", "fifty six", "50 6"], 56, [7, 8]), { heard: 56, correct: true });
+  assert.deepEqual(judgeSpoken(["50 6", "fifty six", "56"], 56, [7, 8]), { heard: 56, correct: true });
+  assert.deepEqual(judgeSpoken(["50 6", "56"], 56), { heard: 56, correct: true });
 });

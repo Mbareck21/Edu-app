@@ -53,10 +53,10 @@ function isOneNumber(words: readonly string[]): boolean {
   return i > 0 && i === words.length;
 }
 
-/** The number a run of tokens ends with, reading back from the end. */
-function numberAtEnd(tokens: string[]): number | null {
+/** The number a run of tokens ends with, reading back from the end, and the token it starts at. */
+function numberAtEnd(tokens: string[]): { n: number; at: number } | null {
   for (let i = tokens.length - 1; i >= 0; i--) {
-    if (/^\d+$/.test(tokens[i])) return Number(tokens[i]);
+    if (/^\d+$/.test(tokens[i])) return { n: Number(tokens[i]), at: i };
     if (NUMBER_WORD.test(tokens[i])) {
       let start = i;
       while (start > 0 && NUMBER_WORD.test(tokens[start - 1])) start--;
@@ -66,27 +66,43 @@ function numberAtEnd(tokens: string[]): number | null {
       for (let s = start; s <= i; s++) {
         const words = tokens.slice(s, i + 1);
         // "one forty four" is how 144 is often said out loud; read as a sum
-        // it was 45.
-        if (words[0] === "one" && TENS.test(words[1] ?? "") && isOneNumber(words.slice(1))) {
+        // it was 45. Not the "one" of "twenty one twenty one", though.
+        if (words[0] === "one" && !TENS.test(tokens[s - 1] ?? "") && TENS.test(words[1] ?? "") && isOneNumber(words.slice(1))) {
           const rest = fromWords(words.slice(1).join(" "));
-          if (rest !== null) return 100 + rest;
+          if (rest !== null) return { n: 100 + rest, at: s };
         }
-        if (isOneNumber(words)) return fromWords(words.join(" "));
+        if (isOneNumber(words)) {
+          const n = fromWords(words.join(" "));
+          return n === null ? null : { n, at: s };
+        }
       }
-      return fromWords(tokens[i]);
+      const n = fromWords(tokens[i]);
+      return n === null ? null : { n, at: i };
     }
   }
   return null;
 }
 
+/** Every number in a run of tokens, in the order said, each read as numberAtEnd reads the last. */
+function numbersSaid(tokens: string[]): number[] {
+  const said: number[] = [];
+  let found = numberAtEnd(tokens);
+  while (found) {
+    // "equal two fifty six": a two before another number is the word "to".
+    if (!(found.n === 2 && said.length > 0)) said.unshift(found.n);
+    found = numberAtEnd(tokens.slice(0, found.at));
+  }
+  return said;
+}
+
 /**
- * The answer in a transcript, or null when there is none.
+ * The words of a transcript that can hold the answer.
  *
  * When the fact itself is in there ("two times two is four", or the app's own
  * voice caught at the end of "two times two"), only what comes after the
  * second number counts. Otherwise that echo read as the answer 2.
  */
-export function lastNumber(text: string): number | null {
+function answerTokens(text: string): string[] {
   const tokens = text
     .toLowerCase()
     .replace(/(\d),(\d)/g, "$1$2")
@@ -100,25 +116,44 @@ export function lastNumber(text: string): number | null {
     .filter((t, i, all) => !(t === "and" && all[i - 1] === "hundred"));
 
   const times = tokens.lastIndexOf("times");
-  if (times >= 0) {
-    // Skip the fact's second number (always one word or digit: 1 to 12).
-    let i = times + 1;
-    while (i < tokens.length && !isNumberToken(tokens[i])) i++;
-    return numberAtEnd(tokens.slice(i + 1));
-  }
-  return numberAtEnd(tokens);
+  if (times < 0) return tokens;
+  // Skip the fact's second number (always one word or digit: 1 to 12).
+  let i = times + 1;
+  while (i < tokens.length && !isNumberToken(tokens[i])) i++;
+  return tokens.slice(i + 1);
+}
+
+/** The answer in a transcript, or null when there is none. */
+export function lastNumber(text: string): number | null {
+  return numberAtEnd(answerTokens(text))?.n ?? null;
+}
+
+/**
+ * The number one guess counts as. Several different numbers in one go
+ * ("fifty, fifty one, … fifty six") is counting up to the answer, not knowing
+ * it, so that guess counts as the first of them that is not the answer. The
+ * fact's own numbers are left out: "eight, fifty six" is the app's voice
+ * caught before his answer, and "seven by eight is fifty six" is the fact.
+ */
+function guessed(text: string, answer: number, operands: readonly number[]): number | null {
+  const tokens = answerTokens(text);
+  const said = numbersSaid(tokens).filter((n) => !operands.includes(n));
+  if (new Set(said).size > 1) return said.find((n) => n !== answer) ?? null;
+  return numberAtEnd(tokens)?.n ?? null;
 }
 
 /**
  * What he said, judged against the answer. `alternatives` are the
  * recogniser's guesses, best first; any guess that heard the right number
  * counts, since an accent more often costs the first guess than the answer.
+ * `operands` are the fact's two numbers, which a guess may say as well.
  */
 export function judgeSpoken(
   alternatives: readonly string[],
-  answer: number
+  answer: number,
+  operands: readonly number[] = []
 ): { heard: number | null; correct: boolean } {
-  const numbers = alternatives.map(lastNumber);
+  const numbers = alternatives.map((text) => guessed(text, answer, operands));
   const correct = numbers.includes(answer);
   const heard = correct ? answer : (numbers.find((n) => n !== null) ?? null);
   return { heard, correct };

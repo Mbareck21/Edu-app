@@ -89,7 +89,8 @@ export default function VoiceTablesRunner({
   }, []);
 
   /** One spoken answer: the phone's recogniser, or a recording sent to the server. */
-  const hear = useCallback(async (answer: number): Promise<{ alternatives: string[]; ms: number } | "blocked"> => {
+  const hear = useCallback(async (fact: Fact): Promise<{ alternatives: string[]; ms: number } | "blocked"> => {
+    const answer = fact.a * fact.b;
     const started = performance.now();
     if (canListen()) {
       // A guess on the way counts ("4" before it settles on "floor"), except
@@ -99,7 +100,7 @@ export default function VoiceTablesRunner({
       const l = listenOnce({
         maxMs: 8000,
         accept: (guesses, isFinal) => {
-          const ok = (isFinal || !onlyFinal) && judgeSpoken(guesses, answer).correct;
+          const ok = (isFinal || !onlyFinal) && judgeSpoken(guesses, answer, [fact.a, fact.b]).correct;
           if (ok && !acceptedAt) acceptedAt = performance.now();
           return ok;
         },
@@ -161,14 +162,14 @@ export default function VoiceTablesRunner({
       await say(`${fact.a} times ${fact.b}`);
       if (!live()) return;
       setPhase("listening");
-      const got = await hear(answer);
+      const got = await hear(fact);
       if (!live()) return;
       if (got === "blocked") {
         setError("I can't use the microphone. Allow it for this site, then tap Start again.");
         setPhase("ready");
         return;
       }
-      const { heard: number, correct } = judgeSpoken(got.alternatives, answer);
+      const { heard: number, correct } = judgeSpoken(got.alternatives, answer, [fact.a, fact.b]);
       setHeard(number);
 
       // Nothing he said was a number: ask again, twice, before moving on.
