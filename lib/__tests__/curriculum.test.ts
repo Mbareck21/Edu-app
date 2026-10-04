@@ -107,7 +107,12 @@ test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2026-08-25")?.id, "growing-plants"); // week 3
   assert.equal(scienceUnitForWeek("2026-09-01")?.id, "adaptations"); // week 4
   assert.equal(scienceUnitForWeek("2026-09-15")?.id, "senses"); // week 6
-  assert.equal(scienceUnitForWeek("2026-09-28")?.id, "senses"); // week 7
+  assert.equal(scienceUnitForWeek("2026-09-28")?.id, "senses"); // week 8
+  // A Monday is in its own week, not the one before: weeks start on Monday.
+  assert.equal(scienceUnitForWeek("2026-08-17")?.id, "growing-plants"); // Mon, week 2
+  assert.equal(scienceUnitForWeek("2026-08-31")?.id, "adaptations"); // Mon, week 4
+  assert.equal(scienceUnitForWeek("2026-09-14")?.id, "senses"); // Mon, week 6
+  assert.equal(scienceUnitForWeek("2026-08-16")?.id, undefined); // Sun, week 1
   assert.equal(scienceUnitForWeek("2026-10-06")?.id, "senses"); // week 9
   assert.equal(scienceUnitForWeek("2026-11-03")?.id, "earth-features");
   assert.equal(scienceUnitForWeek("2027-01-12")?.id, "energy");
