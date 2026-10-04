@@ -14,6 +14,9 @@ import {
   countWords,
   MAX_PASSAGE_PARAGRAPHS,
   MAX_UNKNOWN_BUDGET,
+  GLOSSARY_SLACK,
+  MAX_GLOSSARY_ENTRIES,
+  studyWordsFor,
   foldParagraphs,
   levelAtGrade,
   lexileForLevel,
@@ -69,6 +72,45 @@ test("the unknown-word budget keeps 98% of the passage known at every level", ()
       assert.ok(p.unknownBudget <= p.targetWords * 0.02, `level ${level}: ${p.unknownBudget} of ${p.targetWords}`);
     }
   }
+});
+
+test("the glossary cap follows each level's budget, not the top level's", () => {
+  // The route used to accept 8 glosses at every level: about 7% unknown on a
+  // 110-word level 1 passage.
+  assert.equal(readingParams(1).maxGlossary, 3);
+  assert.ok(8 > readingParams(1).maxGlossary);
+  for (let level = 1; level <= 12; level++) {
+    const p = readingParams(level);
+    assert.equal(p.maxGlossary, p.unknownBudget + GLOSSARY_SLACK, `level ${level}`);
+    // At the cap, at least 97% of a passage of the target length is known.
+    assert.ok((p.targetWords - p.maxGlossary) / p.targetWords >= 0.97, `level ${level}`);
+    // Trimming to the shape's ceiling must never hide an over-budget glossary.
+    assert.ok(p.maxGlossary < MAX_GLOSSARY_ENTRIES, `level ${level}`);
+  }
+});
+
+test("list words he cannot read yet are offered only up to the budget", () => {
+  const word = (w: string, recognizeStreak: number) => ({ word: w, recognizeStreak });
+  // A list he has just started: 12 words, none learned. Level 1 offers 2.
+  const fresh = Array.from({ length: 12 }, (_, i) => word(`w${i}`, 0));
+  const start = studyWordsFor(fresh, readingParams(1).unknownBudget, 12, seeded(1));
+  assert.deepEqual(start.known, []);
+  assert.equal(start.learning.length, 2);
+
+  const list = [word("observe", 3), word("habitat", 4), word("survive", 2), word("adapt", 0), word("predator", 1)];
+  const split = studyWordsFor(list, 2, 12, seeded(2));
+  assert.deepEqual([...split.known].sort(), ["habitat", "observe"]);
+  assert.equal(split.learning.length, 2);
+  for (const w of split.learning) assert.ok(["survive", "adapt", "predator"].includes(w), w);
+  // Known words are free but still capped.
+  assert.equal(studyWordsFor(list, 2, 1, seeded(3)).known.length, 1);
+});
+
+test("the writer's glossary limit is the request's budget, not a fixed six", () => {
+  const prompt = readingSystemPrompt(4);
+  assert.doesNotMatch(prompt, /at most 6 entries/);
+  assert.match(prompt, /never more than the\s+UNKNOWN-WORD BUDGET/);
+  assert.match(prompt, /NEW STUDY\s+WORDS[^.]*:[^.]*but each\s+one counts toward the budget/);
 });
 
 test("question plan grows with the level and matches the passage kind", () => {

@@ -5,6 +5,8 @@ import { FPS_QUARTERS, SCHOOL_YEAR_END, currentQuarter, type Quarter } from "@/l
 import { todayKey } from "@/lib/day";
 import { gradeOn, type Grade } from "@/lib/grade";
 import type { ReadingQuestionType } from "@/lib/models/WordList";
+import { sampleWords } from "@/lib/session-sample";
+import { KNOWN_STREAK } from "@/lib/spacing";
 
 /** The profile's reading ladder runs 1..12 (see lib/rewards.ts). */
 export const MAX_READING_LEVEL = 12;
@@ -27,16 +29,23 @@ export const MAX_UNKNOWN_BUDGET = 6;
 /**
  * 2% of the passage, so 98% of it is words he knows. A flat 6 was 94.5% known
  * on a 110-word level 1 passage, under even the 95% floor. At least 2, so a
- * passage still teaches a new word. His list words are not counted: they are
- * taught on the words-first screen before he reads.
+ * passage still teaches a new word. List words he has not learned count like
+ * any other hard word: the words-first screen shows only glossed words, and
+ * only three of them. See studyWordsFor.
  */
 export function unknownBudgetFor(targetWords: number): number {
   return Math.max(2, Math.min(MAX_UNKNOWN_BUDGET, Math.floor(targetWords * 0.02)));
 }
 
-/** Glossary cap the generator accepts: the budget plus slack for a model that
-    glosses a word or two more than it was asked to. */
-export const MAX_GLOSSARY_ENTRIES = MAX_UNKNOWN_BUDGET + 2;
+/** Room for a model that glosses one easy word more than it was asked to. */
+export const GLOSSARY_SLACK = 1;
+
+/**
+ * The most glossary entries the shape accepts, at any level. One above the top
+ * level's cap, so trimming to it never hides an over-budget glossary from the
+ * per-level check (ReadingParams.maxGlossary).
+ */
+export const MAX_GLOSSARY_ENTRIES = MAX_UNKNOWN_BUDGET + GLOSSARY_SLACK + 1;
 
 /** Story = narrative, info = informational (science / social studies). */
 export type PassageKind = "story" | "info";
@@ -100,6 +109,8 @@ export type ReadingParams = {
   maxSentenceWords: number;
   /** Hu & Nation 98% coverage: at most this many words he will not know. */
   unknownBudget: number;
+  /** Most glossed words a passage at this level may carry: budget + slack. */
+  maxGlossary: number;
   /** Paragraph count that keeps the passage scannable at this length. */
   paragraphs: number;
 };
@@ -112,6 +123,7 @@ export function clampLevel(level: number, max: number = MAX_READING_LEVEL): numb
 export function readingParams(rawLevel: number): ReadingParams {
   const level = clampLevel(rawLevel);
   const targetWords = 110 + 30 * (level - 1);
+  const unknownBudget = unknownBudgetFor(targetWords);
   return {
     level,
     lexile: lexileForLevel(level),
@@ -119,9 +131,28 @@ export function readingParams(rawLevel: number): ReadingParams {
     minWords: Math.round(targetWords * 0.85),
     maxWords: Math.round(targetWords * 1.25),
     maxSentenceWords: 8 + level,
-    unknownBudget: unknownBudgetFor(targetWords),
+    unknownBudget,
+    maxGlossary: unknownBudget + GLOSSARY_SLACK,
     paragraphs: level <= 2 ? 2 : level <= 5 ? 3 : 4,
   };
+}
+
+/**
+ * His list words for the writer, split by whether he can read them yet. A
+ * word is known once he has picked it from its meaning in KNOWN_STREAK spaced
+ * reviews (the recognize skill); reading needs that, not the spelling.
+ * Known words cost nothing. Each other one is a word he may not know, so no
+ * more of them are offered than the budget holds.
+ */
+export function studyWordsFor(
+  words: readonly { word: string; recognizeStreak: number }[],
+  budget: number,
+  maxKnown: number,
+  rng: () => number = Math.random
+): { known: string[]; learning: string[] } {
+  const known = words.filter((w) => w.recognizeStreak >= KNOWN_STREAK).map((w) => w.word);
+  const learning = words.filter((w) => w.recognizeStreak < KNOWN_STREAK).map((w) => w.word);
+  return { known: sampleWords(known, maxKnown, rng), learning: sampleWords(learning, budget, rng) };
 }
 
 // ── Question plan ─────────────────────────────────────────────────────────

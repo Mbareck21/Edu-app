@@ -227,9 +227,10 @@ questions, in that order, with those types and formats.
    UNKNOWN-WORD BUDGET given in the request. Every one of them goes in
    "glossary". Everything else must be common Grade 2-3 English. This is the
    98%-known-words rule — do not smuggle in hard words and leave them unglossed.
-6. Use as many of the STUDY WORDS as fit naturally. Prefer them over inventing
-   new hard words. Then use 2-4 of the TOPIC WORDS; a hard one counts toward
-   the budget.
+6. Use as many of the STUDY WORDS as fit naturally; he knows them. NEW STUDY
+   WORDS are his to learn: prefer them over inventing new hard words, but each
+   one counts toward the budget. Then use 2-4 of the TOPIC WORDS; a hard one
+   counts toward the budget too.
 7. Never inline Arabic, parentheses, glosses, or definitions inside the
    passage text. The passage is plain English prose only. No markdown, no
    bullet points, no headings inside paragraphs.
@@ -334,7 +335,8 @@ BAD:  "What is the author's purpose?"  (a strategy label, not a question about t
 Never ask a question whose own words give the answer away.
 
 ═══ GLOSSARY ═══
-"glossary": at most 6 entries, one per hard word in the passage.
+"glossary": one entry per hard word in the passage, never more than the
+UNKNOWN-WORD BUDGET.
   { "word": "<exactly as it appears in the passage, lowercase base form>",
     "meaning": "<Grade-3 English meaning, 3-10 words, no period>",
     "arabic": "<Modern Standard Arabic, 1-4 words, Arabic script only>" }

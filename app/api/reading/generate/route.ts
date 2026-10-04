@@ -25,6 +25,7 @@ import {
   longestAnswerWarning,
   questionPlan,
   readingParams,
+  studyWordsFor,
   type PassageKind,
   type QuestionSpec,
   type StoryCast,
@@ -206,9 +207,9 @@ export async function POST(req: Request) {
   const doc = await WordList.findById(parsed.data.listId);
   if (!doc) return NextResponse.json({ error: "list not found" }, { status: 404 });
 
-  const allWords = (doc.words || [])
-    .map((w) => String(w.word))
-    .filter((w) => /^[a-z][a-z\s-]*$/.test(w));
+  const listWords = (doc.words || [])
+    .map((w) => ({ word: String(w.word), recognizeStreak: Number(w.skills?.recognize?.streak) || 0 }))
+    .filter((w) => /^[a-z][a-z\s-]*$/.test(w.word));
 
   // The reading ladder lives on the profile, not the list. An explicit level
   // in the body wins (the drill / practice screens may want to pin one).
@@ -249,7 +250,8 @@ export async function POST(req: Request) {
       : sampleWords(theme.prompts.slice(1), 1)[0];
   const essentialQuestion = theme.prompts[0];
 
-  const studyWords = sampleWords(allWords, MAX_STUDY_WORDS);
+  // Words he can read are free; the rest spend the unknown-word budget.
+  const study = studyWordsFor(listWords, params.unknownBudget, MAX_STUDY_WORDS);
   // The school quarter opens the standards his class has started on, even
   // when the reading ladder has not reached them yet.
   const plan = questionPlan(level, kind, useScience, planQuarter(todayISO));
@@ -301,12 +303,13 @@ TARGET WORDS: ${params.targetWords} (never fewer than ${params.minWords}, never 
 TEXT DIFFICULTY: about ${params.lexile}L. Match it with sentence length and word choice, not with padding.
 MAX SENTENCE WORDS: ${params.maxSentenceWords}
 PARAGRAPHS: ${params.paragraphs}
-UNKNOWN-WORD BUDGET: ${params.unknownBudget} (hard words other than the STUDY WORDS, which he is taught before reading; topic words he may not know count; every one goes in "glossary")
+UNKNOWN-WORD BUDGET: ${params.unknownBudget} (every word he may not know counts: NEW STUDY WORDS and hard topic words alike; every one goes in "glossary")
 
 ${kindBlock}
 
 TOPIC WORDS (use 2-4 of them): ${topicWords.join(", ")}
-STUDY WORDS he has been learning (prefer these, use as many as fit naturally): ${studyWords.join(", ") || "none yet"}
+STUDY WORDS he already knows (use as many as fit naturally; never gloss them): ${study.known.join(", ") || "none yet"}
+NEW STUDY WORDS he is still learning (use them; each one spends one word of the budget and goes in "glossary"): ${study.learning.join(", ") || "none"}
 
 QUESTION PLAN — produce exactly these ${plan.length} questions, in this order:
 ${describePlan(plan)}${historyBlock}
@@ -410,8 +413,12 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       const rambling = longest > params.maxSentenceWords + 3;
       const wrongCount = validated.data.questions.length !== plan.length;
       const circular = circularQuestions(validated.data.questions, passage);
+      // More glossed words than the level allows: the passage is too hard, and
+      // dropping glosses would only hide the extra words, not remove them.
+      const glossed = dedupeGlosses(validated.data.glossary).length;
+      const tooHard = glossed > params.maxGlossary;
 
-      if (attempt === 1 && (short || rambling || wrongCount || circular.size > 0)) {
+      if (attempt === 1 && (short || rambling || wrongCount || circular.size > 0 || tooHard)) {
         const fixes: string[] = ["\n\nYour previous attempt fell short. Fix this:"];
         if (short) {
           fixes.push(
@@ -421,6 +428,11 @@ Your last answer was not valid JSON — it ran out of room before the closing br
         if (rambling) {
           fixes.push(
             `- One sentence ran to ${longest} words. No sentence may pass ${params.maxSentenceWords} words. Split the long ones.`
+          );
+        }
+        if (tooHard) {
+          fixes.push(
+            `- The glossary had ${glossed} words. This level allows ${params.unknownBudget} words he may not know. Swap the extra hard words in the passage for easy everyday ones, and gloss every hard word that stays.`
           );
         }
         if (wrongCount) {
