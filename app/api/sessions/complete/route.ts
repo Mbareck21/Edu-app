@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { z } from "zod";
 
@@ -19,6 +19,7 @@ import {
 } from "@/lib/models/Profile";
 import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
+import { trackActivity } from "@/lib/tracker-store";
 import { applyReading, applySession, beatsDone, goalBeats, levelFor, readTooFast } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
 import type { SessionResult, StepId } from "@/lib/types";
@@ -415,6 +416,11 @@ export async function POST(req: Request) {
         gained: applied.gained,
       };
     });
+
+    // The parent's competition record (lib/tracker.ts), after the reply: a
+    // failure there must never cost him the session.
+    const learner = await currentLearner();
+    after(() => trackActivity(learner, saved.activity).then(() => undefined, () => undefined));
 
     return NextResponse.json({
       gained: changed.gained,

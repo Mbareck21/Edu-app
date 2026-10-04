@@ -9,6 +9,7 @@ A home learning app for Nour (Grade 4, Asbell Elementary). Words, reading, and m
 - **Drill** — free practice: word drills (cards, match, listen, spell, use, spelling test, "write what you remember", Word rescue, mixed) and math drills (relaxed or timed). Everything still counts.
 - **Reading** — AI passages at levels 1–10 (length, sentence length, and question types scale with performance), listen-while-reading, read-aloud fluency (words correct per minute against his own record, with the missed words to practise), a words-per-minute timer, and questions mapped to the school's ELA standards. Science-unit topics follow the school calendar.
 - **Word lists** (Me → Word lists, grown-ups PIN) — build lists, one-tap "school lists" from the current science/reading units, AI clues/examples.
+- **Competition report** (Me → Word lists → Competition report, grown-ups PIN) — both children side by side since the first daily race (Sep 25), for the month's reward: days won, quest days, average score and time in every section, week by week, and sessions worth a look. Every session is kept for it (`lib/tracker.ts`), past the activity log's cap.
 - **Sparky** — a pet on the Learn tab that hatches and grows with words known and math levels gained (never raw XP), with a mood that follows today's goal.
 - **Me** — level, XP, streak, badges, words known, a family scoreboard (both children's XP today, a nudge to catch up or stay ahead, and their total together), settings, and "Add to phone".
 - **AI Buddy** — kid-safe chat with gentle grammar recasts and voice in/out.
