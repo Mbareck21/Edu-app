@@ -179,3 +179,13 @@ test("the whole passage pasted into the box is not an answer", () => {
   const own = "Layla planted some tomato seeds in her garden because her family wanted to eat fresh tomatoes";
   assert.notEqual(judgeAnswer(own, ["tomato seeds"], q, passage).verdict, "wrong");
 });
+
+test("pronouns and intensifiers copied off the passage are not what he must say", () => {
+  // Keys copied from the passage carry "far", "than", "ours", "them": a right
+  // answer without them fell under the coverage mark (2026-10-04 review).
+  const owls = "Why can owls hunt at night?";
+  assert.notEqual(judgeAnswer("they hear better", ["their hearing is far better than ours"], owls).verdict, "wrong");
+  assert.notEqual(judgeAnswer("so they can help", ["so she could help them"], "Why did Amina stay?").verdict, "wrong");
+  // A wrong reason is still wrong.
+  assert.equal(judgeAnswer("the dog was far away", ["the dog was close"], "Why could Leo pat the dog?").verdict, "wrong");
+});

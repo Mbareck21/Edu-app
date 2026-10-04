@@ -14,6 +14,7 @@ import {
   countWords,
   MAX_PASSAGE_PARAGRAPHS,
   MAX_UNKNOWN_BUDGET,
+  TYPED_WHY_LEVEL,
   GLOSSARY_SLACK,
   MAX_GLOSSARY_ENTRIES,
   studyWordsFor,
@@ -114,7 +115,8 @@ test("the writer's glossary limit is the request's budget, not a fixed six", () 
 });
 
 test("question plan grows with the level and matches the passage kind", () => {
-  // School-test style: fact, word meaning, character, one short written answer.
+  // School-test style: fact, word meaning, character, and "why". Below
+  // TYPED_WHY_LEVEL the why is multiple choice; from it, a short written answer.
   const l1 = questionPlan(1, "story", false);
   assert.deepEqual(
     l1.map((q) => q.type),
@@ -122,8 +124,11 @@ test("question plan grows with the level and matches the passage kind", () => {
   );
   assert.deepEqual(
     l1.map((q) => q.format),
-    ["mcq", "mcq", "mcq", "text"]
+    ["mcq", "mcq", "mcq", "mcq"]
   );
+  assert.equal(TYPED_WHY_LEVEL, 4);
+  assert.equal(questionPlan(3, "story", false).find((q) => q.type === "cause_effect")?.format, "mcq");
+  assert.equal(questionPlan(4, "story", false).find((q) => q.type === "cause_effect")?.format, "text");
   assert.deepEqual(
     questionPlan(1, "info", false).map((q) => q.type),
     ["detail", "vocab", "main_idea", "cause_effect"]
