@@ -2,6 +2,8 @@ import { after, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { z } from "zod";
 
+import { unpaidReason } from "@/lib/assigned";
+import { kidLocked } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -19,6 +21,7 @@ import {
 } from "@/lib/models/Profile";
 import { SKILL_IDS, toSkillState, type WordSkills } from "@/lib/models/WordList";
 import { getProfile, updateProfile } from "@/lib/profile";
+import { readTicket } from "@/lib/ticket";
 import { trackActivity } from "@/lib/tracker-store";
 import { applyReading, applySession, beatsDone, goalBeats, levelFor, paidXp, readTooFast } from "@/lib/rewards";
 import { STEP_IDS, stepById } from "@/lib/types";
@@ -368,11 +371,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "other learner" }, { status: 409 });
   }
 
+  // A child is paid only for what he was handed: the session id is the
+  // ticket minted with that page (lib/ticket.ts, lib/assigned.ts).
+  const locked = await kidLocked();
+  const ticket = locked && body.sessionId ? readTicket(body.sessionId, learner) : null;
+
   // Played offline and sent later: it counts for the day it was played, so
-  // yesterday's lesson keeps yesterday's streak day.
+  // yesterday's lesson keeps yesterday's streak day. Never before its page
+  // was served, though: the phone's clock is not the server's, and set back
+  // it moved play into the race after 9:30 pm or into a fresh day of full pay.
   const arrived = Date.now();
   const played = body.playedAt ?? arrived;
-  const now = new Date(Math.min(arrived, Math.max(arrived - MAX_BACKDATE_MS, played)));
+  const earliest = Math.max(arrived - MAX_BACKDATE_MS, ticket ? Math.min(arrived, ticket.issuedAt) : 0);
+  const now = new Date(Math.min(arrived, Math.max(earliest, played)));
   const when = { at: now, today: todayKey(now) };
 
   // Also creates the profile on the very first session, which reserveSession needs.
@@ -413,7 +424,14 @@ export async function POST(req: Request) {
     // A failed read only means those badges wait for the next session.
     result.mastery = await loadMasterySnapshot().catch(() => undefined);
     const { changed, saved } = await updateProfile((current) => {
-      const applied = applySession(current, result, when);
+      const unpaid = unpaidReason({
+        locked,
+        ticketed: ticket !== null,
+        activity: current.activity,
+        session: body,
+        day: when.today,
+      });
+      const applied = applySession(current, result, when, { unpaid });
       return {
         // A passage finished faster than it can be read leaves the ladder alone.
         profile:

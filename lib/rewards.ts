@@ -807,7 +807,14 @@ function runEndingOn(last: string, activity: readonly Pick<ActivityEntry, "at">[
 export function applySession(
   profile: ProfileState,
   result: SessionResult,
-  now: Now
+  now: Now,
+  /**
+   * `unpaid`: why this session's work earns nothing (lib/assigned.ts): a
+   * child's session that was not handed to him, or a quest beat he had
+   * already done that day. It still counts as played, and words reaching
+   * known or mastered still pay: that is the learning itself.
+   */
+  opts: { unpaid?: string } = {}
 ): { profile: ProfileState; gained: Gained } {
   const answered = Math.max(0, Math.floor(result.answered) || 0);
   const correct = Math.min(answered, Math.max(0, Math.floor(result.correct) || 0));
@@ -892,18 +899,20 @@ export function applySession(
   const accuracy = sessionAccuracy(result, answered, correct);
   const work = Math.round(capped * accuracy);
   const factor = varietyFactor(sameKindToday, fullPerKind(kind));
-  const tip = fairPlayTip({
-    factor,
-    nth: sameKindToday + 1,
-    rushed: capped < earned,
-    tried: tried || !bonuses,
-    accurate: accuracy >= 1,
-    skimmed: readTooFast(result),
-  });
+  const tip =
+    opts.unpaid ??
+    fairPlayTip({
+      factor,
+      nth: sameKindToday + 1,
+      rushed: capped < earned,
+      tried: tried || !bonuses,
+      accurate: accuracy >= 1,
+      skimmed: readTooFast(result),
+    });
   // A finished session pays at least XP.finished, however it went.
   const paid = Math.round(work * factor);
   const xpGained =
-    (bonuses ? Math.max(XP.finished, paid) : paid) +
+    (opts.unpaid ? 0 : bonuses ? Math.max(XP.finished, paid) : paid) +
     (streakExtended || lateNewDay ? XP.streakDay : 0) +
     Math.max(0, Math.floor(result.wordsKnownUp ?? 0)) * XP.wordKnown +
     Math.max(0, Math.floor(result.wordsMasteredUp ?? 0)) * XP.wordMastered;

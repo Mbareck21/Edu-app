@@ -14,7 +14,7 @@ import {
 import { modesFor, sourceCounts } from "@/components/drill/picks";
 import AppShell from "@/components/ui/AppShell";
 import Icon from "@/components/ui/Icon";
-import { kidLocked } from "@/lib/assigned-data";
+import { kidLocked, signedSuggestionHref } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { addDays, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -74,6 +74,12 @@ export default async function DrillPage() {
   const lastWinner =
     lastWeek.length > 1 && lastWeek[0].points > 0 && lastWeek[0].points > lastWeek[1].points ? lastWeek[0].name : null;
 
+  // The link carries a mark saying it was handed to him (lib/ticket.ts), so the
+  // drill page need not work the suggestion out again with a later clock.
+  const suggestion = suggestionFor({ weakWords: counts.weak, dueWords: counts.due, toGoWords: counts.all, wordModes: modesFor(counts.weakSkills), played, activity: profile.activity, now });
+  const signedHref = await signedSuggestionHref(suggestion);
+  const signed = suggestion && signedHref ? { ...suggestion, href: signedHref } : null;
+
   const bests: Record<string, Record<MathMode, number | null>> = {};
   for (const id of [MIXED_SKILL, ...MATH_SKILLS.map((s) => s.id)]) {
     bests[id] = Object.fromEntries(
@@ -93,9 +99,7 @@ export default async function DrillPage() {
         <h1 className="font-display text-2xl font-bold">Drill</h1>
       </div>
 
-      <SuggestedDrill
-        suggestion={suggestionFor({ weakWords: counts.weak, dueWords: counts.due, toGoWords: counts.all, wordModes: modesFor(counts.weakSkills), played, activity: profile.activity, now })}
-      />
+      <SuggestedDrill suggestion={signed} />
       <DrillRankCard points={profile.stats.drillXp} learner={me} />
       <DrillDuel rows={duel} lastWinner={lastWinner} />
 

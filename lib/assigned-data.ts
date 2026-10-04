@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import { modesFor, sourceCounts } from "@/components/drill/picks";
 import { suggestionFor, type Suggestion } from "@/components/drill/suggest";
 import { ADULT_COOKIE, adultLockOn, isAdultToken } from "@/lib/adult";
-import { isAssigned, questHrefs } from "@/lib/assigned";
+import { drillMarkValid, isAssigned, questHrefs } from "@/lib/assigned";
+import { currentLearner } from "@/lib/auth";
 import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
 import { levelsOf } from "@/lib/daily-plan-data";
@@ -15,6 +16,7 @@ import { planBeats } from "@/lib/daily-plan-beats";
 import { getListSummaries } from "@/lib/lists";
 import { toClientMathProgress } from "@/lib/models/MathProgress";
 import { getProfile } from "@/lib/profile";
+import { readDrillMark, signDrill } from "@/lib/ticket";
 import { getPractice } from "@/lib/word-source";
 
 /**
@@ -67,7 +69,16 @@ export async function requireQuestBeat(path: string): Promise<void> {
   redirect("/");
 }
 
-/** The gate for a drill page: only the suggested drill, else the Drill tab and its Go. */
+/** The suggestion's link, marked as handed to the signed-in child (lib/ticket.ts). */
+export async function signedSuggestionHref(suggestion: Suggestion | null): Promise<string | null> {
+  return suggestion ? signDrill(suggestion.href, await currentLearner()) : null;
+}
+
+/**
+ * The gate for a drill page: the drill the Drill tab or "Next drill" handed
+ * him (its link carries the mark, good until he plays a drill), else one that
+ * is still the suggestion now; anything else goes back to the Drill tab.
+ */
 export async function requireSuggestedDrill(
   path: string,
   search: Record<string, string | string[] | undefined>
@@ -75,6 +86,8 @@ export async function requireSuggestedDrill(
   if (!(await kidLocked())) return;
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(search)) if (typeof v === "string") params.set(k, v);
+  const mark = readDrillMark(path, params, await currentLearner());
+  if (mark && drillMarkValid(mark.issuedAt, (await getProfile()).activity, Date.now())) return;
   const drill = (await currentSuggestion())?.href ?? null;
   if (isAssigned(path, params, { quest: [], drill })) return;
   redirect("/drill");

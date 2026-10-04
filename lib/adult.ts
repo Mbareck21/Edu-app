@@ -50,9 +50,14 @@ export function isAdultPage(pathname: string): boolean {
   return /^\/lists\/[^/]+\/?$/.test(pathname);
 }
 
-/** API calls that change the lists themselves. Filling meanings stays open. */
+/**
+ * API calls that change the lists themselves, or add words to Words to fix:
+ * a child adding easy words there chose what his drills deal (2026-10-04
+ * audit). Filling meanings stays open.
+ */
 export function isAdultApi(method: string, pathname: string): boolean {
   const m = method.toUpperCase();
   if ((pathname === "/api/lists" || pathname === "/api/lists/seed") && m === "POST") return true;
+  if (pathname === "/api/stuck" && m === "POST") return true;
   return /^\/api\/lists\/[^/]+\/?$/.test(pathname) && (m === "PATCH" || m === "DELETE");
 }

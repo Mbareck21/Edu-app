@@ -137,32 +137,36 @@ function StuckBoardInner({
 
   return (
     <div className="mt-6 space-y-6">
-      <Card color="blue" variant="soft">
-        <label htmlFor="stuck-add" className="font-display text-base font-bold">
-          Add a word he is stuck on
-        </label>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
-          One, or several at once — separate them with commas or new lines.
-        </p>
-        <div className="mt-3 flex gap-2">
-          <input
-            id="stuck-add"
-            className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
-            style={{ borderColor: "var(--color-line)", background: "#fff" }}
-            placeholder="fifty, thirty, eighty"
-            value={text}
-            autoCapitalize="none"
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void add();
-            }}
-          />
-          <Button size="md" color="blue" disabled={!text.trim() || busy} onClick={() => void add()}>
-            {busy ? "Adding…" : "Add"}
-          </Button>
-        </div>
-        {note ? <p className="mt-2 text-sm">{note}</p> : null}
-      </Card>
+      {/* Adding words is for grown-ups (the API asks for the PIN): easy words
+          added here were what his drills dealt. */}
+      {locked ? null : (
+        <Card color="blue" variant="soft">
+          <label htmlFor="stuck-add" className="font-display text-base font-bold">
+            Add a word he is stuck on
+          </label>
+          <p className="mt-1 text-sm" style={{ color: "var(--color-muted)" }}>
+            One, or several at once — separate them with commas or new lines.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <input
+              id="stuck-add"
+              className="min-h-[52px] min-w-0 flex-1 rounded-tile border-2 px-3 text-base"
+              style={{ borderColor: "var(--color-line)", background: "#fff" }}
+              placeholder="fifty, thirty, eighty"
+              value={text}
+              autoCapitalize="none"
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void add();
+              }}
+            />
+            <Button size="md" color="blue" disabled={!text.trim() || busy} onClick={() => void add()}>
+              {busy ? "Adding…" : "Add"}
+            </Button>
+          </div>
+          {note ? <p className="mt-2 text-sm">{note}</p> : null}
+        </Card>
+      )}
 
       {working.length > 0 && locked ? (
         <p className="text-center text-base" style={{ color: "var(--color-muted)" }}>

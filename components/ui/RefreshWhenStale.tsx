@@ -34,7 +34,10 @@ export default function RefreshWhenStale({ renderedAt }: { renderedAt: number })
   }, [router]);
 
   useEffect(() => {
-    const key = `quest:rendered:${pathname}`;
+    // The whole address, not the path: every drill is /drill/vocab or
+    // /drill/math, so swiping back past the latest one replayed the drills
+    // before it unchecked (2026-10-04 audit).
+    const key = `quest:rendered:${pathname}${window.location.search}`;
     try {
       if (window.sessionStorage.getItem(key) === String(renderedAt)) {
         window.sessionStorage.setItem(key, `${renderedAt}:asked`);

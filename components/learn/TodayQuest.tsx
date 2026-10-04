@@ -22,7 +22,12 @@ export default function TodayQuest({
   today: string;
   /** His race points today, and whether tonight's race has closed. */
   race?: { pts: number; closed: boolean };
-  /** A child: Start is the one way in, and the beats below are a checklist (lib/assigned.ts). */
+  /**
+   * A child: a beat done today is no longer a way in (lib/assigned.ts). The
+   * ones still to do stay tappable: when Start's beat cannot be done (the
+   * story writer resting, nothing saved to read), the rest of the quest must
+   * not be stuck behind it.
+   */
   locked?: boolean;
 }) {
   const done = beats.filter((b) => b.done).length;
@@ -96,7 +101,7 @@ export default function TodayQuest({
 
           return (
             <li key={beat.id}>
-              {locked ? (
+              {locked && beat.done ? (
                 <span className="flex min-h-[44px] items-center gap-2.5 rounded-tile bg-white px-3 py-2">
                   {row}
                 </span>

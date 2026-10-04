@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { currentSuggestion } from "@/lib/assigned-data";
+import { currentSuggestion, signedSuggestionHref } from "@/lib/assigned-data";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,6 @@ export const dynamic = "force-dynamic";
  * another turns through words and math. Nothing to suggest: the Drill tab.
  */
 export default async function NextDrillPage() {
-  const suggestion = await currentSuggestion();
-  redirect(suggestion?.href ?? "/drill");
+  const href = await signedSuggestionHref(await currentSuggestion());
+  redirect(href ?? "/drill");
 }
