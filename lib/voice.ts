@@ -100,6 +100,58 @@ export type Playback = {
   promise: Promise<PlaybackEnd>;
 };
 
+/** Arabic letters: the on-device voice needs to be told which language it is reading. */
+const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F]/;
+
+/** Longest wait for the phone's own voice to start before calling it a failure. */
+const DEVICE_START_MS = 3000;
+
+/**
+ * The phone's own voice, for when the online one fails. On 2026-10-13
+ * Microsoft moved the free voice service and every sentence went silent: the
+ * robot reader, the speaker buttons, the spoken tables. The built-in voice is
+ * plainer, but he hears the sentence. Null when the device has none.
+ */
+function speakOnDevice(text: string): Playback | null {
+  if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
+    return null;
+  }
+  const synth = window.speechSynthesis;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = ARABIC_RE.test(text) ? "ar" : "en-US";
+  utterance.rate = 0.95; // a touch slower, like the online voice
+  let started = false;
+  const promise = new Promise<PlaybackEnd>((resolve) => {
+    // A phone that blocks speech outside a tap never starts or ends it: give
+    // up after a moment, or the caller would wait forever.
+    const timer = window.setTimeout(() => {
+      if (started) return;
+      synth.cancel();
+      resolve("failed");
+    }, DEVICE_START_MS);
+    utterance.onstart = () => {
+      started = true;
+    };
+    utterance.onend = () => {
+      window.clearTimeout(timer);
+      resolve("ended");
+    };
+    utterance.onerror = (e) => {
+      window.clearTimeout(timer);
+      // Our own cancel() interrupts it; that is not a failure.
+      resolve(e.error === "interrupted" || e.error === "canceled" ? "ended" : "failed");
+    };
+  });
+  synth.cancel();
+  synth.speak(utterance);
+  return {
+    cancel: () => synth.cancel(),
+    pause: () => synth.pause(),
+    resume: () => synth.resume(),
+    promise,
+  };
+}
+
 export function playTextThroughTTS(text: string): Playback {
   if (typeof window === "undefined" || !text.trim()) {
     return {
@@ -119,6 +171,9 @@ export function playTextThroughTTS(text: string): Playback {
   // read a deliberate pause as a playback failure.
   let pausing = false;
 
+  /** The phone's own voice, once the online one has failed (speakOnDevice). */
+  let device: Playback | null = null;
+
   // Deferred resolver so pause()/resume() can live outside the executor.
   let resolver!: (end: PlaybackEnd) => void;
   const promise = new Promise<PlaybackEnd>((res) => {
@@ -131,10 +186,21 @@ export function playTextThroughTTS(text: string): Playback {
     audio.onerror = null;
     resolver(end);
   };
+  // The online voice failed: read it with the phone's own voice instead, and
+  // only call it a failure if that cannot play either.
+  const fallBack = () => {
+    if (settled || device) return;
+    if (cancelled) return done("ended");
+    audio.onended = null;
+    audio.onerror = null;
+    device = speakOnDevice(text);
+    if (!device) return done("failed");
+    void device.promise.then(done);
+  };
   audio.onended = () => done("ended");
   // A dead src, a 401 from an expired session, or a 502 from the TTS service
-  // all land here. It is a failure, not the end of the sentence.
-  audio.onerror = () => done("failed");
+  // all land here. It is not the end of the sentence: try the phone's voice.
+  audio.onerror = fallBack;
 
   const start = () => {
     // If cancel ran before the deferred play() promise settled, swallow it —
@@ -148,8 +214,9 @@ export function playTextThroughTTS(text: string): Playback {
       // iPhone does that on the first item, and a retry then a red speaker
       // told him the sound was broken when one tap would have played it.
       (err: unknown) => {
-        if (pausing || cancelled) return;
-        done((err as { name?: unknown } | null)?.name === "NotAllowedError" ? "ended" : "failed");
+        if (pausing || cancelled || device) return;
+        if ((err as { name?: unknown } | null)?.name === "NotAllowedError") done("ended");
+        else fallBack();
       }
     );
   };
@@ -160,6 +227,7 @@ export function playTextThroughTTS(text: string): Playback {
       if (cancelled) return;
       cancelled = true;
       pausing = false;
+      device?.cancel();
       try {
         audio.pause();
       } catch { /* ignore */ }
@@ -175,6 +243,7 @@ export function playTextThroughTTS(text: string): Playback {
     pause: () => {
       if (cancelled || settled) return;
       pausing = true;
+      if (device) return device.pause();
       try {
         audio.pause();
       } catch { /* ignore */ }
@@ -182,6 +251,7 @@ export function playTextThroughTTS(text: string): Playback {
     resume: () => {
       if (cancelled || settled) return;
       pausing = false;
+      if (device) return device.resume();
       start();
     },
     promise,
