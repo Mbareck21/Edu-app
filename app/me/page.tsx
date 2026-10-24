@@ -11,6 +11,7 @@ import CreatureCollection from "@/components/badges/CreatureCollection";
 import FamilyScoreboard from "@/components/me/FamilyScoreboard";
 import ProfileSettings from "@/components/ProfileSettings";
 import ReadingProgressCard from "@/components/reading/ReadingProgressCard";
+import { loadFocus } from "@/lib/school-report-store";
 import SignOutButton from "@/components/SignOutButton";
 import { lastSevenDays, previousDay, todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
@@ -38,13 +39,15 @@ export default async function MePage() {
   const { WordList, SpellChain, TimesFact } = await db();
   // One round trip instead of five in a row. The lists only lend their words:
   // loaded whole, each carried every saved passage and its history.
-  const [state, docs, factRows, chainRows, me, family] = await Promise.all([
+  const [state, docs, factRows, chainRows, me, family, focus] = await Promise.all([
     getProfile(),
     WordList.find({ kind: { $ne: "pool" } }).select("name words createdAt updatedAt").lean(),
     TimesFact.find().lean(),
     SpellChain.find().lean(),
     currentLearner(),
     getFamilyProfiles(),
+    // The school report card's reading-speed goal, if a grown-up entered one.
+    loadFocus(),
   ]);
   const profile = toClientProfile(state);
   const words: ClientWord[] = docs.flatMap((doc) => toClient(doc).words);
@@ -192,7 +195,7 @@ export default async function MePage() {
         </div>
       </Card>
 
-      <ReadingProgressCard progress={readingProgress(profile.reading, now)} />
+      <ReadingProgressCard progress={readingProgress(profile.reading, now)} speed={focus.fluencyGoal} />
 
       {/* The parent's week: every section's numbers in one place. See lib/digest.ts. */}
       <Fold className="mt-3" title="For the grown-ups">
@@ -252,6 +255,14 @@ export default async function MePage() {
         >
           <Icon name="words" size={20} />
           Open word lists
+        </Link>
+        <Link
+          href={`/me/school?learner=${me}`}
+          className={`mt-2 ${buttonClass({ color: "green", variant: "secondary", size: "md", fullWidth: true })}`}
+          style={buttonStyle({ color: "green", variant: "secondary", size: "md" })}
+        >
+          <Icon name="book" size={20} />
+          School report card
         </Link>
       </Fold>
 

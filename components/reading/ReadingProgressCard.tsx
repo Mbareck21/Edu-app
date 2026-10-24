@@ -4,6 +4,7 @@ import { todayKey } from "@/lib/day";
 import { gradeOn } from "@/lib/grade";
 import { maxReadingLevel } from "@/lib/reading";
 import { READING_UP_PCT, READING_UP_RUN, type ReadingProgress } from "@/lib/rewards";
+import type { FluencyGoal } from "@/lib/school-report";
 
 /** Stars for one reading: 3 all right, 2 a good one, 1 some right, 0 a miss. */
 export function readingStars(pct: number): number {
@@ -29,7 +30,14 @@ function Stars({ n }: { n: number }) {
  * His reading in words he understands: his level, how many good readings in a
  * row the next level needs (circles that fill), and stars for his last reads.
  */
-export default function ReadingProgressCard({ progress }: { progress: ReadingProgress }) {
+export default function ReadingProgressCard({
+  progress,
+  speed = null,
+}: {
+  progress: ReadingProgress;
+  /** The school's reading-speed goal, when a grown-up has entered a check (lib/school-report.ts). */
+  speed?: FluencyGoal | null;
+}) {
   const { level, goodInARow, toNext, scores, thisWeek } = progress;
   const top = maxReadingLevel(gradeOn(todayKey()));
   const recent = scores.slice(-6).reverse(); // newest first
@@ -106,6 +114,33 @@ export default function ReadingProgressCard({ progress }: { progress: ReadingPro
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {speed?.last ? (
+        <div className="mt-4">
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--color-muted)" }}>
+            Reading speed goal
+          </p>
+          <div
+            className="mt-2 h-3 w-full overflow-hidden rounded-full"
+            style={{ background: "var(--color-sand)" }}
+            role="img"
+            aria-label={`${speed.last.wpm} of ${speed.goal} words a minute`}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.min(100, Math.round((speed.last.wpm / speed.goal) * 100))}%`,
+                background: "var(--color-blue)",
+              }}
+            />
+          </div>
+          <p className="mt-2 text-sm">
+            <strong className="font-display">{speed.last.wpm}</strong> words a minute at school. Goal:{" "}
+            <strong className="font-display">{speed.goal}</strong>.{" "}
+            <span style={{ color: "var(--color-muted)" }}>Reading after the robot every day gets you there.</span>
+          </p>
         </div>
       ) : null}
     </Card>

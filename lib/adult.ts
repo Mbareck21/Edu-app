@@ -41,10 +41,11 @@ export async function isAdultToken(token: string | undefined): Promise<boolean> 
   }
 }
 
-/** Pages only a grown-up opens: the list manager, the list editors, the competition report. */
+/** Pages only a grown-up opens: the list manager, the list editors, the competition report, the school report card. */
 export function isAdultPage(pathname: string): boolean {
   if (pathname === "/me/lists" || pathname.startsWith("/me/lists/")) return true;
   if (pathname === "/me/report" || pathname.startsWith("/me/report/")) return true;
+  if (pathname === "/me/school" || pathname.startsWith("/me/school/")) return true;
   // /lists/<id> only redirects to /me/lists/<id> now; kept locked for old
   // links. /lists/<id>/flashcards redirects to the unit's path and stays open.
   return /^\/lists\/[^/]+\/?$/.test(pathname);
@@ -57,6 +58,8 @@ export function isAdultPage(pathname: string): boolean {
  */
 export function isAdultApi(method: string, pathname: string): boolean {
   const m = method.toUpperCase();
+  // A child's report card, either way: it is grades, and it steers practice.
+  if (pathname === "/api/school-report") return true;
   if ((pathname === "/api/lists" || pathname === "/api/lists/seed") && m === "POST") return true;
   if (pathname === "/api/stuck" && m === "POST") return true;
   return /^\/api\/lists\/[^/]+\/?$/.test(pathname) && (m === "PATCH" || m === "DELETE");

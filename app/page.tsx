@@ -12,14 +12,10 @@ import Icon from "@/components/ui/Icon";
 import TopBar from "@/components/ui/TopBar";
 import { kidLocked } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
-import { todayKey } from "@/lib/day";
-import { db } from "@/lib/db";
-import { asWord, planBeats, unitOf } from "@/lib/daily-plan-beats";
-import { levelsOf } from "@/lib/daily-plan-data";
-import { getListSummaries } from "@/lib/lists";
+import { asWord, unitOf } from "@/lib/daily-plan-beats";
+import { loadDay } from "@/lib/daily-plan-data";
 import { skillsKnowledge, uniqueWords } from "@/lib/mastery";
 import { growthPoints, mathLevelsUp, petMood, type Growth } from "@/lib/pet";
-import { getProfile } from "@/lib/profile";
 import { goalBeats, shownStreak } from "@/lib/rewards";
 
 export const dynamic = "force-dynamic";
@@ -27,23 +23,14 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Learn" };
 
 export default async function LearnPage() {
-  const { MathProgress } = await db();
-  const [profile, lists, learner, mathRows, locked] = await Promise.all([
-    getProfile(),
-    getListSummaries(),
+  // loadDay builds the beats the kid-lock gate checks against, report card and all.
+  const [{ profile, lists, mathRows, today, beats }, learner, locked] = await Promise.all([
+    loadDay(),
     currentLearner(),
-    MathProgress.find().select("skill level").lean(),
     kidLocked(),
   ]);
 
   const unit = unitOf(lists);
-  const today = todayKey(new Date());
-  const beats = planBeats({
-    activity: profile.activity,
-    lists,
-    mathLevels: levelsOf(mathRows),
-    today,
-  });
 
   // Sparky grows with words known and math levels gained, never with XP.
   // The same word on two lists counts once.
