@@ -179,7 +179,10 @@ export type QuestionSpec = {
  * him on the standard whatever level his texts are at. Waiting for the ladder
  * to reach level 5 would mean never practising the Q3 standards.
  */
-const STANDARD_OPENS: Record<"retell" | "theme" | "evidence", Quarter["id"]> = {
+/** The reading questions that wait for a school quarter or a reading level. */
+export type GatedQuestion = "retell" | "theme" | "evidence";
+
+const STANDARD_OPENS: Record<GatedQuestion, Quarter["id"]> = {
   theme: "Q2", // 4.RC.9.RL
   retell: "Q3", // 4.RC.3.RF
   evidence: "Q3", // 4.RC.14.RI
@@ -228,11 +231,13 @@ export function questionPlan(
   rawLevel: number,
   kind: PassageKind,
   science: boolean,
-  quarter?: Quarter["id"] | "summer"
+  quarter?: Quarter["id"] | "summer",
+  /** Gated questions to ask whatever the quarter and level: a report card's call. */
+  opens: readonly GatedQuestion[] = []
 ): QuestionSpec[] {
   const level = clampLevel(rawLevel);
-  const open = (id: keyof typeof STANDARD_OPENS, minLevel: number) =>
-    level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]);
+  const open = (id: GatedQuestion, minLevel: number) =>
+    level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]) || opens.includes(id);
   const out: QuestionSpec[] = [
     level >= 5
       ? {

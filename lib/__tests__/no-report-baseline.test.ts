@@ -19,6 +19,7 @@ import type { ListSummary } from "@/lib/lists";
 import { mulberry32 } from "@/lib/math/rng";
 import type { ClientWord, SkillState } from "@/lib/models/WordList";
 import { questionPlan } from "@/lib/reading";
+import { NO_FOCUS, emptyReport, focusFor, type SchoolFocus, type SchoolReport } from "@/lib/school-report";
 
 const FIXTURE = join(__dirname, "fixtures", "no-report-baseline.json");
 const NOW = new Date("2026-10-24T17:00:00.000Z");
@@ -66,18 +67,40 @@ function itemKey(i: LessonItem): string {
   return [i.kind, i.word ?? "", "answer" in i ? String(i.answer) : "", "part" in i ? String(i.part) : ""].join("|");
 }
 
-function snapshot() {
+/**
+ * With no focus the calls are the ones the app made before report cards. With
+ * a focus, each consumer gets its own field, the way loadDay and the beat
+ * pages pass them.
+ */
+function snapshot(focus?: SchoolFocus) {
   const levels = { "place-value": 2, "number-forms": 1 };
+  const f = focus ?? null;
   return {
-    mathSkill: days().map((d) => `${d} ${mathSkillFor(d, levels)}`),
+    mathSkill: days().map((d) => `${d} ${f ? mathSkillFor(d, levels, f.mathCatchUp) : mathSkillFor(d, levels)}`),
     planHrefs: ["2026-09-25", "2026-10-24", "2026-11-20", "2027-02-15", "2027-06-10"].map((d) =>
-      planBeats({ activity: [], lists: [unit], mathLevels: levels, today: d }).map((b) => `${b.id} ${b.href}`)
+      planBeats({ activity: [], lists: [unit], mathLevels: levels, today: d, ...(f ? { mathCatchUp: f.mathCatchUp } : {}) }).map(
+        (b) => `${b.id} ${b.href}`
+      )
     ),
     newWords: [1, 2, 3, 4, 5].map((seed) =>
-      buildLesson({ words: WORDS, step: "match", now: NOW, rng: mulberry32(seed), maxNew: 3, listId: "u1" }).map(itemKey)
+      buildLesson({
+        words: WORDS,
+        step: "match",
+        now: NOW,
+        rng: mulberry32(seed),
+        maxNew: 3,
+        listId: "u1",
+        ...(f ? { extras: f.newWordsExtras, partKinds: f.partKinds } : {}),
+      }).map(itemKey)
     ),
     production: [1, 2, 3, 4, 5].map((seed) =>
-      buildProductionSession({ words: WORDS, now: NOW, rng: mulberry32(seed), listId: "u1" }).map(itemKey)
+      buildProductionSession({
+        words: WORDS,
+        now: NOW,
+        rng: mulberry32(seed),
+        listId: "u1",
+        ...(f ? { extras: f.productionExtras, partKinds: f.partKinds } : {}),
+      }).map(itemKey)
     ),
     questionPlans: [1, 3, 4, 5, 7, 10].flatMap((level) =>
       (["story", "info"] as const).flatMap((kind) =>
@@ -85,7 +108,7 @@ function snapshot() {
           (["summer", "Q1", "Q2", "Q3", "Q4"] as const).map(
             (q) =>
               `${level} ${kind} ${science} ${q}: ` +
-              questionPlan(level, kind, science, q)
+              (f ? questionPlan(level, kind, science, q, f.readingOpens) : questionPlan(level, kind, science, q))
                 .map((s) => `${s.type}/${s.format}`)
                 .join(",")
           )
@@ -103,4 +126,29 @@ test("with no report card, the quest, lessons and reading questions are what the
   }
   const before = JSON.parse(readFileSync(FIXTURE, "utf8"));
   assert.deepEqual(now, before);
+});
+
+/** Made-up cards (never a real child's): ones that ask for nothing. */
+function inertCards(): SchoolReport[] {
+  const allThrees: SchoolReport = {
+    ...emptyReport(),
+    standards: ["4.FR.1.PD", "4.FR.4.PE", "4.RC.2.RF", "4.L.14.S", "4.NPV.1", "4.CAR.2"].map((code) => ({
+      code,
+      scores: [3, 3, null, null] as SchoolReport["standards"][number]["scores"],
+    })),
+  };
+  const onlyReadingSpeed: SchoolReport = { ...emptyReport(), reading: [{ on: "2026-10-01", wpm: 70 }] };
+  const onlyStrengths: SchoolReport = { ...emptyReport(), glows: ["mul-facts", "prefixes"] };
+  return [emptyReport(), allThrees, onlyReadingSpeed, onlyStrengths];
+}
+
+test("a card that asks for nothing changes nothing either", () => {
+  const before = JSON.parse(readFileSync(FIXTURE, "utf8"));
+  assert.deepEqual(snapshot(NO_FOCUS), before, "NO_FOCUS");
+  assert.deepEqual(snapshot(focusFor(null, "2026-10-24")), before, "no card");
+  for (const card of inertCards()) {
+    // A card can still carry a reading-speed goal to show; it must not touch practice.
+    const focus = focusFor(card, "2026-10-24");
+    assert.deepEqual(snapshot(focus), before, JSON.stringify(card).slice(0, 80));
+  }
 });

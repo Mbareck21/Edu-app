@@ -41,7 +41,22 @@ export function unitOf(lists: readonly ListSummary[]): ListSummary | null {
  * deterministic, so the page stays pure. After the last school day: one of
  * his lowest-level skills, rotated the same way.
  */
-export function mathSkillFor(today: string, levels: Readonly<Record<string, number>>): MathSkillId {
+export function mathSkillFor(
+  today: string,
+  levels: Readonly<Record<string, number>>,
+  /** A report card's catch-up skills (lib/school-report.ts). Empty: as always. */
+  catchUp: readonly MathSkillId[] = []
+): MathSkillId {
+  if (catchUp.length > 0 && today <= SCHOOL_YEAR_END) {
+    // Whole days, so a 30-day month cannot put two catch-up days in a row.
+    // Catch-up on even days; the class lesson on odd days, rotated by the
+    // half-day count so every skill of a lesson still comes round.
+    const day = Math.floor(Date.parse(`${today.slice(0, 10)}T12:00:00Z`) / 86_400_000);
+    const half = Math.floor(day / 2);
+    if (day % 2 === 0) return catchUp[half % catchUp.length];
+    const skills = currentLesson(today).skills;
+    return skills[half % Math.max(1, skills.length)] ?? "place-value";
+  }
   const dayIndex = Number(today.slice(8, 10)) + Number(today.slice(5, 7)) * 31;
   if (today <= SCHOOL_YEAR_END) {
     const skills = currentLesson(today).skills;
@@ -59,11 +74,14 @@ export function planBeats({
   lists,
   mathLevels,
   today,
+  mathCatchUp = [],
 }: {
   activity: readonly Pick<ActivityEntry, "at" | "kind" | "ref">[];
   lists: readonly ListSummary[];
   mathLevels: Readonly<Record<string, number>>;
   today: string;
+  /** A report card's catch-up skills. Pass it through loadDay(), the one caller. */
+  mathCatchUp?: readonly MathSkillId[];
 }): PlanBeat[] {
   const unit = unitOf(lists);
   // Review only takes words he has met. Before the first one it was empty,
@@ -72,7 +90,7 @@ export function planBeats({
   // Every word met: the beat still practises, but it has no new words to promise.
   const anyNew = lists.some((l) => l.words.some((w) => isNewWord(asWord(w))));
   const done = doneToday(activity, today);
-  const skill = getSkill(mathSkillFor(today, mathLevels));
+  const skill = getSkill(mathSkillFor(today, mathLevels, mathCatchUp));
   const beats: Record<BeatId, Omit<PlanBeat, "id" | "done">> = {
     review: {
       name: "Review",

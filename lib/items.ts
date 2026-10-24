@@ -11,7 +11,7 @@
 // wrong. Short, concrete, uses the real word for the idea (see the plan's
 // "Explanation quality rule").
 
-import { LATIN_PARTS } from "@/lib/curriculum";
+import { LATIN_PARTS, type PartKind } from "@/lib/curriculum";
 import { pick, randInt, shuffle } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
 import type { ClientWord, SkillId } from "@/lib/models/WordList";
@@ -945,10 +945,14 @@ export function makeContextClue(
 export function makeWordPartMeaning(
   pool: ItemPool,
   rng: Rng,
-  preferWord?: ClientWord
+  preferWord?: ClientWord,
+  /** Only these kinds of part (a report card says prefixes are a strength). Empty: any. */
+  kinds: readonly PartKind[] = []
 ): WordPartMeaningItem | null {
-  const fromWord = preferWord ? partEntryFor(preferWord.word) : null;
-  const entry = fromWord ?? pick(rng, LATIN_PARTS);
+  const allowed = (p: (typeof LATIN_PARTS)[number]) => kinds.length === 0 || kinds.includes(p.kind);
+  const word = preferWord ? partEntryFor(preferWord.word) : null;
+  const fromWord = word && allowed(word) ? word : null;
+  const entry = fromWord ?? pick(rng, kinds.length === 0 ? LATIN_PARTS : LATIN_PARTS.filter(allowed));
   // Several parts mean the same thing (un-, dis-, non- and in- are all "not";
   // -able and -ible are both "can be done"), so a part whose meaning starts
   // the same way would be a second right answer.
@@ -1002,9 +1006,13 @@ function partEntryFor(word: string): (typeof LATIN_PARTS)[number] | null {
 /** Build a real word from a base + the part that carries the meaning. */
 export function makeWordPartBuild(
   pool: ItemPool,
-  rng: Rng
+  rng: Rng,
+  /** Only these kinds of part. Empty: prefixes and suffixes, as always. */
+  kinds: readonly PartKind[] = []
 ): WordPartBuildItem | null {
-  const candidates = LATIN_PARTS.filter((p) => p.kind === "suffix" || p.kind === "prefix");
+  const candidates = LATIN_PARTS.filter(
+    (p) => (p.kind === "suffix" || p.kind === "prefix") && (kinds.length === 0 || kinds.includes(p.kind))
+  );
   for (const entry of shuffle(rng, candidates)) {
     for (const example of shuffle(rng, entry.examples)) {
       const split = latinPartsOf(example);
@@ -1482,6 +1490,26 @@ export function itemForSkill(
   // must still feed "use", like the recognize stand-ins above: tagged "spell",
   // "use" was never answered and the word could never become known.
   return { ...makeSpell(word, pool, rng), skill: "use" };
+}
+
+/** Curriculum items that belong to no single word, by kind. */
+export type SchoolItemKind = Extract<LessonItem["kind"], "word-part-meaning" | "word-part-build" | "sentence-combine">;
+
+/**
+ * One school item of a given kind, for a report card's extra practice. A
+ * word-part maker with nothing to offer falls back to sentence joining, as
+ * schoolItem does.
+ */
+export function schoolItemOf(
+  kind: SchoolItemKind,
+  pool: ItemPool,
+  rng: Rng,
+  word?: ClientWord,
+  partKinds: readonly PartKind[] = []
+): LessonItem {
+  if (kind === "word-part-meaning") return makeWordPartMeaning(pool, rng, word, partKinds) ?? makeSentenceCombine(pool, rng);
+  if (kind === "word-part-build") return makeWordPartBuild(pool, rng, partKinds) ?? makeSentenceCombine(pool, rng);
+  return makeSentenceCombine(pool, rng);
 }
 
 /** Curriculum items that belong to no single word (word parts, sentences). */
