@@ -6,6 +6,7 @@ import { todayKey } from "@/lib/day";
 import { gradeOn } from "@/lib/grade";
 import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfileWithSeen } from "@/lib/profile";
+import { loadFocus } from "@/lib/school-report-store";
 import {
   scienceUnitForWeek,
   themeForWeek,
@@ -239,7 +240,8 @@ export async function POST(req: Request) {
 
   // The reading ladder lives on the profile, not the list. An explicit level
   // in the body wins (the drill / practice screens may want to pin one).
-  const { state: profile, seen: allSeen } = await getProfileWithSeen();
+  // The report card can open a question early (4.RC.2.RF: evidence); read in parallel.
+  const [{ state: profile, seen: allSeen }, focus] = await Promise.all([getProfileWithSeen(), loadFocus()]);
   const level = clampLevel(
     parsed.data.level ?? profile.reading.level ?? 1,
     maxReadingLevel(gradeOn(todayKey()))
@@ -280,7 +282,7 @@ export async function POST(req: Request) {
   const study = studyWordsFor(listWords, params.unknownBudget, MAX_STUDY_WORDS);
   // The school quarter opens the standards his class has started on, even
   // when the reading ladder has not reached them yet.
-  const plan = questionPlan(level, kind, useScience, planQuarter(todayISO));
+  const plan = questionPlan(level, kind, useScience, planQuarter(todayISO), focus.readingOpens);
 
   // One de-duplicated list, newest last. A passage generated on this list is
   // already in `seen`; matching on the opening keeps it from being listed twice.

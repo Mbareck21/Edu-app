@@ -35,3 +35,10 @@ test("an unlock token is accepted; anything else is not", async () => {
   assert.equal(await isAdultToken("nope"), false);
   assert.equal(await isAdultToken(undefined), false);
 });
+
+test("the school report card is for grown-ups, page and API alike", () => {
+  assert.equal(isAdultPage("/me/school"), true);
+  assert.equal(isAdultPage("/me/school/"), true);
+  assert.equal(isAdultPage("/me"), false);
+  for (const m of ["GET", "PUT", "POST", "DELETE"]) assert.equal(isAdultApi(m, "/api/school-report"), true, m);
+});

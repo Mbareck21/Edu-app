@@ -9,11 +9,8 @@ import { suggestionFor, type Suggestion } from "@/components/drill/suggest";
 import { ADULT_COOKIE, adultLockOn, isAdultToken } from "@/lib/adult";
 import { drillMarkValid, isAssigned, questHrefs } from "@/lib/assigned";
 import { currentLearner } from "@/lib/auth";
-import { todayKey } from "@/lib/day";
 import { db } from "@/lib/db";
-import { levelsOf } from "@/lib/daily-plan-data";
-import { planBeats } from "@/lib/daily-plan-beats";
-import { getListSummaries } from "@/lib/lists";
+import { loadDay } from "@/lib/daily-plan-data";
 import { toClientMathProgress } from "@/lib/models/MathProgress";
 import { getProfile } from "@/lib/profile";
 import { readDrillMark, signDrill } from "@/lib/ticket";
@@ -47,15 +44,9 @@ export async function currentSuggestion(now: Date = new Date()): Promise<Suggest
   });
 }
 
-/** Links of today's quest beats not yet done. */
+/** Links of today's quest beats not yet done: the same beats Home shows (loadDay). */
 async function currentQuest(): Promise<string[]> {
-  const { MathProgress } = await db();
-  const [profile, lists, mathRows] = await Promise.all([
-    getProfile(),
-    getListSummaries(),
-    MathProgress.find().select("skill level").lean(),
-  ]);
-  return questHrefs(planBeats({ activity: profile.activity, lists, mathLevels: levelsOf(mathRows), today: todayKey() }));
+  return questHrefs((await loadDay()).beats);
 }
 
 /**

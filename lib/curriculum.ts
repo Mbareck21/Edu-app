@@ -421,9 +421,11 @@ export function weekInTheme(dateISO: string): number {
  * Latin word parts (4.FR.1.PD decode / 4.FR.4.PE encode)
  * ------------------------------------------------------------------ */
 
+export type PartKind = "prefix" | "suffix" | "base";
+
 export const LATIN_PARTS: {
   part: string;
-  kind: "prefix" | "suffix" | "base";
+  kind: PartKind;
   meaning: string;
   examples: string[];
 }[] = [

@@ -3,6 +3,7 @@
 export type MathSkillId =
   | "place-value"
   | "number-forms"
+  | "rounding"
   | "add-sub-big"
   | "mul-facts"
   | "mul-multi"
@@ -55,6 +56,8 @@ export type Visual =
   | { kind: "table"; rows: DataRow[] }
   | { kind: "bars"; bars: DataRow[]; scale: number }
   | { kind: "angle"; total: number; known: number }
+  /** The two round numbers a number sits between, for rounding. */
+  | { kind: "numberline"; lo: number; hi: number; mark: number }
   | {
       kind: "shape";
       name: ShapeName;

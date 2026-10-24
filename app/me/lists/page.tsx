@@ -127,6 +127,24 @@ export default async function WordsPage() {
 
       <div className="space-y-6">
         <Link
+          href="/me/school"
+          className="press-3d flex min-h-11 items-center gap-3 rounded-card border bg-white p-4"
+          style={{ borderColor: "var(--color-line)", ["--btn-shade" as string]: "var(--color-line)" }}
+        >
+          <span style={{ color: "var(--color-green)" }}>
+            <Icon name="book" size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg font-bold leading-tight">School report card</span>
+            <span className="block text-sm" style={{ color: "var(--color-muted)" }}>
+              Copy in each child&rsquo;s card; practice leans toward what is not yet a 3.
+            </span>
+          </span>
+          <span style={{ color: "var(--color-faint)" }}>
+            <Icon name="arrowRight" size={24} />
+          </span>
+        </Link>
+        <Link
           href="/me/report"
           className="press-3d flex min-h-11 items-center gap-3 rounded-card border bg-white p-4"
           style={{ borderColor: "var(--color-line)", ["--btn-shade" as string]: "var(--color-line)" }}

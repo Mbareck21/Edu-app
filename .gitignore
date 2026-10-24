@@ -55,3 +55,6 @@ next-env.d.ts
 .chrome-pwa/
 .chrome-shots/
 .prod.log
+
+# Local database dumps hold the children's data; this repo is public.
+dump*.json

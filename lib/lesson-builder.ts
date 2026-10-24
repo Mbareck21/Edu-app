@@ -26,10 +26,13 @@ import {
   makeSpell,
   makeWrite,
   schoolItem,
+  schoolItemOf,
   type ItemPool,
   type ItemSkill,
   type LessonItem,
+  type SchoolItemKind,
 } from "@/lib/items";
+import type { PartKind } from "@/lib/curriculum";
 import { ROTATE_WIDTH, checkDue, isFinished, type ChainState } from "@/lib/spell-chain";
 
 // Re-exported so callers can get the whole session vocabulary from one module.
@@ -195,7 +198,38 @@ export type BuildLessonArgs = {
   /** New words allowed in one lesson. */
   maxNew?: number;
   listId?: string;
+  /**
+   * Extra school items a report card asks for, on top of the lesson. Drawn
+   * after every other draw, so with none the lesson is what it always was.
+   */
+  extras?: readonly SchoolItemKind[];
+  /** Word-part extras use only these kinds of part. Empty: any. */
+  partKinds?: readonly PartKind[];
 };
+
+/**
+ * The report card's extra items. Called after every other random draw, so an
+ * empty list changes nothing; redrawn when it repeats a question already in.
+ */
+function drawExtras(
+  kinds: readonly SchoolItemKind[],
+  already: readonly LessonItem[],
+  pool: ItemPool,
+  rng: Rng,
+  words: readonly ClientWord[],
+  partKinds: readonly PartKind[]
+): LessonItem[] {
+  const out: LessonItem[] = [];
+  kinds.forEach((kind, i) => {
+    const word = words.length > 0 ? words[i % words.length] : undefined;
+    let item = schoolItemOf(kind, pool, rng, word, partKinds);
+    for (let tries = 0; tries < 6 && [...already, ...out].some((s) => sameQuestion(s, item)); tries++) {
+      item = schoolItemOf(kind, pool, rng, word, partKinds);
+    }
+    out.push(item);
+  });
+  return out;
+}
 
 /**
  * One path-step lesson: 12 items (15 for the challenge).
@@ -209,6 +243,8 @@ export function buildLesson({
   rng,
   maxNew = MAX_NEW_WORDS,
   listId,
+  extras = [],
+  partKinds = [],
 }: BuildLessonArgs): LessonItem[] {
   const skill = stepSkill(step);
   if (!skill || words.length === 0) return [];
@@ -269,8 +305,9 @@ export function buildLesson({
     }
     school.push(item);
   }
+  const extra = drawExtras(extras, [...body, ...school], pool, rng, ordered, partKinds);
 
-  return [...blocked, ...interleave([...body, ...school])];
+  return [...blocked, ...interleave([...body, ...school, ...extra])];
 }
 
 /** The same question, whatever order its options come in. */
@@ -343,6 +380,9 @@ export type BuildProductionArgs = {
   rng: Rng;
   listId?: string;
   size?: number;
+  /** As for buildLesson: report-card extras, drawn after the round's own items. */
+  extras?: readonly SchoolItemKind[];
+  partKinds?: readonly PartKind[];
 };
 
 /**
@@ -355,6 +395,8 @@ export function buildProductionSession({
   rng,
   listId,
   size = PRODUCTION_SIZE,
+  extras = [],
+  partKinds = [],
 }: BuildProductionArgs): LessonItem[] {
   const pool: ItemPool = { words, listId };
   const usable = words.filter((w) => !isNewWord(w));
@@ -384,6 +426,7 @@ export function buildProductionSession({
   // because / although / if IS this term's writing objective, and the builder
   // for it existed but nothing ever called it.
   if (items.length > 0) items.push(makeSentenceCombine(pool, rng));
+  if (items.length > 0) items.push(...drawExtras(extras, items, pool, rng, used, partKinds));
   return interleave(items);
 }
 

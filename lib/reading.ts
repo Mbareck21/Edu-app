@@ -179,7 +179,10 @@ export type QuestionSpec = {
  * him on the standard whatever level his texts are at. Waiting for the ladder
  * to reach level 5 would mean never practising the Q3 standards.
  */
-const STANDARD_OPENS: Record<"retell" | "theme" | "evidence", Quarter["id"]> = {
+/** The reading questions that wait for a school quarter or a reading level. */
+export type GatedQuestion = "retell" | "theme" | "evidence";
+
+const STANDARD_OPENS: Record<GatedQuestion, Quarter["id"]> = {
   theme: "Q2", // 4.RC.9.RL
   retell: "Q3", // 4.RC.3.RF
   evidence: "Q3", // 4.RC.14.RI
@@ -228,11 +231,13 @@ export function questionPlan(
   rawLevel: number,
   kind: PassageKind,
   science: boolean,
-  quarter?: Quarter["id"] | "summer"
+  quarter?: Quarter["id"] | "summer",
+  /** Gated questions to ask whatever the quarter and level: a report card's call. */
+  opens: readonly GatedQuestion[] = []
 ): QuestionSpec[] {
   const level = clampLevel(rawLevel);
-  const open = (id: keyof typeof STANDARD_OPENS, minLevel: number) =>
-    level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]);
+  const open = (id: GatedQuestion, minLevel: number) =>
+    level >= minLevel || quarterReached(quarter, STANDARD_OPENS[id]) || opens.includes(id);
   const out: QuestionSpec[] = [
     level >= 5
       ? {
@@ -317,9 +322,13 @@ export function questionPlan(
       format: "mcq",
       options: 4,
       brief:
-        kind === "story"
+        // The right sentence must back the point, not restate it: a point
+        // copied from the answer sentence is a question that answers itself,
+        // and the circular-question check drops it (lib/circular-question.ts).
+        (kind === "story"
           ? `The school's "Part B": "Which sentence from the story best shows that [name] is [the trait or feeling from the character question]?". The four options must be four sentences copied word for word from the passage.`
-          : 'Name a point the writer makes, then ask "Which sentence from the passage best supports this?". The four options must be four sentences copied word for word from the passage.',
+          : 'Name a point the writer makes, then ask "Which sentence from the passage best supports this?". The four options must be four sentences copied word for word from the passage.') +
+        " Say the point in your own words, never copying the right sentence: the right sentence gives the action, detail or reason that proves it, and shares few words with the question.",
     });
   }
 

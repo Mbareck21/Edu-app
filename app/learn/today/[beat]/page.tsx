@@ -5,7 +5,8 @@ import KidGuard from "@/components/ui/KidGuard";
 import { requestSeed } from "@/components/ui/time";
 import { kidLocked, requireQuestBeat } from "@/lib/assigned-data";
 import { connectDB } from "@/lib/db";
-import { loadPlanProgress } from "@/lib/daily-plan-data";
+import { planProgress } from "@/lib/daily-plan";
+import { loadDay } from "@/lib/daily-plan-data";
 import { getPractice } from "@/lib/word-source";
 import {
   buildLesson,
@@ -62,7 +63,11 @@ export default async function TodayBeatPage({
   const rng = mulberry32(seed % 2147483647);
   const unit = productionList(lists);
   const fill = lists.filter(needsExamples).map((l) => l._id);
-  const dayPlan = await loadPlanProgress(beat === "new-words" ? "new" : beat);
+  // One read of the day: the plan for the finish screen and the report card's
+  // extra practice for this beat (lib/school-report.ts; none without a card).
+  const day = await loadDay();
+  const dayPlan = planProgress(day.beats, beat === "new-words" ? "new" : beat, day.today);
+  const { focus } = day;
 
   const shared = {
     exitHref: "/",
@@ -109,6 +114,8 @@ export default async function TodayBeatPage({
           rng,
           maxNew: 3,
           listId: fresh._id,
+          extras: focus.newWordsExtras,
+          partKinds: focus.partKinds,
         })
       : [];
     return (
@@ -129,7 +136,14 @@ export default async function TodayBeatPage({
   }
 
   const items = unit
-    ? buildProductionSession({ words: unit.words, now, rng, listId: unit._id })
+    ? buildProductionSession({
+        words: unit.words,
+        now,
+        rng,
+        listId: unit._id,
+        extras: focus.productionExtras,
+        partKinds: focus.partKinds,
+      })
     : [];
   return (
     <>

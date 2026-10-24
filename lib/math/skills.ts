@@ -1410,7 +1410,57 @@ function genPlaceValue(level: Level, rng: Rng): MathQuestion {
   }
   if (roll === 1) return pvExpanded(rng, randInt(rng, 5, 6));
   if (roll === 2) return pvCompare(rng);
-  return pvRound(rng, 1000);
+  // "Ten times the place to its right" (4.NPV.1) is graded all year; it used
+  // to stop at level 3. Rounding has its own skill now.
+  return rng() < 0.5 ? pvRound(rng, 1000) : pvTimesAsMuch(rng, [10, 100, 1000]);
+}
+
+// ---------------------------------------------------------------- rounding
+
+/**
+ * Rounding whole numbers to a place, up to the hundred thousands: iReady
+ * Lesson 3 of Unit 1, and a "work on it" his teacher named. Place Value only
+ * rounds in one question of three from level 2, and never at level 1.
+ *
+ * Levels 1 and 2 draw the number line between the two round numbers, so
+ * "which one is it closer to" is something he can see before it is a rule.
+ * Some numbers sit exactly halfway, the case children get wrong.
+ */
+function roundingAt(level: Level): { lo: number; hi: number; units: readonly number[] } {
+  if (level === 1) return { lo: 100, hi: 9_999, units: [10, 100] };
+  if (level === 2) return { lo: 1_000, hi: 99_999, units: [100, 1_000] };
+  if (level === 3) return { lo: 10_000, hi: 999_999, units: [1_000, 10_000, 100_000] };
+  return { lo: 100_000, hi: 9_999_999, units: [10_000, 100_000, 1_000_000] };
+}
+
+const PLACE_WORD: Record<number, string> = {
+  10: "ten",
+  100: "hundred",
+  1_000: "thousand",
+  10_000: "ten thousand",
+  100_000: "hundred thousand",
+  1_000_000: "million",
+};
+
+function genRounding(level: Level, rng: Rng): MathQuestion {
+  const { lo, hi, units } = roundingAt(level);
+  const unit = pick(rng, units.filter((u) => u * 10 <= hi));
+  const below = Math.floor(randInt(rng, Math.max(lo, unit), hi) / unit) * unit;
+  // One in five sits exactly halfway; the rest anywhere but on a round number.
+  const offset = rng() < 0.2 ? unit / 2 : randInt(rng, 1, unit - 1);
+  const n = below + offset;
+  const answer = Math.floor(n / unit + 0.5) * unit;
+  const next = Math.floor((n % unit) / (unit / 10));
+  const way = next >= 5 ? "5 or more, so round up" : "under 5, so round down";
+  return {
+    prompt: `Round ${group(n)} to the nearest ${PLACE_WORD[unit]}.`,
+    answer,
+    visual: level <= 2 ? { kind: "numberline", lo: below, hi: below + unit, mark: n } : NONE,
+    how: `It is between ${group(below)} and ${group(below + unit)}. Next digit ${next}: ${way}.`,
+    op: "?",
+    a: n,
+    b: unit,
+  };
 }
 
 // -------------------------------------------------------------- number-forms
@@ -1426,12 +1476,18 @@ function genPlaceValue(level: Level, rng: Rng): MathQuestion {
 function nfDigits(level: Level): { lo: number; hi: number } {
   if (level === 1) return { lo: 11, hi: 999 };
   if (level === 2) return { lo: 1000, hi: 9999 };
-  return { lo: 10_000, hi: 99_999 };
+  // 4.NPV.2 reads and writes numbers up to 1,000,000; level 3 stopped at 99,999.
+  return { lo: 10_000, hi: 999_999 };
 }
 
 function nfWordToStandard(level: Level, rng: Rng): MathQuestion {
   const { lo, hi } = nfDigits(level);
-  const n = randInt(rng, lo, hi);
+  // Some six-digit numbers take more words than one card line holds; draw
+  // again, and settle for five digits if the draws keep running long.
+  let n = randInt(rng, lo, hi);
+  for (let tries = 0; `Write ${toWords(n)} as a number.`.length > 80; tries++) {
+    n = tries < 12 ? randInt(rng, lo, hi) : randInt(rng, lo, Math.min(hi, 99_999));
+  }
   return {
     prompt: `Write ${toWords(n)} as a number.`,
     answer: n,
@@ -2379,6 +2435,18 @@ export const MATH_SKILLS: readonly MathSkill[] = [
     unit: 1,
     standards: ["4.NPV.1", "4.NPV.2"],
     generate: genNumberForms,
+  },
+  {
+    id: "rounding",
+    name: "Rounding",
+    blurb: "Round big numbers to a place.",
+    grade: 4,
+    color: "purple",
+    unit: 1,
+    // Rounding is iReady Lesson 3 (4.NBT.A.3); the FPS report card lists no
+    // separate code for it, so none is claimed here.
+    standards: [],
+    generate: genRounding,
   },
   {
     id: "add-sub-big",

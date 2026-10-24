@@ -22,6 +22,7 @@ const SAMPLES = 200;
 const MAX_ANSWER: Record<MathSkillId, number> = {
   "place-value": 1000000,
   "number-forms": 1000000,
+  rounding: 1000000,
   "add-sub-big": 1000000,
   "mul-facts": 144,
   "mul-multi": 100000,
@@ -42,6 +43,7 @@ const MAX_ANSWER_G5: Record<MathSkillId, number> = {
   ...MAX_ANSWER,
   "place-value": 100_000_000,
   "number-forms": 10_000_000,
+  rounding: 10_000_000,
   "add-sub-big": 10_000_000,
   "mul-facts": 144_000,
   "mul-multi": 1_000_000,
@@ -112,13 +114,17 @@ function checkQuestion(q: MathQuestion, id: MathSkillId, level: Level = 1): void
     case "shape":
       assert.ok(v.name.length > 0, `${id}: shape needs a name`);
       break;
+    case "numberline":
+      assert.ok(v.lo < v.mark && v.mark < v.hi, `${id}: the mark must sit between the ends`);
+      assert.ok([q.answer === v.lo, q.answer === v.hi].includes(true), `${id}: rounds to neither end`);
+      break;
     case "none":
       break;
   }
 }
 
 test("registry is complete and display-ready", () => {
-  assert.equal(MATH_SKILLS.length, 14);
+  assert.equal(MATH_SKILLS.length, 15);
   assert.equal(new Set(MATH_SKILL_IDS).size, MATH_SKILLS.length);
   for (const skill of MATH_SKILLS) {
     assert.ok(skill.name.trim().split(/\s+/).length <= 2, `${skill.id}: name is more than 2 words`);
@@ -587,4 +593,24 @@ test("Grade 5 giving-away answers are not always round tens", () => {
   }
   assert.ok(asked > 500);
   assert.ok(tens / asked < 0.2, `${((tens / asked) * 100).toFixed(1)}% end in 0`);
+});
+
+test("rounding: right place, halfway rounds up, a number line until level 3", () => {
+  let halfway = 0;
+  for (const level of ALL_LEVELS) {
+    for (let seed = 1; seed <= 300; seed++) {
+      const q = getSkill("rounding").generate(level, mulberry32(seed));
+      const unit = q.b as number;
+      const n = q.a as number;
+      assert.equal(q.answer % unit, 0, `answer ${q.answer} is not a multiple of ${unit}`);
+      assert.ok(Math.abs(q.answer - n) <= unit / 2, `${n} -> ${q.answer} is not the nearest ${unit}`);
+      assert.notEqual(n % unit, 0, `${n} is already round`);
+      if (n % unit === unit / 2) {
+        halfway++;
+        assert.equal(q.answer, n + unit / 2, `halfway ${n} must round up`);
+      }
+      assert.equal(q.visual.kind === "numberline", level <= 2, `level ${level} number line`);
+    }
+  }
+  assert.ok(halfway > 100, `halfway cases are rare: ${halfway}`);
 });

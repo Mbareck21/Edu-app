@@ -22,7 +22,7 @@ export const MATH_UNITS: readonly MathUnit[] = [
     start: quarterDay("Q1", 5),
     end: quarterDay("Q1", 32),
     standards: ["4.NPV.1", "4.NPV.2", "4.CAR.2"],
-    skills: ["place-value", "number-forms", "add-sub-big"],
+    skills: ["place-value", "number-forms", "rounding", "add-sub-big"],
   },
   {
     id: 2,
