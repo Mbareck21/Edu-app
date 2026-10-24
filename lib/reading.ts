@@ -322,9 +322,13 @@ export function questionPlan(
       format: "mcq",
       options: 4,
       brief:
-        kind === "story"
+        // The right sentence must back the point, not restate it: a point
+        // copied from the answer sentence is a question that answers itself,
+        // and the circular-question check drops it (lib/circular-question.ts).
+        (kind === "story"
           ? `The school's "Part B": "Which sentence from the story best shows that [name] is [the trait or feeling from the character question]?". The four options must be four sentences copied word for word from the passage.`
-          : 'Name a point the writer makes, then ask "Which sentence from the passage best supports this?". The four options must be four sentences copied word for word from the passage.',
+          : 'Name a point the writer makes, then ask "Which sentence from the passage best supports this?". The four options must be four sentences copied word for word from the passage.') +
+        " Say the point in your own words, never copying the right sentence: the right sentence gives the action, detail or reason that proves it, and shares few words with the question.",
     });
   }
 
