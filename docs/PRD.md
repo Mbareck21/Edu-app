@@ -4,6 +4,16 @@ Rolling history of what's live. Append-only; each entry is the durable memory of
 
 ---
 
+## School report card: the quest follows the child's grades — 2026-10-24
+
+- **Status:** Merged to `main` via PR from `claude/school-report-card` (Vercel green before merge).
+- **What it is:** Me > For the grown-ups > School report card (`/me/school`, grown-ups PIN). A parent copies a child's quarterly standards-based card in: 1/2/3 per FPS standard per quarter, the school's reading-speed checks (goals 87 then 121 words a minute), the teacher's "work on" and "strengths" as ticks, notes. Stored on that child's database only (`school_report`, one document per school year); no child data in this public repo.
+- **What it changes** (`lib/school-report.ts` `focusFor`, one rule per standard, latest graded quarter wins): math standards under 3 plus ticked math topics become up to three catch-up skills the quest's Math beat takes every other day (a strength cancels a score); 4.FR.1.PD under 3 adds two word-part questions to New words; 4.FR.4.PE adds a build-the-word question and 4.L.14.S a second sentence-joining question to Write and use; 4.RC.2.RF opens the "which sentence shows" evidence question now instead of Q3; prefixes as a strength point word-part questions at roots and suffixes; Me shows the reading-speed goal. No card, or nothing under 3: the app is byte-identical (baseline test).
+- **Also:** a Rounding skill (nearest ten up to the nearest hundred thousand, a number line at levels 1-2, halfway cases); Place Value level 3 keeps "ten times the place to its right"; Number Forms level 3 reads numbers to 999,999; `loadDay()` is the only builder of quest beats so Home and the kid-lock gate agree; evidence questions name the point in their own words (they were being dropped as circular); local DB dumps are git-ignored.
+- **Verified:** npm test, tsc, eslint, next build, ux-audit (360/1280, both children) clean; on the dev server a card with standards under 3 moved the Math beat, added the extras and the goal, and left the other child unchanged. Decision trail: `docs/run-trail-2026-10-24.tsv`.
+
+---
+
 ## Quest: full-app review, 137 fixes — 2026-09-28
 
 - **Status:** Merged to `main` via PR from `claude/full-review-2026-09-28` (Vercel preview green before merge).
