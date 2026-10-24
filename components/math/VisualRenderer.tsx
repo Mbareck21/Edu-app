@@ -35,6 +35,8 @@ export default function VisualRenderer({ visual, op }: VisualRendererProps) {
       return <Frame><AngleWedge total={visual.total} known={visual.known} /></Frame>;
     case "shape":
       return <Frame><PlaneShape names={visual.second ? [visual.name, visual.second] : [visual.name]} /></Frame>;
+    case "numberline":
+      return <Frame><NumberLine lo={visual.lo} hi={visual.hi} mark={visual.mark} /></Frame>;
     default:
       return null;
   }
@@ -113,6 +115,46 @@ function BarModel({ a, b, op }: { a: number; b: number; op?: MathOp }) {
         In all: {takeAway ? String(a) : "?"}
       </p>
     </div>
+  );
+}
+
+// --------------------------------------------------------------- number line
+
+/** 12,345 with the comma, the way the prompt writes it. */
+function grouped(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/**
+ * The two round numbers either side, the halfway point between them, and
+ * where his number sits. Rounding is "which end is it closer to"; seeing it
+ * comes before the next-digit rule.
+ */
+function NumberLine({ lo, hi, mark }: { lo: number; hi: number; mark: number }) {
+  const left = 30;
+  const right = 290;
+  const x = (n: number) => left + ((n - lo) / (hi - lo)) * (right - left);
+  const mid = (lo + hi) / 2;
+  return (
+    <svg viewBox="0 0 320 120" className={FIGURE} role="img" aria-label={`${grouped(mark)} on a line from ${grouped(lo)} to ${grouped(hi)}`}>
+      <line x1={left} y1={70} x2={right} y2={70} stroke={INK} strokeWidth={3} strokeLinecap="round" />
+      {[lo, hi].map((n) => (
+        <g key={n}>
+          <line x1={x(n)} y1={58} x2={x(n)} y2={82} stroke={INK} strokeWidth={3} />
+          <text x={x(n)} y={104} textAnchor="middle" fontSize={15} fontWeight={700} fill={INK}>
+            {grouped(n)}
+          </text>
+        </g>
+      ))}
+      <line x1={x(mid)} y1={62} x2={x(mid)} y2={78} stroke={MUTED} strokeWidth={2} strokeDasharray="3 3" />
+      <text x={x(mid)} y={100} textAnchor="middle" fontSize={11} fill={MUTED}>
+        halfway
+      </text>
+      <circle cx={x(mark)} cy={70} r={8} fill={PURPLE} />
+      <text x={x(mark)} y={40} textAnchor="middle" fontSize={16} fontWeight={700} fill="var(--color-purple-dark)">
+        {grouped(mark)}
+      </text>
+    </svg>
   );
 }
 
