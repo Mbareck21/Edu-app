@@ -83,15 +83,17 @@ function mondayOf(n: number): number {
 
 /**
  * Mondays of every week that carries at least one instructional day.
- * Weeks that fall entirely inside a quarter gap (winter break) are dropped.
+ * Weeks with none are dropped: the gaps between quarters (fall and winter
+ * break) and the weeks off inside one (Thanksgiving, spring break). Those two
+ * used to count, so from 23 November the reading unit ran a week ahead of the
+ * class, and two weeks ahead after spring break.
  */
 function schoolWeeks(): number[] {
-  const ranges = FPS_QUARTERS.map((q) => [dayNum(q.start), dayNum(q.end)] as const);
+  const schoolDays = new Set(FPS_QUARTERS.flatMap((q) => schoolDaysOf(q)).map(dayNum));
   const last = dayNum(SCHOOL_YEAR_END);
   const weeks: number[] = [];
   for (let m = mondayOf(dayNum(SCHOOL_YEAR_START)); m <= last; m += 7) {
-    const friday = m + 4;
-    if (ranges.some(([a, b]) => friday >= a && m <= b)) weeks.push(m);
+    if ([0, 1, 2, 3, 4].some((d) => schoolDays.has(m + d))) weeks.push(m);
   }
   return weeks;
 }
@@ -640,11 +642,12 @@ export const SCIENCE_UNITS: ScienceUnit[] = [
 
 /**
  * The science unit running in the week containing `dateISO`.
- * Week 1 is the week of Aug 11 2026; weeks are counted straight through, breaks
- * included, which is close enough for "what are they doing in science now".
- * Because breaks are ignored, week 36 falls in mid-April; the remaining school
- * weeks stay on the last unit rather than going blank. Outside the school year,
- * and in week 1 (launch week, before Unit 1 starts), the answer is null.
+ * Week 1 is the week of Aug 11 2026 and weeks are instructional weeks, as the
+ * district plan counts them (36 in the year, nine or ten a quarter). Counted
+ * straight through the breaks, the plan ran ahead: Energy, a Q3 unit, was
+ * served from mid-December. School weeks past 36 stay on the last unit rather
+ * than going blank. Outside the school year, and in week 1 (launch week,
+ * before Unit 1 starts), the answer is null.
  * Two units share weeks 31-32; a shared span is split evenly between the
  * units that claim it, in list order.
  */
@@ -652,8 +655,8 @@ export function scienceUnitForWeek(dateISO: string): ScienceUnit | null {
   const n = dayNum(dateISO);
   if (n < dayNum(SCHOOL_YEAR_START) || n > dayNum(SCHOOL_YEAR_END)) return null;
   // Weeks run Monday to Sunday. Counted from Aug 11, a Tuesday, every Monday
-  // still showed the week before's unit.
-  const week = Math.min(36, Math.floor((mondayOf(n) - mondayOf(dayNum(SCHOOL_YEAR_START))) / 7) + 1);
+  // still showed the week before's unit. A break week keeps the week before's.
+  const week = Math.min(36, schoolWeekIndex(dateISO) + 1);
   const matches = SCIENCE_UNITS.filter((u) => week >= u.weekStart && week <= u.weekEnd);
   if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0];
