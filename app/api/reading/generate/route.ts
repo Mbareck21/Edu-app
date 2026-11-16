@@ -8,6 +8,8 @@ import { toClient, READING_QUESTION_TYPES } from "@/lib/models/WordList";
 import { getProfileWithSeen } from "@/lib/profile";
 import { loadFocus } from "@/lib/school-report-store";
 import {
+  infoAnglesFor,
+  infoTopicFor,
   scienceUnitForWeek,
   themeForWeek,
   weekInTheme,
@@ -261,13 +263,16 @@ export async function POST(req: Request) {
   const seen: SeenEntry[] = allSeen.slice(-READING_SEEN_MAX);
   const kind: PassageKind = parsed.data.kind ?? nextKind(seen);
 
-  // What the class is doing this week. Informational passages ride the science
-  // unit when there is one; stories ride the Benchmark reading theme.
+  // What the class is doing this week. Stories ride the Benchmark reading
+  // theme. Informational passages ride the science unit, turn about with the
+  // reading unit when that unit is informational itself. See infoTopicFor.
   const todayISO = todayKey();
   const theme: ReadingTheme = themeForWeek(todayISO);
   const themeWeek = weekInTheme(todayISO);
   const scienceUnit: ScienceUnit | null = scienceUnitForWeek(todayISO);
-  const useScience = kind === "info" && scienceUnit !== null;
+  const lastInfo = [...history].reverse().find((h) => h.kind === "info");
+  const useScience =
+    kind === "info" && infoTopicFor(theme, scienceUnit, lastInfo?.topic) === "science";
 
   const topic = useScience && scienceUnit ? scienceUnit.title : theme.title;
   const topicWords = sampleWords(
@@ -277,7 +282,7 @@ export async function POST(req: Request) {
   const topicIdea =
     useScience && scienceUnit
       ? sampleWords(scienceUnit.passageIdeas, 1)[0]
-      : sampleWords(theme.prompts.slice(1), 1)[0];
+      : sampleWords(kind === "info" ? infoAnglesFor(theme) : theme.prompts.slice(1), 1)[0];
   const essentialQuestion = theme.prompts[0];
 
   // Words he can read are free; the rest spend the unknown-word budget.
@@ -319,7 +324,7 @@ PROBLEM the story turns on: ${cast.problem}`
   const kindBlock =
     kind === "info"
       ? `KIND: info (informational, non-fiction)
-TOPIC: ${topic}${useScience && scienceUnit ? ` — this is the science unit his class is on now (${scienceUnit.standards.map((s) => s.code).join(", ") || "no code"})` : ""}
+TOPIC: ${topic}${useScience && scienceUnit ? ` — this is the science unit his class is on now (${scienceUnit.standards.map((s) => s.code).join(", ") || "no code"})` : " — the reading unit his class is on now"}
 ANGLE: ${topicIdea ?? topic}
 The writer must make one clear point and back it with reasons and examples.`
       : `KIND: story (narrative)
@@ -358,8 +363,10 @@ Write the passage and the questions now. Strict JSON only.`;
   // The call itself failed, as opposed to the writing missing a target. A
   // second attempt cannot fix a rate limit or a bad key, so it is not made.
   let hardFail = false;
-  // Attempt 1 was refused by the per-minute limit and the wait was sat out.
-  let waited = false;
+  // Rate-limit waits sat out so far, and how long the longest call that did
+  // run took: what the next call is expected to take.
+  let waits = 0;
+  let callMs = 0;
   let correction = "";
 
   // The route is declared maxDuration = 60. A second attempt started after
@@ -384,19 +391,20 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
     if (attempt === 2 && hardFail) break;
     const spent = Date.now() - startedAt;
-    // After a rate-limit wait attempt 1 never ran, so its time says nothing
-    // about how long a call takes: allow for the longest one.
-    if (attempt === 2 && spent + (waited ? AI_CALL_TIMEOUT_MS : spent) > BUDGET_MS) {
+    // A call that was refused never ran, so it says nothing about how long
+    // one takes: with none timed yet, allow for the longest.
+    if (attempt === 2 && spent + (callMs || AI_CALL_TIMEOUT_MS) > BUDGET_MS) {
       console.warn(
-        `[reading/generate] attempt 1 took ${Math.round(spent / 1000)}s; no room for a second`
+        `[reading/generate] ${Math.round(spent / 1000)}s spent; no room for a second attempt`
       );
       break;
     }
+    const callStarted = Date.now();
     try {
       const completion = await groq().chat.completions.create({
         model: CLUE_MODEL,
         messages: [
-          { role: "system", content: readingSystemPrompt(gradeOn(todayISO)) },
+          { role: "system", content: readingSystemPrompt(gradeOn(todayISO), level) },
           { role: "user", content: userPrompt + correction },
         ],
         response_format: { type: "json_object" },
@@ -406,6 +414,7 @@ Your last answer was not valid JSON — it ran out of room before the closing br
         max_tokens: REPLY_TOKENS - Math.ceil(correction.length / 4),
         reasoning_effort: "low",
       });
+      callMs = Math.max(callMs, Date.now() - callStarted);
       const text = completion.choices[0]?.message?.content ?? "{}";
       // "length" means the model was cut off mid-JSON. That is a budget
       // problem, not a writing problem, and telling it to mind the shape is
@@ -508,18 +517,24 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       lastErr = friendlyAiError(err, "The story would not come. Tap it again.");
       shown = lastErr;
       // The per-minute limit: one reading takes most of a minute's tokens, so
-      // when both boys start theirs together the second is refused. Groq says
-      // how long until it would pass. Wait that out when a call still fits in
-      // what is left; a rate limit used to end the request at once.
+      // when both boys start theirs together the second is refused. So is this
+      // request's own second attempt when the first came back quickly, which
+      // threw away the correction and served the passage that fell short.
+      // Groq says how long until it would pass. Wait that out when the
+      // longest call still fits in what is left, and make the same attempt
+      // again; a rate limit used to end the request at once. The longest
+      // call, not the last one's time: a 33s wait behind a 4s first attempt
+      // was followed by a 17s second one, and the request ran to 55s.
       const wait = rateLimitWaitMs(err);
       if (
-        attempt === 1 &&
         wait !== null &&
+        waits < 2 &&
         Date.now() - startedAt + wait + AI_CALL_TIMEOUT_MS <= BUDGET_MS
       ) {
         console.warn(`[reading/generate] rate limited; trying again in ${Math.ceil(wait / 1000)}s`);
         await new Promise((resolve) => setTimeout(resolve, wait + 250));
-        waited = true;
+        waits++;
+        attempt--;
         continue;
       }
       hardFail = true;
@@ -562,7 +577,8 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       archive,
       others.map((l) => l.readingArchive ?? []),
       Date.now(),
-      (a) => servable(a).length
+      (a) => servable(a).length,
+      level
     );
     if (pick) {
       const old = pick.passage;

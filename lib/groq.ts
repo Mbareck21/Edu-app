@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import type { Grade } from "@/lib/grade";
+import { levelAtGrade, wordGradeFor } from "@/lib/reading";
 
 /** The longest one call to the writer can run before it is cut off. */
 export const AI_CALL_TIMEOUT_MS = 25_000;
@@ -203,9 +204,11 @@ Keys must echo each input entry EXACTLY as it was given (lowercase, preserving s
 //   • Mention a recurring character or his name if you want.
 //   • Note anything to avoid.
 // ────────────────────────────────────────────────────────────────────────────
-export const readingSystemPrompt = (grade: Grade) => `
+// `level` is his reading level: it sets the word band and whether he is
+// described as below grade level. The exact targets still go in the user message.
+export const readingSystemPrompt = (grade: Grade, level = 1) => `
 You write READING PASSAGES with comprehension questions for a 9-year-old
-Arabic-native English learner in Grade ${grade}, reading below grade level.
+Arabic-native English learner in Grade ${grade}, reading ${level < levelAtGrade() ? "below" : "at"} grade level.
 
 The user message gives you: a LEVEL (1-12) with its exact word/sentence
 targets, a KIND ("story" or "info"), a TOPIC, TOPIC WORDS, the child's own
@@ -228,7 +231,7 @@ questions, in that order, with those types and formats.
 4. NO sentence may be longer than MAX SENTENCE WORDS. Count them.
 5. VOCABULARY BUDGET: no more words he is unlikely to know than the
    UNKNOWN-WORD BUDGET given in the request. Every one of them goes in
-   "glossary". Everything else must be common Grade 2-3 English. This is the
+   "glossary". Everything else must be common ${wordGradeFor(level)} English. This is the
    98%-known-words rule — do not smuggle in hard words and leave them unglossed.
 6. Use as many of the STUDY WORDS as fit naturally; he knows them. Never bend
    a sentence to fit one in: every sentence must read as plain, natural
