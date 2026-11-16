@@ -5,7 +5,7 @@
 import { previousDay, todayKey } from "@/lib/day";
 import { isDrillRef } from "@/lib/drill-rank";
 import { gradeOn, type Grade } from "@/lib/grade";
-import { maxReadingLevel } from "@/lib/reading";
+import { levelAtGrade, maxReadingLevel } from "@/lib/reading";
 import { doneToday, PLAN_ORDER } from "@/lib/daily-plan";
 import { activityKind } from "@/lib/scoreboard";
 import type {
@@ -118,8 +118,8 @@ export const BONUS_MIN_ANSWERED = 3;
 export const BONUS_MIN_PCT = 50;
 
 /**
- * At least this share right and each right answer pays in full: 3 of 4, the
- * mark of a good reading (READING_UP_PCT), so a steady reader loses nothing.
+ * At least this share right and each right answer pays in full: 3 of 4, so
+ * a steady reader loses nothing.
  */
 export const FULL_PAY_PCT = 75;
 
@@ -691,16 +691,30 @@ export const MAX_READING_LEVEL = 10;
  * 0/25/.../100 or 0/20/.../100. An 85 mark meant "perfect three times
  * running". Since readings became four school-style questions (2026-09-23),
  * 80 did the same: 3 of 4 is 75, so only a perfect reading counted and a
- * steady reader never moved. 75 counts 3 of 4 and 4 of 5, still not 2 of 3.
+ * steady reader never moved. 75 counted 3 of 4 and 4 of 5, still not 2 of 3.
+ *
+ * From level 4 a reading asks six or seven questions, and 75 there is 6 of 7:
+ * one miss allowed in seven where the low levels allow one in five. The bar
+ * rose with the level, and a steady 5 of 7 never moved. 70 counts
+ * 5 of 7 and 5 of 6, and still not 2 of 3, 4 of 6 or 4 of 7.
  */
-export const READING_UP_PCT = 75;
+export const READING_UP_PCT = 70;
 export const READING_UP_RUN = 3;
+/**
+ * Below grade level, one reading this good moves him up at once: 6 of 7, or
+ * all right on a shorter set. Everyone starts at level 1 and reads once a day,
+ * so three good readings a level put grade level (levelAtGrade) at least 18
+ * days away for a boy who never misses. The slow rule stays for readings that
+ * are good but not this good, and from grade level up it is the only rule.
+ */
+export const READING_FAST_PCT = 85;
 export const READING_DOWN_PCT = 50;
 export const READING_DOWN_RUN = 2;
 
 /**
  * Move the reading ladder. READING_UP_RUN readings in a row at READING_UP_PCT
- * step up; READING_DOWN_RUN in a row under READING_DOWN_PCT step down, and only
+ * step up, and so does one at READING_FAST_PCT below grade level;
+ * READING_DOWN_RUN in a row under READING_DOWN_PCT step down, and only
  * readings taken at the current level count. Pure — `recent` is newest first.
  */
 export function nextReadingLevel(
@@ -715,6 +729,9 @@ export function nextReadingLevel(
   // log meant one promotion cascaded into the next on the very next reading:
   // three good ones at L1 would have walked him L1 -> L4 in five sessions.
   const atLevel = readingsAtLevel(cur, recent, since);
+  if (cur < levelAtGrade() && atLevel.length > 0 && atLevel[0].pct >= READING_FAST_PCT) {
+    return Math.min(top, cur + 1);
+  }
   const runUp = atLevel.slice(0, READING_UP_RUN);
   if (runUp.length === READING_UP_RUN && runUp.every((r) => r.pct >= READING_UP_PCT)) {
     return Math.min(top, cur + 1);
@@ -994,6 +1011,8 @@ export type ReadingProgress = {
   goodInARow: number;
   /** Good readings still needed to move up; 0 at the top level. */
   toNext: number;
+  /** Below grade level: one reading at READING_FAST_PCT moves him up at once. */
+  fastTrack: boolean;
   /** The last readings' scores, oldest first, for a small chart. */
   scores: number[];
   /** Words a minute from timed reads, oldest first. */
@@ -1019,6 +1038,7 @@ export function readingProgress(
     level,
     goodInARow,
     toNext: level >= top ? 0 : READING_UP_RUN - goodInARow,
+    fastTrack: level < top && level < levelAtGrade(),
     scores: reading.recent.slice(0, shown).map((r) => r.pct).reverse(),
     wpms: reading.recent
       .filter((r) => typeof r.wpm === "number" && r.wpm > 0)

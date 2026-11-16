@@ -198,12 +198,13 @@ function log(pct: number, level = 1): ReadingLog {
 
 test("three readings at READING_UP_PCT step the level up, capped at 10", () => {
   assert.equal(nextReadingLevel(1, [log(90), log(88), log(86)]), 2);
-  // 75 is the mark: 3 of 4 counts, and so does 4 of 5.
+  // 3 of 4 counts, and so does 4 of 5.
   assert.equal(nextReadingLevel(1, [log(75), log(75), log(80)]), 2);
   assert.equal(nextReadingLevel(10, [log(90), log(88), log(86)], undefined, 4), 10);
-  assert.equal(nextReadingLevel(1, [log(90), log(88)]), 1);
+  // Good but not near-perfect (see reading-pace.test.ts): two are not three.
+  assert.equal(nextReadingLevel(1, [log(80), log(80)]), 1);
   // 2 of 3 is still not a good reading.
-  assert.equal(nextReadingLevel(1, [log(90), log(88), log(67)]), 1);
+  assert.equal(nextReadingLevel(1, [log(80), log(80), log(67)]), 1);
 });
 
 test("Grade 5 opens levels 11 and 12, capped at 12", () => {
@@ -234,7 +235,7 @@ test("two readings under READING_DOWN_PCT step the level down, floor 1", () => {
 test("only readings taken at the current level move it", () => {
   // He has just been promoted to 2 and read once at the new level. The three
   // strong level-1 readings behind it must not promote him again.
-  const recent = [log(95, 2), log(95), log(95), log(95)];
+  const recent = [log(80, 2), log(95), log(95), log(95)];
   assert.equal(nextReadingLevel(2, recent), 2);
   // Two weak readings at the new level do move him back.
   assert.equal(nextReadingLevel(2, [log(30, 2), log(30, 2), log(95)]), 1);
@@ -243,13 +244,13 @@ test("only readings taken at the current level move it", () => {
 test("an easier passage left from before a promotion does not reset the run", () => {
   let p: ProfileState = emptyProfile();
   const at = (min: number) => ({ at: new Date(NOW.getTime() + min * 60_000), today: "2026-08-19" });
-  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(i));
+  for (let i = 0; i < 3; i++) p = applyReading(p, { level: 1, pct: 80, wordsCount: 60 }, at(i));
   assert.equal(p.reading.level, 2);
-  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(3));
+  p = applyReading(p, { level: 2, pct: 80, wordsCount: 60 }, at(3));
   // A level-1 passage still open on another list.
-  p = applyReading(p, { level: 1, pct: 100, wordsCount: 60 }, at(4));
+  p = applyReading(p, { level: 1, pct: 80, wordsCount: 60 }, at(4));
   assert.equal(readingProgress(p.reading, NOW).goodInARow, 1);
-  p = applyReading(p, { level: 2, pct: 100, wordsCount: 60 }, at(5));
+  p = applyReading(p, { level: 2, pct: 80, wordsCount: 60 }, at(5));
   assert.equal(readingProgress(p.reading, NOW).goodInARow, 2);
 });
 
@@ -279,10 +280,10 @@ test("applyReading logs newest first and caps at 20", () => {
 test("applyReading moves the level after three strong readings", () => {
   const now = { at: NOW, today: "2026-08-19" };
   let p: ProfileState = emptyProfile();
-  p = applyReading(p, { level: 1, pct: 90, wordsCount: 60 }, now);
-  p = applyReading(p, { level: 1, pct: 92, wordsCount: 60 }, now);
+  p = applyReading(p, { level: 1, pct: 80, wordsCount: 60 }, now);
+  p = applyReading(p, { level: 1, pct: 82, wordsCount: 60 }, now);
   assert.equal(p.reading.level, 1);
-  p = applyReading(p, { level: 1, pct: 88, wordsCount: 60, wpm: 92 }, now);
+  p = applyReading(p, { level: 1, pct: 78, wordsCount: 60, wpm: 92 }, now);
   assert.equal(p.reading.level, 2);
   assert.equal(p.reading.recent[0].wpm, 92);
   p = applyReading(p, { level: 2, pct: 40, wordsCount: 60 }, now);

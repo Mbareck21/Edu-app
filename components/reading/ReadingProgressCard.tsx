@@ -87,7 +87,9 @@ export default function ReadingProgressCard({
             <strong>
               {toNext} more good {toNext === 1 ? "reading" : "readings"} in a row!
             </strong>{" "}
-            <span style={{ color: "var(--color-muted)" }}>A good reading is 3 of every 4 right.</span>
+            <span style={{ color: "var(--color-muted)" }}>
+              A good reading is 5 of every 7 right.{progress.fastTrack ? " Miss one or none and you move up right away!" : ""}
+            </span>
           </p>
         </>
       )}
