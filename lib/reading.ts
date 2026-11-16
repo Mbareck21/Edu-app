@@ -789,6 +789,30 @@ export function checkMcq(
 }
 
 /**
+ * A multiple choice with one sure right option, or null.
+ *
+ * An answer index out of range is recovered from the writer's own answer text
+ * when that names one option. With no sure key the question used to be asked
+ * as a typed one, scored against the single answer written for the key: he
+ * had to type an option he was never shown, word for word. Null tells the
+ * caller to drop the question instead.
+ */
+export function keyedMcq(
+  options: readonly string[],
+  answerIndex: number,
+  acceptable: readonly string[]
+): { options: string[]; answerIndex: number } | null {
+  let index = answerIndex;
+  if (index < 0 || index >= options.length) {
+    const answer = (acceptable[0] ?? "").trim().toLowerCase();
+    index = options.findIndex((o) => o.trim().toLowerCase() === answer);
+    if (index < 0) return null;
+  }
+  const checked = checkMcq(options, index, acceptable);
+  return checked.answerIndex < 0 ? null : checked;
+}
+
+/**
  * A log line when the right option is strictly the longest in most of a
  * passage's multiple-choice questions, or null. Shuffling already hides where
  * the answer sits, but a writer that pads the right one with detail hands him
@@ -857,6 +881,40 @@ export function pickArchived<T extends { generatedAt?: Date | string | null }>(
   const ready = archive.filter((a) => at(a) <= now - REUSE_AFTER_MS);
   ready.sort((a, b) => at(a) - at(b));
   return ready[0] ?? null;
+}
+
+/** A passage is a full reading from this many questions; fewer does not count. */
+export const FULL_READING_QUESTIONS = 3;
+
+/**
+ * The archived passage to serve when the writer cannot be reached, and where
+ * it came from: -1 for the list's own archive, else the index into `others`.
+ *
+ * Only the list's own archive was looked at, so a new list had nothing to
+ * fall back on: the Reading beat could not be done that day and the day could
+ * not be won. A full passage comes before a thin one, and his own list's
+ * before another's. `servable` says how many questions of a passage can still
+ * be asked.
+ */
+export function pickFallback<T extends { generatedAt?: Date | string | null }>(
+  own: readonly T[],
+  others: readonly (readonly T[])[],
+  now: number,
+  servable: (passage: T) => number
+): { passage: T; from: number } | null {
+  const from = new Map<T, number>();
+  for (const a of own) from.set(a, -1);
+  others.forEach((archive, i) => {
+    for (const a of archive) from.set(a, i);
+  });
+  const full = (a: T) => servable(a) >= FULL_READING_QUESTIONS;
+  const some = (a: T) => servable(a) > 0;
+  const pools = [own.filter(full), others.flat().filter(full), own.filter(some), others.flat().filter(some)];
+  for (const pool of pools) {
+    const passage = pickArchived(pool, now);
+    if (passage) return { passage, from: from.get(passage) ?? -1 };
+  }
+  return null;
 }
 
 // ── Reading part by part ──────────────────────────────────────────────────
