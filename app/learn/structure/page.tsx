@@ -5,6 +5,8 @@ import { requestSeed } from "@/components/ui/time";
 import { kidLocked, requireQuestBeat } from "@/lib/assigned-data";
 import { currentLearner } from "@/lib/auth";
 import { loadPlanProgress } from "@/lib/daily-plan-data";
+import { getProfile } from "@/lib/profile";
+import { structureLevelFrom } from "@/lib/text-structure";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,8 @@ export default async function StructurePage({
         learner={await currentLearner()}
         dayPlan={await loadPlanProgress("structure")}
         again={!(await kidLocked())}
+        // The harder passages, once his own finished sessions show he is ready.
+        level={structureLevelFrom((await getProfile()).activity)}
       />
     </>
   );

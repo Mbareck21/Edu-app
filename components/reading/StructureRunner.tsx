@@ -22,6 +22,7 @@ import {
   TEXT_STRUCTURES,
   findSignalWords,
   structureById,
+  type StructureLevel,
   type TextStructureId,
 } from "@/lib/text-structure";
 import { startStopwatch, type Stopwatch } from "@/lib/time-on-task";
@@ -35,6 +36,8 @@ export type StructureRunnerProps = {
   dayPlan?: PlanProgress;
   /** Offer "Again" when done. Off for a child: the beat again is points again (lib/assigned.ts). */
   again?: boolean;
+  /** 2 deals the harder passages, once he has mastered the first set. See structureLevel. */
+  level?: StructureLevel;
 };
 
 /**
@@ -128,6 +131,7 @@ function StructureRunnerInner({
   learner,
   dayPlan,
   again = true,
+  level = 1,
   saveKey,
   initial,
 }: StructureRunnerProps & { saveKey: string; initial: Saved | null }) {
@@ -143,8 +147,8 @@ function StructureRunnerInner({
   // walking the five in declaration order taught him the positions, not the
   // structures. See structureSession().
   const rounds = useMemo(
-    () => structureSession(mulberry32(seed % 2147483647), recent),
-    [seed, recent]
+    () => structureSession(mulberry32(seed % 2147483647), recent, 4, level),
+    [seed, recent, level]
   );
 
   // A saved run skips the intro: he has read it and was mid-lesson.
@@ -276,6 +280,15 @@ function StructureRunnerInner({
           Nonfiction is built in five shapes. Read each passage. Ask yourself:
           how is it built?
         </p>
+        {level === 2 ? (
+          <p
+            className="rounded-tile px-3 py-3 text-base font-bold"
+            style={{ background: "var(--color-gold-soft)", color: "var(--color-ink)" }}
+          >
+            You know the five shapes. These passages are longer, and the signal
+            words hide. Read the whole passage before you choose.
+          </p>
+        ) : null}
         <Card className="space-y-3">
           {TEXT_STRUCTURES.map((s) => (
             <div key={s.id} className="flex items-start gap-2">
@@ -299,7 +312,7 @@ function StructureRunnerInner({
             // Recorded as soon as they are dealt, not at the finish: a lesson
             // he walks away from still showed him its texts.
             const seen = readSeen(learner);
-            writeSeen(learner, rememberDealt(seen, structureSession(mulberry32(seed % 2147483647), seen)));
+            writeSeen(learner, rememberDealt(seen, structureSession(mulberry32(seed % 2147483647), seen, 4, level)));
             setRecent(seen);
             watch.current = startStopwatch();
             setPhase("play");

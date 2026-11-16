@@ -26,6 +26,9 @@
 
 import { shuffle } from "@/lib/math/rng";
 import type { Rng } from "@/lib/math/types";
+import { HARD_STRUCTURE_PASSAGES } from "@/lib/text-structure-hard";
+
+export { HARD_STRUCTURE_PASSAGES };
 
 export type TextStructureId =
   | "description"
@@ -501,9 +504,72 @@ export type StructureRound = {
   choices: StructureChoices;
 };
 
-/** Every passage written for one structure. */
-export function passagesFor(id: TextStructureId): StructurePassage[] {
-  return STRUCTURE_PASSAGES.filter((p) => p.structure === id);
+// ── Two levels ────────────────────────────────────────────────────────────
+//
+// Level 1 is the forty passages above, built on the teacher's frames. Level 2
+// is the harder forty in lib/text-structure-hard.ts. The lesson had one pool
+// and no level, and it was a daily beat: a child who named all six right every
+// day for weeks was dealt the same kind of passage the next day.
+
+export type StructureLevel = 1 | 2;
+
+/** A good session: 5 of the 6 rounds right. */
+export const STRUCTURE_UP_PCT = 80;
+/** Good sessions in a row that open level 2. */
+export const STRUCTURE_UP_RUN = 3;
+/** A failing session: 2 of 6 or fewer. */
+export const STRUCTURE_DOWN_PCT = 50;
+/** Failing level 2 sessions in a row that send him back to level 1. */
+export const STRUCTURE_DOWN_RUN = 2;
+
+/**
+ * The level his next session is dealt at, from the scores of his sessions so
+ * far, oldest first. Up after STRUCTURE_UP_RUN good ones in a row, down after
+ * STRUCTURE_DOWN_RUN failing ones in a row, and a session from before a move
+ * never counts toward the next one: the same shape as the reading ladder.
+ *
+ * Worked out from the log each time, not stored, so there is nothing to
+ * migrate and nothing to drift: the sessions he has already played place him.
+ */
+export function structureLevel(pcts: readonly number[]): StructureLevel {
+  let level: StructureLevel = 1;
+  let run: number[] = [];
+  for (const pct of pcts) {
+    run.push(pct);
+    if (level === 1 && run.length >= STRUCTURE_UP_RUN && run.slice(-STRUCTURE_UP_RUN).every((p) => p >= STRUCTURE_UP_PCT)) {
+      level = 2;
+      run = [];
+    } else if (
+      level === 2 &&
+      run.length >= STRUCTURE_DOWN_RUN &&
+      run.slice(-STRUCTURE_DOWN_RUN).every((p) => p < STRUCTURE_DOWN_PCT)
+    ) {
+      level = 1;
+      run = [];
+    }
+  }
+  return level;
+}
+
+/** The ref a text-structure session is logged under. */
+export const STRUCTURE_REF = "read:structure";
+
+/** structureLevel from the profile's activity log, which is newest first. */
+export function structureLevelFrom(
+  activity: readonly { ref: string; pct: number }[]
+): StructureLevel {
+  return structureLevel(
+    activity
+      .filter((a) => a.ref === STRUCTURE_REF)
+      .map((a) => a.pct)
+      .reverse()
+  );
+}
+
+/** Every passage written for one structure, at one level. */
+export function passagesFor(id: TextStructureId, level: StructureLevel = 1): StructurePassage[] {
+  const pool = level === 2 ? HARD_STRUCTURE_PASSAGES : STRUCTURE_PASSAGES;
+  return pool.filter((p) => p.structure === id);
 }
 
 /**
@@ -547,7 +613,9 @@ export function rememberDealt(
 export function structureSession(
   rng: Rng,
   recent: readonly string[] = [],
-  choiceCount = 4
+  choiceCount = 4,
+  /** 2 deals from the harder passages. See structureLevel. */
+  level: StructureLevel = 1
 ): StructureRound[] {
   // Where each id last shows up in `recent`; a passage not in it is -1, older
   // than anything seen.
@@ -560,12 +628,12 @@ export function structureSession(
   };
 
   // Every structure gets practised...
-  const chosen = STRUCTURE_IDS.map((id) => pick(passagesFor(id)));
+  const chosen = STRUCTURE_IDS.map((id) => pick(passagesFor(id, level)));
   // ...and one gets a second turn, on a different text where there is one.
   const encore = STRUCTURE_IDS[Math.min(STRUCTURE_IDS.length - 1, Math.floor(rng() * STRUCTURE_IDS.length))];
   const taken = new Set(chosen.map((p) => p.id));
-  const spare = passagesFor(encore).filter((p) => !taken.has(p.id));
-  chosen.push(pick(spare.length > 0 ? spare : passagesFor(encore)));
+  const spare = passagesFor(encore, level).filter((p) => !taken.has(p.id));
+  chosen.push(pick(spare.length > 0 ? spare : passagesFor(encore, level)));
 
   const rounds = chosen.map((passage) => ({
     passage,
