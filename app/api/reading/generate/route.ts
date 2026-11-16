@@ -17,7 +17,6 @@ import {
 import {
   MAX_GLOSSARY_ENTRIES,
   castFor,
-  checkMcq,
   clampLevel,
   countWords,
   MAX_PASSAGE_PARAGRAPHS,
@@ -31,7 +30,8 @@ import {
   type QuestionSpec,
   type StoryCast,
   ARCHIVE_MAX,
-  pickArchived,
+  keyedMcq,
+  pickFallback,
   planQuarter,
   tidyReading,
   maxReadingLevel,
@@ -40,10 +40,12 @@ import {
 import { PROFILE_KEY, READING_SEEN_MAX } from "@/lib/models/Profile";
 import {
   groq,
+  AI_CALL_TIMEOUT_MS,
   CLUE_MODEL,
   readingSystemPrompt,
   friendlyAiError,
   rateLimit,
+  rateLimitWaitMs,
   getClientIp,
 } from "@/lib/groq";
 import { sampleWords, shuffle } from "@/lib/session-sample";
@@ -356,6 +358,8 @@ Write the passage and the questions now. Strict JSON only.`;
   // The call itself failed, as opposed to the writing missing a target. A
   // second attempt cannot fix a rate limit or a bad key, so it is not made.
   let hardFail = false;
+  // Attempt 1 was refused by the per-minute limit and the wait was sat out.
+  let waited = false;
   let correction = "";
 
   // The route is declared maxDuration = 60. A second attempt started after
@@ -380,7 +384,9 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   for (let attempt = 1; attempt <= 2 && !reading; attempt++) {
     if (attempt === 2 && hardFail) break;
     const spent = Date.now() - startedAt;
-    if (attempt === 2 && spent * 2 > BUDGET_MS) {
+    // After a rate-limit wait attempt 1 never ran, so its time says nothing
+    // about how long a call takes: allow for the longest one.
+    if (attempt === 2 && spent + (waited ? AI_CALL_TIMEOUT_MS : spent) > BUDGET_MS) {
       console.warn(
         `[reading/generate] attempt 1 took ${Math.round(spent / 1000)}s; no room for a second`
       );
@@ -501,6 +507,21 @@ Your last answer was not valid JSON — it ran out of room before the closing br
       // billing link the day the daily token budget ran out.
       lastErr = friendlyAiError(err, "The story would not come. Tap it again.");
       shown = lastErr;
+      // The per-minute limit: one reading takes most of a minute's tokens, so
+      // when both boys start theirs together the second is refused. Groq says
+      // how long until it would pass. Wait that out when a call still fits in
+      // what is left; a rate limit used to end the request at once.
+      const wait = rateLimitWaitMs(err);
+      if (
+        attempt === 1 &&
+        wait !== null &&
+        Date.now() - startedAt + wait + AI_CALL_TIMEOUT_MS <= BUDGET_MS
+      ) {
+        console.warn(`[reading/generate] rate limited; trying again in ${Math.ceil(wait / 1000)}s`);
+        await new Promise((resolve) => setTimeout(resolve, wait + 250));
+        waited = true;
+        continue;
+      }
       hardFail = true;
     }
   }
@@ -520,9 +541,13 @@ Your last answer was not valid JSON — it ran out of room before the closing br
 
   if (!reading) {
     // The writer is down or the day's budget is spent. Before handing him an
-    // error, look for a passage from this list he has not seen for a week: an
-    // old one beats none, and the Groq free tier runs out on a busy day.
+    // error, look for a passage he has not seen for a week: an old one beats
+    // none, and the Groq free tier runs out on a busy day. This list's archive
+    // first, then any other list's: a new list has none of its own.
     const archive = archiveOf(doc);
+    const others = (await WordList.find({ _id: { $ne: doc._id }, "readingArchive.0": { $exists: true } })
+      .select("readingArchive")
+      .lean()) as unknown as { _id: unknown; readingArchive?: Archived[] }[];
     // Passages stored before the circular check get the same filter now. One
     // left with nothing to ask is skipped: served, it opened on an empty
     // questions screen.
@@ -533,12 +558,22 @@ Your last answer was not valid JSON — it ran out of room before the closing br
     };
     // Three questions or more first: three of Nour's readings came back from
     // here with two, too few for the finish bonus or the reading to count.
-    const full = archive.filter((a) => servable(a).length >= 3);
-    const old = pickArchived(
-      full.length > 0 ? full : archive.filter((a) => servable(a).length > 0),
-      Date.now()
+    const pick = pickFallback(
+      archive,
+      others.map((l) => l.readingArchive ?? []),
+      Date.now(),
+      (a) => servable(a).length
     );
-    if (old) {
+    if (pick) {
+      const old = pick.passage;
+      // It moves to this list, so the list it came from does not hand it out
+      // again tomorrow: it is archived here once he has read it.
+      if (pick.from >= 0) {
+        await WordList.updateOne(
+          { _id: others[pick.from]._id },
+          { $pull: { readingArchive: { generatedAt: old.generatedAt, title: old.title } } }
+        );
+      }
       const kept = archive.filter((a) => a !== old);
       if (unfinished) kept.push(unfinished);
       doc.set("currentReading", {
@@ -571,41 +606,27 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   // slot, lost its options, and he had to type a whole summary sentence. Then
   // each question is taken as what the writer actually made.
   const aligned = reading.questions.length === plan.length;
+  // Multiple choices with no sure key, by index. See keyedMcq.
+  const lostKey = new Set<number>();
   const questions = reading.questions.map((q, i) => {
     const spec = aligned ? plan[i] : undefined;
     let options = q.options.filter((o) => o.trim());
     let wantsMcq = spec ? spec.format === "mcq" : options.length > 0;
     if (!wantsMcq) options = [];
-    let answerIndex = wantsMcq ? q.answerIndex : -1;
-    if (wantsMcq && (answerIndex < 0 || answerIndex >= options.length)) {
-      // Fall back to matching the model's own "acceptable" text.
-      const guess = options.findIndex(
-        (o) => o.trim().toLowerCase() === (q.acceptable[0] ?? "").trim().toLowerCase()
-      );
-      if (guess >= 0) {
-        answerIndex = guess;
-      } else {
-        // We do not know which option is right. Crowning option 0 would mark
-        // his correct pick wrong and then show him a distractor as "the
-        // answer". Ask it as an open question instead — judgeAnswer scores
-        // that against `acceptable`, which is the part we do trust.
-        wantsMcq = false;
-        options = [];
-        answerIndex = -1;
-      }
-    }
+    let answerIndex = -1;
     if (wantsMcq) {
-      // Exactly one right option, or it is not a multiple choice. A distractor
-      // that is also in the model's own acceptable list would mark a right
-      // pick wrong — see checkMcq.
-      const checked = checkMcq(options, answerIndex, q.acceptable);
-      if (checked.answerIndex < 0) {
+      // Exactly one right option, or it is not served. Crowning option 0
+      // would mark his correct pick wrong and then show him a distractor as
+      // "the answer"; asked as a typed question it had one accepted answer,
+      // an option he was never shown.
+      const keyed = keyedMcq(options, q.answerIndex, q.acceptable);
+      if (keyed) {
+        options = keyed.options;
+        answerIndex = keyed.answerIndex;
+      } else {
+        lostKey.add(i);
         wantsMcq = false;
         options = [];
-        answerIndex = -1;
-      } else {
-        options = checked.options;
-        answerIndex = checked.answerIndex;
       }
     }
     const hints = q.hints.slice(0, 2);
@@ -632,6 +653,7 @@ Your last answer was not valid JSON — it ran out of room before the closing br
   // does not have, after the retry is not served. It is dropped after the
   // plan has set formats and types, so the rest keep theirs.
   const dropped = droppedQuestions(questions, passage);
+  for (const i of lostKey) if (!dropped.has(i)) dropped.set(i, `question ${i + 1} has no sure answer key`);
   if (dropped.size > 0) {
     console.warn(`[reading/generate] dropped ${dropped.size} question(s): ${[...dropped.values()].join("; ")}`);
   }

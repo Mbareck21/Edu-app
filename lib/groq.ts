@@ -1,6 +1,9 @@
 import Groq from "groq-sdk";
 import type { Grade } from "@/lib/grade";
 
+/** The longest one call to the writer can run before it is cut off. */
+export const AI_CALL_TIMEOUT_MS = 25_000;
+
 let _client: Groq | null = null;
 export function groq(): Groq {
   if (!_client) {
@@ -12,7 +15,7 @@ export function groq(): Groq {
     // 429 it will sleep out. That outlived every route's time limit (transcribe
     // has 30s), and stacked under the reading route's own retry. One try each,
     // cut off in time for the route to answer him itself.
-    _client = new Groq({ apiKey, timeout: 25_000, maxRetries: 0 });
+    _client = new Groq({ apiKey, timeout: AI_CALL_TIMEOUT_MS, maxRetries: 0 });
   }
   return _client;
 }
@@ -468,6 +471,26 @@ export function friendlyAiError(err: unknown, fallback: string): string {
     return "That took too long. Tap it again.";
   }
   return fallback;
+}
+
+/**
+ * How long a per-minute rate limit asks us to wait, in ms, or null when the
+ * failure is anything else: the daily budget, another status, or a 429 that
+ * names no time. Groq puts the wait in the text ("Please try again in 5.2s")
+ * and in the retry-after header.
+ */
+export function rateLimitWaitMs(err: unknown): number | null {
+  if (typeof err !== "object" || err === null) return null;
+  const { status, headers } = err as { status?: unknown; headers?: unknown };
+  const raw = err instanceof Error ? err.message : "";
+  if (Number(status) !== 429 || /per day|\((?:TPD|RPD)\)|quota/i.test(raw)) return null;
+  const m = raw.match(/try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?(?:(\d+)ms)?/i);
+  if (m && m.slice(1).some(Boolean)) {
+    const [h, min, s, ms] = m.slice(1).map((v) => Number(v) || 0);
+    return Math.round(h * 3_600_000 + min * 60_000 + s * 1000 + ms);
+  }
+  const after = headers instanceof Headers ? Number(headers.get("retry-after")) : NaN;
+  return Number.isFinite(after) && after > 0 ? Math.round(after * 1000) : null;
 }
 
 export function getClientIp(req: Request): string {
