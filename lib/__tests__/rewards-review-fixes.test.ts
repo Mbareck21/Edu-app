@@ -115,27 +115,27 @@ test("a math session of one or two answers is not a math game for Math Star", ()
 test("a reading sent late does not wipe the good readings at his new level", () => {
   let p: ProfileState = { ...emptyProfile(), reading: { level: 3, recent: [], since: "2026-10-01T15:00:00.000Z" } };
   for (const d of ["2026-10-07T22:00:00Z", "2026-10-08T22:00:00Z", "2026-10-09T22:00:00Z"]) {
-    p = applyReading(p, { level: 3, pct: 100, wordsCount: 300 }, when(d));
+    p = applyReading(p, { level: 3, pct: 80, wordsCount: 300 }, when(d));
   }
   assert.equal(p.reading.level, 4);
   for (const d of ["2026-10-10T22:00:00Z", "2026-10-11T22:00:00Z"]) {
-    p = applyReading(p, { level: 4, pct: 100, wordsCount: 300 }, when(d));
+    p = applyReading(p, { level: 4, pct: 80, wordsCount: 300 }, when(d));
   }
   assert.equal(readingProgress(p.reading, new Date("2026-10-11T23:00:00Z")).goodInARow, 2);
   // Played on Oct 6 at level 3, queued on the phone, sent on Oct 12.
-  p = applyReading(p, { level: 3, pct: 100, wordsCount: 300 }, when("2026-10-06T22:00:00Z"));
+  p = applyReading(p, { level: 3, pct: 80, wordsCount: 300 }, when("2026-10-06T22:00:00Z"));
   assert.equal(readingProgress(p.reading, new Date("2026-10-12T23:00:00Z")).goodInARow, 2);
   assert.deepEqual(
     p.reading.recent.map((r) => r.at),
     [...p.reading.recent.map((r) => r.at)].sort().reverse(),
     "newest first, by when it was read"
   );
-  p = applyReading(p, { level: 4, pct: 100, wordsCount: 300 }, when("2026-10-12T22:30:00Z"));
+  p = applyReading(p, { level: 4, pct: 80, wordsCount: 300 }, when("2026-10-12T22:30:00Z"));
   assert.equal(p.reading.level, 5);
 });
 
 test("the reading badge checks a late reading at the time it was read, as it is stored", () => {
-  const good = (at: string) => ({ at, level: 4, pct: 100, wordsCount: 300 });
+  const good = (at: string) => ({ at, level: 4, pct: 80, wordsCount: 300 });
   const p: ProfileState = {
     ...emptyProfile(),
     reading: {
@@ -144,10 +144,10 @@ test("the reading badge checks a late reading at the time it was read, as it is 
       since: "2026-08-19T12:00:00.000Z",
     },
   };
-  const reading = { level: 4, pct: 100, wordsCount: 300 };
+  const reading = { level: 4, pct: 80, wordsCount: 300 };
   // Read at 10:00, before he reached level 4 at noon, and sent later.
   const late = when("2026-08-19T10:00:00Z");
-  const r: SessionResult = { kind: "reading", ref: "read:l1@a", answered: 4, correct: 4, fastCount: 0, ms: 480_000, perfect: true, reading };
+  const r: SessionResult = { kind: "reading", ref: "read:l1@a", answered: 5, correct: 4, fastCount: 0, ms: 480_000, perfect: false, reading };
   const { profile, gained } = applySession(p, r, late);
   const stored = applyReading(profile, reading, late);
   assert.equal(stored.reading.level, 4);
