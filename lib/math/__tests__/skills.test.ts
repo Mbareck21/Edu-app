@@ -27,6 +27,8 @@ const MAX_ANSWER: Record<MathSkillId, number> = {
   "mul-facts": 144,
   "mul-multi": 100000,
   "word-problems": 1000,
+  // 12 kilometers are 12,000 meters.
+  measurement: 13000,
   division: 5000,
   "factors-multiples": 144,
   fractions: 200,
@@ -48,6 +50,8 @@ const MAX_ANSWER_G5: Record<MathSkillId, number> = {
   "mul-facts": 144_000,
   "mul-multi": 1_000_000,
   "word-problems": 5000,
+  // 5 hours are 18,000 seconds.
+  measurement: 20_000,
   decimals: 10_000,
   geometry: 2000,
   shapes: 360,
@@ -124,7 +128,7 @@ function checkQuestion(q: MathQuestion, id: MathSkillId, level: Level = 1): void
 }
 
 test("registry is complete and display-ready", () => {
-  assert.equal(MATH_SKILLS.length, 15);
+  assert.equal(MATH_SKILLS.length, 16);
   assert.equal(new Set(MATH_SKILL_IDS).size, MATH_SKILLS.length);
   for (const skill of MATH_SKILLS) {
     assert.ok(skill.name.trim().split(/\s+/).length <= 2, `${skill.id}: name is more than 2 words`);

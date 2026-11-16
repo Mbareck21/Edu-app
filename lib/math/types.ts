@@ -8,6 +8,7 @@ export type MathSkillId =
   | "mul-facts"
   | "mul-multi"
   | "word-problems"
+  | "measurement"
   | "division"
   | "factors-multiples"
   | "fractions"

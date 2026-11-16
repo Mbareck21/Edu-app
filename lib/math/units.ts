@@ -40,7 +40,7 @@ export const MATH_UNITS: readonly MathUnit[] = [
     start: quarterDay("Q2", 19),
     end: quarterDay("Q2", 43),
     standards: ["4.CAR.3", "4.CAR.4"],
-    skills: ["division", "factors-multiples"],
+    skills: ["measurement", "division", "factors-multiples"],
   },
   {
     id: 4,
