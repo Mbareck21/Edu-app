@@ -65,7 +65,7 @@ export const IREADY_LESSONS: readonly IreadyLesson[] = [
   // Unit 3 — FPS Unit 3 "Multiply & Divide Multi-Digit"
   { lesson: 11, title: "Multiply by One-Digit Numbers", ireadyUnit: 3, fpsUnit: 3, standards: ["4.NBT.B.5"], skills: ["mul-multi"] },
   { lesson: 12, title: "Multiply by Two-Digit Numbers", ireadyUnit: 3, fpsUnit: 3, standards: ["4.NBT.B.5"], skills: ["mul-multi"] },
-  { lesson: 13, title: "Use Multiplication to Convert Measurements", ireadyUnit: 3, fpsUnit: 3, standards: ["4.MD.A.1", "4.MD.A.2"], skills: ["word-problems"] },
+  { lesson: 13, title: "Use Multiplication to Convert Measurements", ireadyUnit: 3, fpsUnit: 3, standards: ["4.MD.A.1", "4.MD.A.2"], skills: ["measurement"] },
   { lesson: 14, title: "Divide Three-Digit Numbers", ireadyUnit: 3, fpsUnit: 3, standards: ["4.NBT.B.6"], skills: ["division"] },
   { lesson: 15, title: "Divide Four-Digit Numbers", ireadyUnit: 3, fpsUnit: 3, standards: ["4.NBT.B.6"], skills: ["division"] },
   { lesson: 16, title: "Find Perimeter and Area", ireadyUnit: 3, fpsUnit: 3, standards: ["4.MD.A.3"], skills: ["geometry"] },
@@ -85,7 +85,7 @@ export const IREADY_LESSONS: readonly IreadyLesson[] = [
   { lesson: 26, title: "Relate Decimals and Fractions", ireadyUnit: 4, fpsUnit: 5, standards: ["4.NF.C.6"], skills: ["decimals"] },
   { lesson: 27, title: "Compare Decimals", ireadyUnit: 4, fpsUnit: 5, standards: ["4.NF.C.7"], skills: ["decimals"] },
   { lesson: 28, title: "Problems About Time and Money", ireadyUnit: 4, fpsUnit: 5, standards: ["4.MD.A.2"], skills: ["decimals", "word-problems"] },
-  { lesson: 29, title: "Problems About Length, Liquid Volume, Mass, and Weight", ireadyUnit: 4, fpsUnit: 5, standards: ["4.MD.A.1", "4.MD.A.2"], skills: ["word-problems"] },
+  { lesson: 29, title: "Problems About Length, Liquid Volume, Mass, and Weight", ireadyUnit: 4, fpsUnit: 5, standards: ["4.MD.A.1", "4.MD.A.2"], skills: ["measurement", "word-problems"] },
 
   // Unit 5 — FPS Unit 6 "Angles & Plane Figures"
   { lesson: 30, title: "Points, Lines, Rays, and Angles", ireadyUnit: 5, fpsUnit: 6, standards: ["4.G.A.1"], skills: ["geometry", "shapes"] },

@@ -86,9 +86,34 @@ export function gradeAt(at: Date | string | null | undefined): Grade | null {
   return at ? gradeOn(todayKey(new Date(at))) : null;
 }
 
+/**
+ * The stored level with a clean round already banked counted in.
+ *
+ * Below the class level one round at LEVEL_UP_PCT moves a skill up (upRunFor),
+ * but only a round played after that rule came in was ever looked at. A skill
+ * whose newest round at its level was clean, played under the old
+ * three-in-a-row rule or left there by a drill, sat a level low until one more
+ * round repeated the proof. That round is the evidence: it counts now, once,
+ * and the window clears as on any level change.
+ */
+export function settleLevel(
+  level: number,
+  recentPcts: readonly number[]
+): { level: number; recentPcts: number[] } {
+  const cur = Math.min(MAX_MATH_LEVEL, Math.max(1, level));
+  if (cur < CLASS_LEVEL && recentPcts.length > 0 && recentPcts[0] >= LEVEL_UP_PCT) {
+    return { level: cur + 1, recentPcts: [] };
+  }
+  return { level: cur, recentPcts: [...recentPcts] };
+}
+
 /** The level a skill is played at on `today`, with the Grade 5 floor; see levelForGrade. */
-export function servedLevel(p: Pick<ClientMathProgress, "level" | "lastAt"> | null, today: string): Level {
-  return levelForGrade(p?.level ?? 1, gradeOn(today), gradeAt(p?.lastAt));
+export function servedLevel(
+  p: Pick<ClientMathProgress, "level" | "lastAt"> & { recentPcts?: readonly number[] } | null,
+  today: string
+): Level {
+  const level = settleLevel(p?.level ?? 1, p?.recentPcts ?? []).level;
+  return levelForGrade(level, gradeOn(today), gradeAt(p?.lastAt));
 }
 
 /**
@@ -160,8 +185,11 @@ export function applyRound(
   today: string
 ): { level: number; recentPcts: number[] } {
   const grade = gradeOn(today);
-  const level = levelForGrade(stored.level, grade, gradeAt(stored.lastAt));
-  const recentPcts = level === stored.level ? [...stored.recentPcts] : [];
+  // The same settling servedLevel did before the round was dealt, so the
+  // level it was played at is the level it is scored at.
+  const settled = settleLevel(stored.level, stored.recentPcts);
+  const level = levelForGrade(settled.level, grade, gradeAt(stored.lastAt));
+  const recentPcts = level === settled.level ? settled.recentPcts : [];
   if (!movesLevel(run)) return { level, recentPcts };
   const scored = scoreRound(level, recentPcts, sessionPct(run), run.playedLevel);
   return { level: levelForGrade(scored.level, grade, grade), recentPcts: scored.recentPcts };

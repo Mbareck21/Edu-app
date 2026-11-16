@@ -2412,6 +2412,236 @@ function genWordProblem(level: Level, rng: Rng): MathQuestion {
   };
 }
 
+// ---------------------------------------------------------------- measurement
+//
+// iReady Lesson 13, "Use Multiplication to Convert Measurements" (4.MD.A.1,
+// 4.MD.A.2), and Lesson 29. The lesson used to map to word problems, which
+// asks no conversion at all, so for that week the day's Math was off his
+// class's lesson. Levels: 1 gives the fact and asks one conversion; 2 asks the
+// common facts from memory and mixed measures (4 feet 7 inches); 3 is the
+// two-step story. Grade 5 (5.MD.A.1) converts back up and chains two facts.
+
+type Conversion = { big: string; bigs: string; small: string; per: number };
+
+const METRIC: readonly Conversion[] = [
+  { big: "meter", bigs: "meters", small: "centimeters", per: 100 },
+  { big: "kilometer", bigs: "kilometers", small: "meters", per: 1000 },
+  { big: "kilogram", bigs: "kilograms", small: "grams", per: 1000 },
+  { big: "liter", bigs: "liters", small: "milliliters", per: 1000 },
+];
+
+const TIME: readonly Conversion[] = [
+  { big: "hour", bigs: "hours", small: "minutes", per: 60 },
+  { big: "minute", bigs: "minutes", small: "seconds", per: 60 },
+  { big: "week", bigs: "weeks", small: "days", per: 7 },
+  { big: "day", bigs: "days", small: "hours", per: 24 },
+];
+
+const CUSTOMARY: readonly Conversion[] = [
+  { big: "foot", bigs: "feet", small: "inches", per: 12 },
+  { big: "yard", bigs: "yards", small: "feet", per: 3 },
+  { big: "pound", bigs: "pounds", small: "ounces", per: 16 },
+  { big: "gallon", bigs: "gallons", small: "quarts", per: 4 },
+];
+
+/** "1 foot = 12 inches." */
+function fact(c: Conversion): string {
+  return `1 ${c.big} = ${group(c.per)} ${c.small}.`;
+}
+
+/** One conversion down, bigger unit to smaller. `given` puts the fact in the prompt. */
+function convertDown(rng: Rng, c: Conversion, lo: number, hi: number, given: boolean): MathQuestion {
+  const n = randInt(rng, lo, hi);
+  const ask = `How many ${c.small} are in ${n} ${c.bigs}?`;
+  return {
+    prompt: given ? `${fact(c)} ${ask}` : ask,
+    answer: n * c.per,
+    visual: NONE,
+    how: `${fact(c)} ${n} × ${group(c.per)} = ${group(n * c.per)}`,
+    op: "×",
+    a: n,
+    b: c.per,
+  };
+}
+
+/** "4 feet and 7 inches": convert the big part, then add the small part. */
+function convertMixed(rng: Rng, c: Conversion, given: boolean): MathQuestion {
+  const n = randInt(rng, 2, 9);
+  const step = c.per >= 100 ? 5 : 1;
+  const extra = randInt(rng, 1, Math.floor((c.per - 1) / step)) * step;
+  const ask = `${n} ${c.bigs} and ${extra} ${c.small} is how many ${c.small}?`;
+  return {
+    prompt: given ? `${fact(c)} ${ask}` : ask,
+    answer: n * c.per + extra,
+    visual: NONE,
+    how: `${n} × ${group(c.per)} = ${group(n * c.per)}. ${group(n * c.per)} + ${extra} = ${group(n * c.per + extra)}`,
+    op: "+",
+    a: n * c.per,
+    b: extra,
+  };
+}
+
+/** Two steps: convert, then add, take away or share. */
+function convertStory(rng: Rng): MathQuestion {
+  const kid = pick(rng, KIDS);
+  const roll = randInt(rng, 1, 5);
+  if (roll === 1) {
+    const n = randInt(rng, 2, 9);
+    const cut = randInt(rng, 3, 19) * 5;
+    return {
+      prompt: `A ${n}-meter rope loses ${cut} centimeters. How many centimeters are left?`,
+      answer: n * 100 - cut,
+      visual: NONE,
+      how: `${n} meters = ${n * 100} centimeters. ${n * 100} - ${cut} = ${n * 100 - cut}`,
+      op: "-",
+      a: n * 100,
+      b: cut,
+    };
+  }
+  if (roll === 2) {
+    const n = randInt(rng, 2, 9);
+    const more = randInt(rng, 2, 19) * 50;
+    return {
+      prompt: `${kid.name} walks ${n} kilometers, then ${more} meters more. How many meters in all?`,
+      answer: n * 1000 + more,
+      visual: NONE,
+      how: `${n} kilometers = ${group(n * 1000)} meters. ${group(n * 1000)} + ${more} = ${group(n * 1000 + more)}`,
+      op: "+",
+      a: n * 1000,
+      b: more,
+    };
+  }
+  if (roll === 3) {
+    const n = randInt(rng, 2, 9);
+    const cup = pick(rng, [200, 250, 500]);
+    return {
+      prompt: `A jug holds ${n} liters. A cup holds ${cup} milliliters. How many cups fill the jug?`,
+      answer: (n * 1000) / cup,
+      visual: NONE,
+      how: `${n} liters = ${group(n * 1000)} milliliters. ${group(n * 1000)} ÷ ${cup} = ${(n * 1000) / cup}`,
+      op: "÷",
+      a: n * 1000,
+      b: cup,
+    };
+  }
+  if (roll === 4) {
+    const h = randInt(rng, 2, 5);
+    const m = randInt(rng, 1, 11) * 5;
+    return {
+      prompt: `A movie is ${h} hours and ${m} minutes long. How many minutes is that?`,
+      answer: h * 60 + m,
+      visual: NONE,
+      how: `${h} × 60 = ${h * 60} minutes. ${h * 60} + ${m} = ${h * 60 + m}`,
+      op: "+",
+      a: h * 60,
+      b: m,
+    };
+  }
+  const n = randInt(rng, 2, 9);
+  const more = randInt(rng, 2, 19) * 50;
+  return {
+    prompt: `A bag holds ${n} kilograms of rice and ${more} grams more. How many grams in all?`,
+    answer: n * 1000 + more,
+    visual: NONE,
+    how: `${n} kilograms = ${group(n * 1000)} grams. ${group(n * 1000)} + ${more} = ${group(n * 1000 + more)}`,
+    op: "+",
+    a: n * 1000,
+    b: more,
+  };
+}
+
+/** Grade 5: back up to the bigger unit (4), two facts in a row and bigger stories (5). */
+function genMeasurementG5(level: Level, rng: Rng): MathQuestion {
+  const kid = pick(rng, KIDS);
+  const roll = randInt(rng, 1, 3);
+  if (level === 4) {
+    if (roll <= 2) {
+      const c = pick(rng, roll === 1 ? METRIC : [...TIME, ...CUSTOMARY]);
+      const n = randInt(rng, 2, 9);
+      return {
+        prompt: `How many ${c.bigs} are in ${group(n * c.per)} ${c.small}?`,
+        answer: n,
+        visual: NONE,
+        how: `${group(c.per)} ${c.small} = 1 ${c.big}. ${group(n * c.per)} ÷ ${group(c.per)} = ${n}`,
+        op: "÷",
+        a: n * c.per,
+        b: c.per,
+      };
+    }
+    const km = randInt(rng, 2, 9);
+    const run = randInt(rng, 2, km * 20 - 2) * 50;
+    return {
+      prompt: `A race is ${km} kilometers. ${kid.name} has run ${group(run)} meters. How many meters are left?`,
+      answer: km * 1000 - run,
+      visual: NONE,
+      how: `${km} kilometers = ${group(km * 1000)} meters. ${group(km * 1000)} - ${group(run)} = ${group(km * 1000 - run)}`,
+      op: "-",
+      a: km * 1000,
+      b: run,
+    };
+  }
+  if (roll === 1) {
+    const chain = pick(rng, [
+      { big: "yards", mid: "feet", small: "inches", first: 3, second: 12 },
+      { big: "gallons", mid: "quarts", small: "pints", first: 4, second: 2 },
+      { big: "hours", mid: "minutes", small: "seconds", first: 60, second: 60 },
+      { big: "days", mid: "hours", small: "minutes", first: 24, second: 60 },
+    ]);
+    const n = randInt(rng, 2, chain.first >= 24 ? 5 : 9);
+    const mid = n * chain.first;
+    return {
+      prompt: `How many ${chain.small} are in ${n} ${chain.big}?`,
+      answer: mid * chain.second,
+      visual: NONE,
+      how: `${n} ${chain.big} = ${mid} ${chain.mid}. ${mid} × ${chain.second} = ${group(mid * chain.second)}`,
+      op: "×",
+      a: mid,
+      b: chain.second,
+    };
+  }
+  if (roll === 2) {
+    const each = pick(rng, [250, 500, 750, 1500]);
+    const days = randInt(rng, 1, 3) * 4;
+    return {
+      prompt: `${kid.name} runs ${group(each)} meters a day for ${days} days. How many kilometers is that?`,
+      answer: (each * days) / 1000,
+      visual: NONE,
+      how: `${days} × ${group(each)} = ${group(each * days)} meters. ${group(each * days)} ÷ 1,000 = ${(each * days) / 1000}`,
+      op: "÷",
+      a: each * days,
+      b: 1000,
+    };
+  }
+  const feet = randInt(rng, 2, 12);
+  const piece = pick(rng, [3, 4, 6]);
+  return {
+    prompt: `A board is ${feet} feet long. It is cut into ${piece}-inch pieces. How many pieces?`,
+    answer: (feet * 12) / piece,
+    visual: NONE,
+    how: `${feet} feet = ${feet * 12} inches. ${feet * 12} ÷ ${piece} = ${(feet * 12) / piece}`,
+    op: "÷",
+    a: feet * 12,
+    b: piece,
+  };
+}
+
+function genMeasurement(level: Level, rng: Rng): MathQuestion {
+  if (level >= 4) return genMeasurementG5(level, rng);
+  if (level === 1) {
+    // The fact is given: the lesson is the multiplying, not the memory.
+    const c = pick(rng, [...METRIC, TIME[0], TIME[2], CUSTOMARY[0], CUSTOMARY[1]]);
+    return convertDown(rng, c, 2, c.per >= 60 && c.per < 100 ? 5 : 9, true);
+  }
+  if (level === 2) {
+    const roll = randInt(rng, 1, 3);
+    if (roll === 1) return convertDown(rng, pick(rng, [...METRIC, TIME[0], TIME[2]]), 3, 12, false);
+    if (roll === 2) return convertDown(rng, pick(rng, [...CUSTOMARY, TIME[1], TIME[3]]), 2, 9, true);
+    const c = pick(rng, [METRIC[0], METRIC[1], CUSTOMARY[0], TIME[0]]);
+    return convertMixed(rng, c, c === CUSTOMARY[0]);
+  }
+  return convertStory(rng);
+}
+
 // ------------------------------------------------------------------- registry
 
 /** Ordered the way the school year teaches them (see MATH_UNITS). */
@@ -2487,6 +2717,18 @@ export const MATH_SKILLS: readonly MathSkill[] = [
     unit: 2,
     standards: ["4.CAR.8"],
     generate: genWordProblem,
+  },
+  {
+    id: "measurement",
+    name: "Measurement",
+    blurb: "Change big units into small ones.",
+    grade: 4,
+    color: "purple",
+    unit: 3,
+    // iReady Lessons 13 and 29 (4.MD.A.1, 4.MD.A.2); the FPS report card
+    // lists no separate code for converting units, so none is claimed here.
+    standards: [],
+    generate: genMeasurement,
   },
   {
     id: "division",
