@@ -20,7 +20,7 @@ import {
   type MathSkill,
 } from "@/lib/math";
 import {
-  LEVEL_UP_RUN,
+  upRunFor,
   MAX_MATH_LEVEL,
   cleanRounds,
   servedLevel,
@@ -38,7 +38,7 @@ type Stat = {
   played: boolean;
   /** Best recent score at this level; null right after the level moves. */
   best: number | null;
-  /** Rounds at 90%+ in a row, out of LEVEL_UP_RUN. */
+  /** Rounds at 90%+ in a row, toward upRunFor(level). */
   clean: number;
 };
 
@@ -105,12 +105,14 @@ function SkillCard({
             </span>
           </div>
           {/* Repeating a skill is fine, but he should be able to see where the
-              repeating leads. LEVEL_UP_RUN clean rounds move him up a level. */}
+              repeating leads: the clean rounds that move him up a level. */}
           {stat.level < MAX_MATH_LEVEL && stat.played ? (
             <p className="mt-1.5 text-xs font-bold" style={{ color: "var(--color-purple)" }}>
-              {stat.clean >= LEVEL_UP_RUN
+              {stat.clean >= upRunFor(stat.level)
                 ? "Ready to move up."
-                : `${stat.clean} of ${LEVEL_UP_RUN} clean rounds to level ${stat.level + 1}`}
+                : upRunFor(stat.level) === 1
+                  ? `One clean round moves you to level ${stat.level + 1}`
+                  : `${stat.clean} of ${upRunFor(stat.level)} clean rounds to level ${stat.level + 1}`}
             </p>
           ) : null}
         </div>

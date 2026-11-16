@@ -319,7 +319,9 @@ export function focusFor(report: SchoolReport | null, today: string): SchoolFocu
     MAX_CATCH_UP
   );
   if (mathCatchUp.length > 0) {
-    reasons.push(`Math: every other day, Today's Math is ${mathCatchUp.map(skillName).join(", ")} instead of the class lesson.`);
+    reasons.push(
+      `Math: every other day, Today's Math is ${mathCatchUp.map(skillName).join(", ")} instead of the class lesson, until he is past level 3 on it.`
+    );
   }
 
   const newWordsExtras: SchoolItemKind[] = [];
