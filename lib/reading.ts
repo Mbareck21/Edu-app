@@ -95,6 +95,21 @@ export function levelAtGrade(): number {
   return MAX_READING_LEVEL;
 }
 
+/**
+ * The school grade whose everyday words a passage at this level is written
+ * in, for the writer's prompt. It follows the level's Lexile target: Grade 4
+ * words start where the texts enter the Grade 4 band.
+ *
+ * The prompt said "common Grade 2-3 English" at every level, so a level 8
+ * passage was a level 1 passage with more words in it: longer, not harder.
+ */
+export function wordGradeFor(rawLevel: number): string {
+  const lexile = lexileForLevel(rawLevel);
+  if (lexile < 600) return "Grade 2-3";
+  if (lexile < GRADE4_LEXILE.min) return "Grade 3";
+  return lexile < 980 ? "Grade 4" : "Grade 5";
+}
+
 // ── Level parameters (plan §"Research-driven adjustments" item 8) ──────────
 
 export type ReadingParams = {
@@ -869,17 +884,23 @@ export function readingWordsToAdd(
 export const REUSE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The oldest archived passage he has not seen for a week, or null. Used when
- * the writer cannot be reached: an old passage beats an error, but one from
+ * An archived passage he has not seen for a week, or null. Used when the
+ * writer cannot be reached: an old passage beats an error, but one from
  * yesterday would just be yesterday's again.
+ *
+ * With his reading `level`, the passage nearest it, then the oldest. The
+ * oldest alone is the easiest one he ever read, and a reading below his level
+ * does not count on the ladder: a day the writer is down was a day lost.
  */
-export function pickArchived<T extends { generatedAt?: Date | string | null }>(
+export function pickArchived<T extends { generatedAt?: Date | string | null; level?: unknown }>(
   archive: readonly T[],
-  now: number
+  now: number,
+  level?: number
 ): T | null {
   const at = (a: T) => (a.generatedAt ? new Date(a.generatedAt).getTime() : 0);
+  const gap = (a: T) => (level === undefined ? 0 : Math.abs((Number(a.level) || 1) - level));
   const ready = archive.filter((a) => at(a) <= now - REUSE_AFTER_MS);
-  ready.sort((a, b) => at(a) - at(b));
+  ready.sort((a, b) => gap(a) - gap(b) || at(a) - at(b));
   return ready[0] ?? null;
 }
 
@@ -894,13 +915,14 @@ export const FULL_READING_QUESTIONS = 3;
  * fall back on: the Reading beat could not be done that day and the day could
  * not be won. A full passage comes before a thin one, and his own list's
  * before another's. `servable` says how many questions of a passage can still
- * be asked.
+ * be asked, and `level` is his reading level (see pickArchived).
  */
-export function pickFallback<T extends { generatedAt?: Date | string | null }>(
+export function pickFallback<T extends { generatedAt?: Date | string | null; level?: unknown }>(
   own: readonly T[],
   others: readonly (readonly T[])[],
   now: number,
-  servable: (passage: T) => number
+  servable: (passage: T) => number,
+  level?: number
 ): { passage: T; from: number } | null {
   const from = new Map<T, number>();
   for (const a of own) from.set(a, -1);
@@ -911,7 +933,7 @@ export function pickFallback<T extends { generatedAt?: Date | string | null }>(
   const some = (a: T) => servable(a) > 0;
   const pools = [own.filter(full), others.flat().filter(full), own.filter(some), others.flat().filter(some)];
   for (const pool of pools) {
-    const passage = pickArchived(pool, now);
+    const passage = pickArchived(pool, now, level);
     if (passage) return { passage, from: from.get(passage) ?? -1 };
   }
   return null;

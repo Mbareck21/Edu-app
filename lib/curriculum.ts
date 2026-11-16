@@ -215,6 +215,12 @@ export type ReadingTheme = {
   schoolTitle: string;
   /** true = unit title, essential question and word bank verified in published district scope-and-sequence documents. */
   confirmed: boolean;
+  /**
+   * true = a knowledge unit (social studies, science, technology) the class
+   * reads mostly as nonfiction; false = a literature unit. Read off each
+   * unit's own essential question and prompts, not a published genre list.
+   */
+  informational: boolean;
   words: string[];
   prompts: string[];
 };
@@ -229,6 +235,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Observing Nature",
     schoolTitle: "In the Wild",
     confirmed: true,
+    informational: false,
     words: ["observe", "encounter", "appreciate", "interact", "nature", "sensory", "vast", "solitary", "vegetation", "shimmering", "winding", "scrawny"],
     prompts: [
       "How do we respond to nature?",
@@ -241,6 +248,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Characters' Actions and Reactions",
     schoolTitle: "Characters in Focus",
     confirmed: true,
+    informational: false,
     words: ["actions", "reactions", "connect", "communicate", "interact", "relationships", "tedious", "earnestly", "mischievous", "dejectedly", "appalled", "overrated"],
     prompts: [
       "How do we reveal ourselves to others?",
@@ -253,6 +261,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Government in Action",
     schoolTitle: "Your Government at Work",
     confirmed: true,
+    informational: true,
     words: ["function", "powers", "solve", "levels", "services", "society", "crisis", "adversity", "liberties", "delegated", "tyrannical", "urgency"],
     prompts: [
       "How can government influence the way we live?",
@@ -265,6 +274,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Understanding Different Points of View",
     schoolTitle: "Through the Storyteller's Eyes",
     confirmed: true,
+    informational: false,
     words: ["point of view", "perspective", "narrator", "influence", "distinctive", "realistic fiction", "accustomed", "weariness", "coaxing", "contraption", "involuntarily", "dangled"],
     prompts: [
       "What do we learn when we look at the world through the eyes of others?",
@@ -277,6 +287,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Technology for Tomorrow",
     schoolTitle: "Robot Revolution",
     confirmed: true,
+    informational: true,
     words: ["technology", "automation", "efficiency", "develop", "impact", "society", "specialized", "precautions", "beneficial", "outweigh", "inevitably", "impaired"],
     prompts: [
       "How do we make decisions about developing new technology?",
@@ -289,6 +300,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Confronting Challenges",
     schoolTitle: "Heroes and Villains",
     confirmed: true,
+    informational: false,
     words: ["confront", "challenge", "obstacles", "quest", "mission", "theme", "valor", "undertaking", "fatigue", "subsided", "attentive", "glimpse"],
     prompts: [
       "How do we overcome obstacles?",
@@ -301,6 +313,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "The Transcontinental Railroad",
     schoolTitle: "Changing Lives, Changing Communities",
     confirmed: true,
+    informational: true,
     words: ["expansion", "advances", "communities", "settler", "impact", "devastating", "grueling", "incentive", "isolated", "recruiting", "roamed", "plentiful"],
     prompts: [
       "How do communities evolve?",
@@ -313,6 +326,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Earth Changes",
     schoolTitle: "Nature's Fury",
     confirmed: true,
+    informational: true,
     words: ["natural disaster", "destruction", "pressure", "energy", "events", "violent", "collided", "magnitude", "hazardous", "ominously", "daunting", "substantially"],
     prompts: [
       "How do Earth's natural processes impact our lives?",
@@ -325,6 +339,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "Resources and Their Impact",
     schoolTitle: "Resources Impact Economies",
     confirmed: true,
+    informational: true,
     words: ["resources", "economy", "access", "dependent", "protect", "sustain", "agricultural", "abundance", "union", "wages", "booming", "crippled"],
     prompts: [
       "How does access to resources influence people's lives?",
@@ -337,6 +352,7 @@ export const READING_THEMES: ReadingTheme[] = [
     title: "The Power of Electricity",
     schoolTitle: "Exploring Electricity",
     confirmed: true,
+    informational: true,
     words: ["invention", "generate", "energy", "experiment", "grid", "network", "outage", "influential", "malfunctions", "continuous", "faulty", "prominent"],
     prompts: [
       "Where do scientific discoveries lead us?",
@@ -417,6 +433,36 @@ export function themeForWeek(dateISO: string): ReadingTheme {
 /** Which of the unit's three weeks the class is in, 1..3. */
 export function weekInTheme(dateISO: string): number {
   return themeSlot(dateISO).week;
+}
+
+/**
+ * What an informational passage is about: the science unit or the reading
+ * unit. `lastInfoTopic` is the topic of the last informational passage.
+ *
+ * Informational passages always rode the science unit, so an informational
+ * reading unit (Government in Action, Technology for Tomorrow) reached him
+ * only as made-up stories. Now such a unit takes every other informational
+ * passage. A literature unit still leaves them all to science, and with no
+ * science unit running the reading unit carries the passage, as it always did.
+ */
+export function infoTopicFor(
+  theme: ReadingTheme,
+  science: ScienceUnit | null,
+  lastInfoTopic: string | undefined
+): "science" | "theme" {
+  if (!science) return "theme";
+  if (!theme.informational) return "science";
+  return lastInfoTopic === science.title ? "theme" : "science";
+}
+
+/**
+ * The angles an informational passage on a reading unit may take: the unit's
+ * prompts that ask about facts and reasons, never one about a story, a
+ * character or a poem. The essential question when none is left.
+ */
+export function infoAnglesFor(theme: ReadingTheme): string[] {
+  const angles = theme.prompts.slice(1).filter((p) => !/\b(poet|poem|story|character|narrator)\b/i.test(p));
+  return angles.length > 0 ? angles : [theme.prompts[0]];
 }
 
 /* ------------------------------------------------------------------ *

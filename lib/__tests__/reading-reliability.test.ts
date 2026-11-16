@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { rateLimitWaitMs } from "@/lib/groq";
-import { REUSE_AFTER_MS, keyedMcq, pickFallback } from "@/lib/reading";
+import { REUSE_AFTER_MS, keyedMcq, pickArchived, pickFallback } from "@/lib/reading";
 
 // ── A multiple choice keeps its key or is not served ──────────────────────
 
@@ -68,6 +68,20 @@ test("nothing is served again inside a week, and nothing with no questions", () 
   assert.equal(pickFallback([old(3, 5)], [[old(6, 5)]], NOW, servable), null);
   assert.equal(pickFallback([old(9, 0)], [[old(12, 0)]], NOW, servable), null);
   assert.equal(pickFallback([], [], NOW, servable), null);
+});
+
+test("the fallback is the passage nearest his level, then the oldest", () => {
+  const at = (title: string, days: number, level: number) => ({ ...old(days, 4, title), level });
+  const archive = [at("easy-oldest", 40, 1), at("near", 10, 4), at("near-older", 20, 4), at("hard", 30, 9)];
+  // A level-1 passage does not count on the ladder of a level-4 reader: a day lost.
+  assert.equal(pickFallback(archive, [], NOW, servable, 4)?.passage.title, "near-older");
+  assert.equal(pickFallback(archive, [], NOW, servable, 5)?.passage.title, "near-older");
+  assert.equal(pickFallback(archive, [], NOW, servable, 8)?.passage.title, "hard");
+  // His own list still comes before another list's nearer passage.
+  assert.equal(pickFallback([at("own-easy", 9, 1)], [[at("other-near", 9, 4)]], NOW, servable, 4)?.from, -1);
+  // With no level given, the oldest, as before.
+  assert.equal(pickFallback(archive, [], NOW, servable)?.passage.title, "easy-oldest");
+  assert.equal(pickArchived(archive, NOW)?.title, "easy-oldest");
 });
 
 // ── A per-minute rate limit is waited out ─────────────────────────────────
