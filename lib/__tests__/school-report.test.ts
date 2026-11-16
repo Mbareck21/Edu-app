@@ -188,6 +188,31 @@ test("catch-up math: every other whole day, and no lesson skill is starved", () 
   assert.equal(mathSkillFor("2027-06-02", {}, catchUp), mathSkillFor("2027-06-02", {}));
 });
 
+test("a catch-up skill is done once he is past the class level on it; then the class lesson is back every day", () => {
+  const catchUp = ["rounding", "place-value"] as const;
+  // Catch-up days between two dates, given his levels.
+  const catchUpDays = (levels: Record<string, number>) => {
+    const seen = new Set<string>();
+    for (let t = Date.parse("2026-11-09T12:00:00Z"); t <= Date.parse("2026-12-18T12:00:00Z"); t += 86_400_000) {
+      const d = new Date(t).toISOString().slice(0, 10);
+      const skill = mathSkillFor(d, levels, catchUp);
+      if (!currentLesson(d).skills.includes(skill)) seen.add(skill);
+    }
+    return [...seen].sort();
+  };
+  assert.deepEqual(catchUpDays({}), ["place-value", "rounding"]);
+  // Level 3 is the class level: still being worked on.
+  assert.deepEqual(catchUpDays({ rounding: 3, "place-value": 3 }), ["place-value", "rounding"]);
+  // Past it on one: only the other is left.
+  assert.deepEqual(catchUpDays({ rounding: 4, "place-value": 2 }), ["place-value"]);
+  // Past it on both: exactly the days a child with no card gets.
+  const done = { rounding: 4, "place-value": 5 };
+  assert.deepEqual(catchUpDays(done), []);
+  for (const d of ["2026-11-16", "2026-11-17", "2026-12-01"]) {
+    assert.equal(mathSkillFor(d, done, catchUp), mathSkillFor(d, done));
+  }
+});
+
 test("the quest's Math beat and every caller see the same catch-up", () => {
   const unit = {
     _id: "u1",

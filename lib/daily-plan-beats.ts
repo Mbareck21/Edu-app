@@ -8,6 +8,7 @@ import { isNewWord } from "@/lib/lesson-builder";
 import type { ListSummary, SummaryWord } from "@/lib/lists";
 import { MATH_SKILLS, getSkill, type MathSkillId } from "@/lib/math";
 import { currentLesson } from "@/lib/math/iready";
+import { CLASS_LEVEL } from "@/lib/math/session";
 import type { ClientWord } from "@/lib/models/WordList";
 import type { ActivityEntry } from "@/lib/types";
 
@@ -47,13 +48,18 @@ export function mathSkillFor(
   /** A report card's catch-up skills (lib/school-report.ts). Empty: as always. */
   catchUp: readonly MathSkillId[] = []
 ): MathSkillId {
-  if (catchUp.length > 0 && today <= SCHOOL_YEAR_END) {
+  // A catch-up skill is done once he is past the class level on it: level 3
+  // cleared with three clean rounds in a row. Without this the card held
+  // Today's Math on place value every other day until the next card came,
+  // months after he had it, while the class moved through two more units.
+  const open = catchUp.filter((id) => (levels[id] ?? 1) <= CLASS_LEVEL);
+  if (open.length > 0 && today <= SCHOOL_YEAR_END) {
     // Whole days, so a 30-day month cannot put two catch-up days in a row.
     // Catch-up on even days; the class lesson on odd days, rotated by the
     // half-day count so every skill of a lesson still comes round.
     const day = Math.floor(Date.parse(`${today.slice(0, 10)}T12:00:00Z`) / 86_400_000);
     const half = Math.floor(day / 2);
-    if (day % 2 === 0) return catchUp[half % catchUp.length];
+    if (day % 2 === 0) return open[half % open.length];
     const skills = currentLesson(today).skills;
     return skills[half % Math.max(1, skills.length)] ?? "place-value";
   }

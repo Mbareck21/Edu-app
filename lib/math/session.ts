@@ -91,6 +91,12 @@ export function gradeAnswer(q: MathQuestion, input: string): { correct: boolean;
 export const MAX_LEVEL = 5;
 
 /**
+ * The level his class works at by the end of a unit: level 3 is the Grade 4
+ * standard (two-digit times two-digit, dividing four-digit numbers).
+ */
+export const CLASS_LEVEL = 3;
+
+/**
  * The level a skill is played at. Grade 4 plays the stored level. In Grade 5 a
  * level last saved in Grade 4 (or never saved, `savedIn` null) starts at 4 at
  * least. Once saved in Grade 5 it may sit at 3 for support, never lower —

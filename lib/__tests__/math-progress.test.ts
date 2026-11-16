@@ -8,13 +8,34 @@ import {
   nextLevel,
   scoreRound,
   servedLevel,
+  upRunFor,
 } from "@/lib/models/MathProgress";
 
-test("three strong sessions in a row step the level up", () => {
-  assert.equal(nextLevel(1, [90, 95, 100]), 2);
-  assert.equal(nextLevel(1, [90, 100, 80]), 1, "one weak score in the window blocks it");
-  assert.equal(nextLevel(1, [100, 90]), 1, "two is not three");
+test("from the class level up, three strong sessions in a row step the level up", () => {
+  assert.equal(nextLevel(3, [90, 95, 100]), 4);
+  assert.equal(nextLevel(3, [90, 100, 80]), 3, "one weak score in the window blocks it");
+  assert.equal(nextLevel(3, [100, 90]), 3, "two is not three");
   assert.equal(nextLevel(MAX_MATH_LEVEL, [100, 100, 100]), MAX_MATH_LEVEL);
+});
+
+test("below the class level one clean round moves him up, so he meets the class's work in days", () => {
+  assert.equal(upRunFor(1), 1);
+  assert.equal(upRunFor(2), 1);
+  assert.equal(upRunFor(3), 3);
+  assert.equal(upRunFor(4), 3);
+  assert.equal(nextLevel(1, [90]), 2);
+  assert.equal(nextLevel(2, [100]), 3);
+  assert.equal(nextLevel(1, [80]), 1, "under 90% he stays and practises");
+  assert.equal(nextLevel(2, [80, 100]), 2, "the newest round decides, not an older clean one");
+  // A new skill, three good lessons: level 1 -> 2 -> 3, then he stays at the
+  // class level until three clean rounds there. It used to take six lessons.
+  let state = { level: 1, recentPcts: [] as number[] };
+  for (const pct of [90, 100, 90]) state = scoreRound(state.level, state.recentPcts, pct);
+  assert.deepEqual(state, { level: 3, recentPcts: [90] });
+  // Two bad rounds still step him back down from a level reached too fast.
+  state = scoreRound(state.level, state.recentPcts, 40);
+  state = scoreRound(state.level, state.recentPcts, 50);
+  assert.equal(state.level, 2);
 });
 
 test("a weak run steps the level down, floor 1", () => {
@@ -54,8 +75,8 @@ test("a round moves the level only when it was played at that level", () => {
 });
 
 test("a round with no level counts as the stored level, as older queued sessions did", () => {
-  assert.deepEqual(scoreRound(1, [90, 90], 100), { level: 2, recentPcts: [] });
-  assert.deepEqual(scoreRound(1, [80], 90), { level: 1, recentPcts: [90, 80] });
+  assert.deepEqual(scoreRound(3, [90, 90], 100), { level: 4, recentPcts: [] });
+  assert.deepEqual(scoreRound(3, [80], 90), { level: 3, recentPcts: [90, 80] });
   assert.deepEqual(scoreRound(3, [55], 40), { level: 2, recentPcts: [] });
   assert.deepEqual(scoreRound(2, [90, 90, 50], 70), { level: 2, recentPcts: [70, 90, 90] }, "window stays at three");
 });

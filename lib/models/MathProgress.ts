@@ -2,13 +2,14 @@ import { Schema, model, models, type InferSchemaType, type Model } from "mongoos
 
 import { todayKey } from "@/lib/day";
 import { gradeOn, type Grade } from "@/lib/grade";
-import { MAX_LEVEL, levelForGrade } from "@/lib/math/session";
+import { CLASS_LEVEL, MAX_LEVEL, levelForGrade } from "@/lib/math/session";
 import type { Level } from "@/lib/math/types";
 import { movesLevel, sessionPct, type Scorable } from "@/lib/session-score";
 
 // One document per math skill id (see lib/math/skills.ts, workstream C).
-// `level` adapts: 3 recent sessions at >= 90% level up, two in a row under 60%
-// level down. `recentPcts` keeps the last 3 scores that drive that.
+// `level` adapts: 3 recent sessions at >= 90% level up (one, below the grade
+// standard: see upRunFor), two in a row under 60% level down. `recentPcts`
+// keeps the last 3 scores that drive that.
 
 export const MathProgressSchema = new Schema(
   {
@@ -36,6 +37,18 @@ export const RECENT_PCTS = 3;
 /** Sessions in a row at this mark or better to move up. */
 export const LEVEL_UP_PCT = 90;
 export const LEVEL_UP_RUN = 3;
+/**
+ * Clean rounds that move him up from `level`. Below the class level, one:
+ * every skill starts at level 1, and three clean rounds a level meant six
+ * lessons before he met what school was teaching that week (26 x 5 while the
+ * class did 97 x 85), by which time the class had moved on and the next skill
+ * started at level 1 again. One round at 90% shows the easy level is behind
+ * him; two bad rounds still step him back down. From the class level up it
+ * stays LEVEL_UP_RUN: going beyond the grade has to be earned.
+ */
+export function upRunFor(level: number): number {
+  return level < CLASS_LEVEL ? 1 : LEVEL_UP_RUN;
+}
 /** Sessions in a row below this to move down. */
 export const LEVEL_DOWN_PCT = 60;
 export const LEVEL_DOWN_RUN = 2;
@@ -80,7 +93,8 @@ export function servedLevel(p: Pick<ClientMathProgress, "level" | "lastAt"> | nu
 
 /**
  * Pure level rule, shared by the API and any UI preview.
- * Up when the last 3 sessions are all >= 90%. Down when the last 2 are both < 60%.
+ * Up when the last 3 sessions are all >= 90% (the last one, below the class
+ * level: upRunFor). Down when the last 2 are both < 60%.
  *
  * The caller clears `recentPcts` on every level change, so this window only
  * ever holds scores earned at the current level. An empty window means the
@@ -91,8 +105,9 @@ export function nextLevel(level: number, recentPcts: number[]): number {
   const cur = Math.min(MAX_MATH_LEVEL, Math.max(1, level));
   if (recentPcts.length === 0) return cur;
 
-  const up = recentPcts.slice(0, LEVEL_UP_RUN);
-  if (up.length === LEVEL_UP_RUN && up.every((p) => p >= LEVEL_UP_PCT)) {
+  const run = upRunFor(cur);
+  const up = recentPcts.slice(0, run);
+  if (up.length === run && up.every((p) => p >= LEVEL_UP_PCT)) {
     return Math.min(MAX_MATH_LEVEL, cur + 1);
   }
   // Two in a row, not one. He learns by repetition and grinds a skill for days;
@@ -153,7 +168,7 @@ export function applyRound(
 }
 
 /**
- * Clean rounds banked toward the next level, out of LEVEL_UP_RUN.
+ * Clean rounds banked toward the next level, out of upRunFor(level).
  *
  * The math page shows this so a long grind on one skill has a visible target:
  * he can see that two good rounds are in the bank and one more moves him up.
