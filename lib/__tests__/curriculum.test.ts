@@ -117,8 +117,15 @@ test("science unit lookup follows the week calendar", () => {
   assert.equal(scienceUnitForWeek("2026-11-03")?.id, "earth-features");
   assert.equal(scienceUnitForWeek("2027-01-12")?.id, "energy");
   assert.equal(scienceUnitForWeek("2027-03-16")?.id, "waves");
-  assert.equal(scienceUnitForWeek("2027-04-06")?.id, "engineering-design");
-  // weeks are counted through the breaks, so the tail of the year stays on the last unit
+  // Instructional weeks, as the district plan counts them: a break does not
+  // move the plan on. Counted through the breaks, Energy (Q3) started on
+  // 14 December and Waves in February.
+  assert.equal(scienceUnitForWeek("2026-12-15")?.id, "earth-features"); // last week of Q2
+  assert.equal(scienceUnitForWeek("2026-12-29")?.id, "earth-features"); // winter break
+  assert.equal(scienceUnitForWeek("2027-03-09")?.id, "energy"); // last week of Q3
+  assert.equal(scienceUnitForWeek("2027-04-06")?.id, "waves"); // week 31
+  assert.equal(scienceUnitForWeek("2027-04-20")?.id, "engineering-design"); // week 33
+  // school weeks past the plan's 36 stay on the last unit
   assert.equal(scienceUnitForWeek("2027-05-20")?.id, "engineering-design");
   assert.equal(scienceUnitForWeek("2026-07-01"), null);
   assert.equal(scienceUnitForWeek("2027-06-30"), null);
@@ -156,10 +163,23 @@ test("the reading year follows the publisher's plan", () => {
 });
 
 test("leftover weeks cycle back through the units for review", () => {
-  const late = "2027-04-12";
+  const late = "2027-04-26";
+  assert.ok(!isReviewWeek("2027-04-19"), "Unit 10 week 3");
   assert.ok(isReviewWeek(late));
   assert.equal(themeForWeek(late).id, READING_THEMES[0].id);
-  assert.equal(themeForWeek("2027-04-19").id, READING_THEMES[1].id);
+  assert.equal(themeForWeek("2027-05-03").id, READING_THEMES[1].id);
+});
+
+test("a week with no school does not move the reading unit on", () => {
+  // Thanksgiving week sits inside Q2, so it used to count as a week of the
+  // unit: from 23 November the app ran a week ahead of the class.
+  assert.equal(themeForWeek("2026-11-24").id, themeForWeek("2026-11-17").id);
+  assert.equal(weekInTheme("2026-11-24"), weekInTheme("2026-11-17"));
+  assert.equal(weekInTheme("2026-11-30"), 1, "the next unit starts the Monday after");
+  assert.notEqual(themeForWeek("2026-11-30").id, themeForWeek("2026-11-17").id);
+  assert.equal(weekInTheme("2026-12-14"), 3, "and ends with the quarter");
+  // Spring break the same.
+  assert.equal(weekInTheme("2027-03-23"), weekInTheme("2027-03-16"));
 });
 
 test("the school calendar counts out to the district's own day totals", async () => {
